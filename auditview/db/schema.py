@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS checkpoints (
     session_id INTEGER NOT NULL,
     label TEXT NOT NULL,
     changeset_blob BLOB NOT NULL,
+    checkpoint_type TEXT NOT NULL DEFAULT 'changeset',
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
 
@@ -70,6 +71,7 @@ _MIGRATIONS = [
     "CREATE INDEX IF NOT EXISTS idx_reviewed_lines_session_file ON reviewed_lines(session_id, file_path)",
     "CREATE INDEX IF NOT EXISTS idx_notes_session_file ON notes(session_id, file_path)",
     "CREATE INDEX IF NOT EXISTS idx_checkpoints_session ON checkpoints(session_id)",
+    "ALTER TABLE checkpoints ADD COLUMN checkpoint_type TEXT NOT NULL DEFAULT 'changeset'",
 ]
 
 

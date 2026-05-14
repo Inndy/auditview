@@ -1,8 +1,36 @@
-from flask import Blueprint, jsonify, current_app
+from flask import Blueprint, jsonify, request, current_app
 from auditview.db.connection import open_db
 from auditview.db.checkpoint import CheckpointManager
 
 bp = Blueprint("checkpoints", __name__)
+
+
+@bp.route("/sessions/<int:session_id>/checkpoints", methods=["POST"])
+def create_checkpoint(session_id):
+    conn = open_db(current_app.config["DB_PATH"])
+    cur = conn.cursor()
+
+    row = cur.execute("SELECT id FROM sessions WHERE id = ?", (session_id,)).fetchone()
+    if row is None:
+        return jsonify({"error": "Session not found"}), 404
+
+    body = request.get_json(silent=True) or {}
+    label = (body.get("label") or "").strip() or "manual"
+
+    cm = CheckpointManager(conn)
+    cm.save_snapshot(session_id, label)
+    conn.commit()
+
+    cp = cur.execute(
+        "SELECT id, label, created_at FROM checkpoints WHERE session_id = ? ORDER BY id DESC LIMIT 1",
+        (session_id,),
+    ).fetchone()
+    is_apsw = getattr(conn, '_is_apsw', False)
+    if is_apsw:
+        result = {"id": cp[0], "label": cp[1], "created_at": cp[2]}
+    else:
+        result = {"id": cp["id"], "label": cp["label"], "created_at": cp["created_at"]}
+    return jsonify(result), 201
 
 
 @bp.route("/sessions/<int:session_id>/checkpoints", methods=["GET"])
