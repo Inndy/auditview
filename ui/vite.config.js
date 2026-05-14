@@ -21,6 +21,6 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: '../auditview/static'
+    outDir: 'dist'
   }
 })
