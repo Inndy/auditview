@@ -1,5 +1,7 @@
 import os
-from flask import Flask, send_from_directory, abort
+import time
+import logging
+from flask import Flask, send_from_directory, abort, g, request
 
 from auditview.db.connection import open_db
 from auditview.db.schema import run_migrations
@@ -15,10 +17,28 @@ from auditview.api.coverage import bp as coverage_bp
 from auditview.api.config import bp as config_bp
 
 
+logger = logging.getLogger("auditview")
+
+_SLOW_MS = 200  # log requests that take longer than this
+
+
 def create_app(db_path, root_path):
     app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), "static"))
     app.config["DB_PATH"] = db_path
     app.config["ROOT_PATH"] = root_path
+
+    @app.before_request
+    def _start_timer():
+        g._t = time.perf_counter()
+
+    @app.after_request
+    def _log_request(response):
+        dt_ms = (time.perf_counter() - g._t) * 1000
+        if dt_ms >= _SLOW_MS:
+            logger.warning("SLOW %s %s → %d  %.0fms", request.method, request.path, response.status_code, dt_ms)
+        else:
+            logger.debug("%s %s → %d  %.0fms", request.method, request.path, response.status_code, dt_ms)
+        return response
 
     conn = open_db(db_path)
     run_migrations(conn)
