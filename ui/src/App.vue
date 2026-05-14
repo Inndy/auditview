@@ -100,6 +100,22 @@ body {
   flex: 1;
   overflow: auto;
   background: var(--bg-surface);
+  min-width: 0;
+}
+
+.code-viewer-main.wrap-lines {
+  overflow-x: hidden;
+}
+
+.code-viewer-main.wrap-lines table.code-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.code-viewer-main.wrap-lines .code-cell {
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .right-panels {
