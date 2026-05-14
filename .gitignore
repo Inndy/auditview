@@ -1,0 +1,21 @@
+# database
+*.db
+*.db-wal
+*.db-shm
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# frontend build output
+auditview/static/assets/
+auditview/static/index.html
+
+# node
+ui/node_modules/
+ui/.eslintcache
+
+# misc
+chrome-dev-profile/

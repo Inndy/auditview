@@ -1,0 +1,68 @@
+export class SSEClient {
+  constructor(sessionId) {
+    this.sid = sessionId;
+    this.listeners = {};
+    this.es = null;
+    this.retryDelay = 1000;
+    this._stopped = false;
+  }
+
+  on(event, cb) {
+    if (!this.listeners[event]) {
+      this.listeners[event] = [];
+    }
+    this.listeners[event].push(cb);
+  }
+
+  connect() {
+    this._stopped = false;
+    this._open();
+  }
+
+  _open() {
+    if (this._stopped) return;
+
+    this.es = new EventSource(`/api/sessions/${this.sid}/events`);
+
+    this.es.onmessage = (e) => {
+      this._dispatch('message', e);
+    };
+
+    for (const eventName of ['file_changed', 'heartbeat']) {
+      this.es.addEventListener(eventName, (e) => {
+        let data = {};
+        try { data = JSON.parse(e.data); } catch { }
+        this._dispatch(eventName, data);
+      });
+    }
+
+    this.es.onerror = () => {
+      this.es.close();
+      this.es = null;
+      if (!this._stopped) {
+        setTimeout(() => this._open(), this.retryDelay);
+        this.retryDelay = Math.min(this.retryDelay * 2, 30000);
+      }
+    };
+
+    this.es.onopen = () => {
+      this.retryDelay = 1000;
+    };
+  }
+
+  _dispatch(event, data) {
+    if (this.listeners[event]) {
+      for (const cb of this.listeners[event]) {
+        cb(data);
+      }
+    }
+  }
+
+  disconnect() {
+    this._stopped = true;
+    if (this.es) {
+      this.es.close();
+      this.es = null;
+    }
+  }
+}
