@@ -88,6 +88,17 @@ export default {
     refresh() {
       return this.load()
     },
+    updateFile(path, { countable_lines, reviewed_lines }) {
+      const f = this.files.find((f) => f.rel_path === path)
+      if (!f) return
+      f.countable_lines = countable_lines
+      f.reviewed_lines = reviewed_lines
+      f.coverage = countable_lines > 0 ? reviewed_lines / countable_lines : 0.0
+      if (countable_lines === 0) f.status = 'empty'
+      else if (reviewed_lines === 0) f.status = 'not_viewed'
+      else if (reviewed_lines >= countable_lines) f.status = 'reviewed'
+      else f.status = 'partial'
+    },
   },
 }
 </script>

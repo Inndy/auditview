@@ -22,7 +22,7 @@
           :filePath="currentFile"
           :skipComments="skipComments"
           @notes-updated="onNotesUpdated"
-          @lines-marked="refreshCoverage"
+          @lines-marked="onLinesMarked"
           @file-reloaded="onFileReloaded"
           @show-help="showHelp = true"
         />
@@ -110,6 +110,10 @@ export default {
     },
     onNotesUpdated(notes) {
       this.currentNotes = notes
+    },
+    onLinesMarked({ filePath, countable, reviewed }) {
+      this.$refs.fileTree?.updateFile(filePath, { countable_lines: countable, reviewed_lines: reviewed })
+      this.refreshCoverage()
     },
     async refreshCoverage() {
       try {

@@ -305,7 +305,13 @@ export default {
         for (const l of rangeLines) {
           l.is_reviewed = reviewed
         }
-        this.$emit('lines-marked')
+        const countable = this.lines.filter((l) => l.is_countable).length
+        const reviewedCount = this.lines.filter((l) => l.is_countable && l.is_reviewed).length
+        this.$emit('lines-marked', {
+          filePath: this.filePath,
+          countable,
+          reviewed: reviewedCount,
+        })
       } catch (e) {
         console.error('markLines error:', e.message)
       }
