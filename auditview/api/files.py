@@ -4,7 +4,6 @@ from auditview.db.connection import open_db
 from auditview.core.hashing import line_hash, context_hash
 from auditview.core.coverage import is_countable_line
 from auditview.core.reconciler import reconcile_file
-from auditview.core.scanner import scan_folder
 from auditview.api.util import safe_path
 
 bp = Blueprint("files", __name__)
@@ -35,7 +34,7 @@ def list_files(session_id):
     root_path = session["root_path"]
     exclusion_patterns = session["exclusion_patterns"]
 
-    rel_paths = scan_folder(root_path, exclusion_patterns)
+    rel_paths = current_app.watcher.get_scan(session_id, root_path, exclusion_patterns)
     rel_path_set = set(rel_paths)
 
     for rel_path in rel_paths:
