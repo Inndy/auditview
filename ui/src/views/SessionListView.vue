@@ -1,6 +1,9 @@
 <template>
   <div class="session-list-page">
-    <h1>auditview</h1>
+    <div class="page-header">
+      <h1>auditview</h1>
+      <button class="dark-btn" :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'" @click="onToggleDark">{{ darkMode ? '☀️' : '🌙' }}</button>
+    </div>
     <div v-if="error" class="error-msg">{{ error }}</div>
 
     <div class="create-session-form">
@@ -52,6 +55,7 @@
 
 <script>
 import { listSessions, createSession } from '../api/sessions.js'
+import { isDark, toggleDark } from '../darkMode.js'
 
 export default {
   name: 'SessionListView',
@@ -61,6 +65,7 @@ export default {
       loading: true,
       error: null,
       creating: false,
+      darkMode: isDark(),
       form: {
         label: '',
         root_path: '',
@@ -107,6 +112,10 @@ export default {
     openSession(id) {
       this.$router.push(`/sessions/${id}`)
     },
+    onToggleDark() {
+      toggleDark()
+      this.darkMode = isDark()
+    },
   },
 }
 </script>
@@ -118,9 +127,15 @@ export default {
   padding: 0 20px;
 }
 
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+}
+
 h1 {
   font-size: 28px;
-  margin-bottom: 32px;
 }
 
 h2 {
@@ -128,9 +143,18 @@ h2 {
   margin-bottom: 16px;
 }
 
+.dark-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+  padding: 0;
+  line-height: 1;
+}
+
 .create-session-form {
-  background: #fff;
-  border: 1px solid #ddd;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 20px;
   margin-bottom: 32px;
@@ -151,15 +175,17 @@ h2 {
 .form-group textarea {
   width: 100%;
   padding: 8px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 4px;
   font-size: 13px;
   font-family: inherit;
+  background: var(--bg-surface);
+  color: var(--text);
 }
 
 .session-list {
-  background: #fff;
-  border: 1px solid #ddd;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 20px;
 }
@@ -173,19 +199,19 @@ table {
 th {
   text-align: left;
   padding: 8px;
-  border-bottom: 2px solid #ddd;
+  border-bottom: 2px solid var(--border);
   font-weight: 600;
 }
 
 td {
   padding: 8px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .error-msg {
-  background: #f8d7da;
-  color: #842029;
-  border: 1px solid #f5c2c7;
+  background: var(--badge-orphan-bg);
+  color: var(--badge-orphan-text);
+  border: 1px solid var(--danger);
   border-radius: 4px;
   padding: 10px 14px;
   margin-bottom: 16px;
@@ -193,7 +219,7 @@ td {
 }
 
 .empty {
-  color: #888;
+  color: var(--text-muted);
   font-size: 13px;
 }
 </style>

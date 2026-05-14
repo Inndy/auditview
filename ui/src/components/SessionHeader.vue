@@ -11,12 +11,14 @@
       <span v-if="coverage && !coverage.supports_checkpoints" class="warn-badge">No checkpoints</span>
     </div>
     <SkipCommentsToggle :modelValue="skipComments" @change="$emit('skip-comments-change', $event)" />
+    <button class="dark-btn" :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'" @click="toggleDark">{{ darkMode ? '☀️' : '🌙' }}</button>
     <button class="help-btn" title="Keyboard shortcuts (?)" @click="$emit('show-help')">?</button>
   </div>
 </template>
 
 <script>
 import SkipCommentsToggle from './SkipCommentsToggle.vue'
+import { isDark, toggleDark } from '../darkMode.js'
 
 export default {
   name: 'SessionHeader',
@@ -27,6 +29,15 @@ export default {
     skipComments: { type: Boolean, default: false },
   },
   emits: ['skip-comments-change', 'show-help'],
+  data() {
+    return { darkMode: isDark() }
+  },
+  methods: {
+    toggleDark() {
+      toggleDark()
+      this.darkMode = isDark()
+    },
+  },
   computed: {
     coveragePct() {
       if (!this.coverage) return 0
@@ -42,8 +53,8 @@ export default {
   align-items: center;
   gap: 16px;
   padding: 8px 14px;
-  background: #fff;
-  border-bottom: 1px solid #ddd;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   font-size: 13px;
 }
@@ -56,13 +67,23 @@ export default {
 
 .session-path {
   font-size: 11px;
-  color: #888;
+  color: var(--text-muted);
   font-family: monospace;
 }
 
 .session-coverage {
   margin-left: auto;
-  color: #555;
+  color: var(--text-dim);
+}
+
+.dark-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .help-btn {

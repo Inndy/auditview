@@ -108,10 +108,12 @@ export default {
   margin-top: 6px;
   padding: 6px;
   font-size: 12px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 4px;
   resize: vertical;
   font-family: inherit;
+  background: var(--bg-surface);
+  color: var(--text);
 }
 
 .edit-actions {
@@ -150,7 +152,7 @@ export default {
 }
 
 .note-snapshot pre {
-  background: #f5f5f5;
+  background: var(--bg-gutter);
   padding: 6px;
   border-radius: 3px;
   overflow-x: auto;

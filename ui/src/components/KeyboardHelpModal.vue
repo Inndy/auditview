@@ -64,7 +64,7 @@ export default {
 }
 
 .help-table tr + tr td {
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-light);
 }
 
 .help-table td {
@@ -73,8 +73,8 @@ export default {
 
 .key {
   font-family: 'Fira Mono', 'Consolas', monospace;
-  background: #f0f0f0;
-  border: 1px solid #ddd;
+  background: var(--bg-gutter);
+  border: 1px solid var(--border);
   border-radius: 3px;
   padding: 1px 7px;
   font-size: 12px;

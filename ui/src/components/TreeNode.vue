@@ -63,11 +63,11 @@ export default {
 }
 
 .tree-item:hover {
-  background: #f0f4ff;
+  background: var(--bg-hover);
 }
 
 .tree-active {
-  background: #dce8ff !important;
+  background: var(--bg-active-file) !important;
   font-weight: 600;
 }
 
