@@ -239,6 +239,12 @@ export default {
         return
       }
 
+      if (key === 'U') {
+        e.preventDefault()
+        this.unmarkWholeFile()
+        return
+      }
+
       if (this.rangeMin === null) return
 
       if (key === 'm') {
@@ -263,6 +269,11 @@ export default {
       const countable = this.lines.filter((l) => l.is_countable)
       const allReviewed = countable.length > 0 && countable.every((l) => l.is_reviewed)
       await this.doMark(this.lines, !allReviewed)
+    },
+
+    async unmarkWholeFile() {
+      if (this.lines.length === 0) return
+      await this.doMark(this.lines, false)
     },
 
     async markSelected() {
