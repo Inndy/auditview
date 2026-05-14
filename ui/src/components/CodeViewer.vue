@@ -5,11 +5,7 @@
     <div v-else-if="loading" class="no-file">Loading…</div>
     <div v-else-if="error" class="no-file error-text">{{ error }}</div>
     <template v-else>
-      <table
-        class="code-table"
-        @mouseleave="onTableMouseLeave"
-        @touchstart="onTouchStart"
-      >
+      <table class="code-table" @mouseleave="onTableMouseLeave">
         <tbody>
           <LineRow
             v-for="line in lines"
@@ -19,6 +15,7 @@
             @drag-start="onDragStart"
             @drag-move="onDragMove"
             @drag-end="onDragEnd"
+            @touch-drag-start="onTouchDragStart"
           />
         </tbody>
       </table>
@@ -119,7 +116,6 @@ export default {
       loading: false,
       error: null,
       sseStatus: 'disconnected',
-      isTouchDevice: false,
       selectionFromTouch: false,
     }
   },
@@ -145,13 +141,6 @@ export default {
     },
   },
   mounted() {
-    this.isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches
-    this._touchDetectHandler = () => {
-      this.isTouchDevice = true
-      window.removeEventListener('touchstart', this._touchDetectHandler)
-    }
-    window.addEventListener('touchstart', this._touchDetectHandler, { passive: true })
-
     this._keyHandler = this.onKeyDown.bind(this)
     document.addEventListener('keydown', this._keyHandler)
     this._mouseUpHandler = this.onDocMouseUp.bind(this)
@@ -177,7 +166,6 @@ export default {
   beforeUnmount() {
     document.removeEventListener('keydown', this._keyHandler)
     document.removeEventListener('mouseup', this._mouseUpHandler)
-    window.removeEventListener('touchstart', this._touchDetectHandler)
     if (this._docTouchMove) document.removeEventListener('touchmove', this._docTouchMove)
     if (this._docTouchEnd) document.removeEventListener('touchend', this._docTouchEnd)
     if (this._sse) this._sse.disconnect()
@@ -246,14 +234,7 @@ export default {
       return isNaN(n) ? null : n
     },
 
-    onTouchStart(e) {
-      const touch = e.touches[0]
-      const target = document.elementFromPoint(touch.clientX, touch.clientY)
-      if (!target?.closest('.gutter-cell')) return
-      e.preventDefault()
-      const lineNo = this.lineNoFromPoint(touch.clientX, touch.clientY)
-      if (lineNo === null) return
-
+    onTouchDragStart(lineNo) {
       this.dragStart = lineNo
       this.selectedRange = { start: lineNo, end: lineNo }
       this.selectionFromTouch = true
