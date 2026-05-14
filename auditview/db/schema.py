@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS files (
     rel_path TEXT NOT NULL,
     last_mtime REAL,
     prev_line_hashes TEXT DEFAULT NULL,
+    countable_lines INTEGER DEFAULT NULL,
     UNIQUE(session_id, rel_path)
 );
 
@@ -51,10 +52,24 @@ CREATE TABLE IF NOT EXISTS checkpoints (
     changeset_blob BLOB NOT NULL,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_files_session
+    ON files(session_id);
+CREATE INDEX IF NOT EXISTS idx_reviewed_lines_session_file
+    ON reviewed_lines(session_id, file_path);
+CREATE INDEX IF NOT EXISTS idx_notes_session_file
+    ON notes(session_id, file_path);
+CREATE INDEX IF NOT EXISTS idx_checkpoints_session
+    ON checkpoints(session_id);
 """
 
 _MIGRATIONS = [
     "ALTER TABLE files ADD COLUMN prev_line_hashes TEXT DEFAULT NULL",
+    "ALTER TABLE files ADD COLUMN countable_lines INTEGER DEFAULT NULL",
+    "CREATE INDEX IF NOT EXISTS idx_files_session ON files(session_id)",
+    "CREATE INDEX IF NOT EXISTS idx_reviewed_lines_session_file ON reviewed_lines(session_id, file_path)",
+    "CREATE INDEX IF NOT EXISTS idx_notes_session_file ON notes(session_id, file_path)",
+    "CREATE INDEX IF NOT EXISTS idx_checkpoints_session ON checkpoints(session_id)",
 ]
 
 
