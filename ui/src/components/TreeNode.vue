@@ -7,7 +7,15 @@
     >
       <span class="tree-icon">{{ node.isFile ? '📄' : (expanded ? '📂' : '📁') }}</span>
       <span class="tree-name">{{ node.name }}</span>
-      <CoverageBar v-if="node.isFile && node.fileData" :coverage="node.fileData.coverage" />
+      <template v-if="node.isFile && node.fileData">
+        <span
+          class="status-dot"
+          :class="'status-' + node.fileData.status"
+          :title="statusTitle"
+        ></span>
+        <span v-if="node.fileData.todos_count" class="badge-todo-count" title="TODOs">{{ node.fileData.todos_count }}</span>
+        <span v-if="node.fileData.notes_count" class="badge-note-count" title="Notes">{{ node.fileData.notes_count }}</span>
+      </template>
     </div>
     <div v-if="!node.isFile && expanded" class="tree-children">
       <TreeNode
@@ -22,11 +30,8 @@
 </template>
 
 <script>
-import CoverageBar from './CoverageBar.vue'
-
 export default {
   name: 'TreeNode',
-  components: { CoverageBar },
   props: {
     node: Object,
     currentFile: String,
@@ -38,6 +43,13 @@ export default {
   computed: {
     isActive() {
       return this.node.isFile && this.node.path === this.currentFile
+    },
+    statusTitle() {
+      const s = this.node.fileData?.status
+      if (s === 'reviewed') return 'Fully reviewed'
+      if (s === 'partial') return 'Partially reviewed'
+      if (s === 'not_viewed') return 'Not viewed'
+      return 'No countable lines'
     },
   },
   methods: {
@@ -85,5 +97,37 @@ export default {
 .tree-icon {
   font-size: 12px;
   flex-shrink: 0;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-reviewed   { background: #4caf50; }
+.status-partial    { background: #ff9800; }
+.status-not_viewed { background: var(--border-mid); }
+.status-empty      { display: none; }
+
+.badge-todo-count,
+.badge-note-count {
+  font-size: 10px;
+  border-radius: 3px;
+  padding: 0 3px;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+.badge-todo-count {
+  background: var(--badge-todo-bg);
+  color: var(--badge-todo-text);
+}
+
+.badge-note-count {
+  background: var(--bg-gutter);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
 }
 </style>
