@@ -14,7 +14,6 @@
       @drag-start="(n) => $emit('drag-start', n)"
       @drag-move="(n) => $emit('drag-move', n)"
       @drag-end="(n) => $emit('drag-end', n)"
-      @touch-drag-start="(n) => $emit('touch-drag-start', n)"
     />
     <td class="code-cell">
       <code v-html="line.highlightedContent || escapeHtml(line.content)"></code>
@@ -39,7 +38,7 @@ export default {
     line: { type: Object, required: true },
     isSelected: { type: Boolean, default: false },
   },
-  emits: ['drag-start', 'drag-move', 'drag-end', 'touch-drag-start'],
+  emits: ['drag-start', 'drag-move', 'drag-end'],
   methods: {
     escapeHtml,
     onMouseDown(e) {

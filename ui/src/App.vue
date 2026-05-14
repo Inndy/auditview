@@ -151,7 +151,6 @@ table.code-table tr.reviewed.selected {
   color: var(--text-gutter);
   -webkit-user-select: none;
   user-select: none;
-  touch-action: none;
   cursor: pointer;
   font-size: 12px;
   background: var(--bg-gutter);

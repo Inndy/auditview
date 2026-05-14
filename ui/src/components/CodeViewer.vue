@@ -15,7 +15,6 @@
             @drag-start="onDragStart"
             @drag-move="onDragMove"
             @drag-end="onDragEnd"
-            @touch-drag-start="onTouchDragStart"
           />
         </tbody>
       </table>
@@ -30,15 +29,6 @@
       @cancel="showModal = false"
     />
 
-    <Teleport to="body">
-      <div v-if="selectionFromTouch && rangeMin !== null && !showModal" class="touch-action-bar">
-        <button class="touch-btn" @click="touchMark">Mark</button>
-        <button class="touch-btn" @click="touchUnmark">Unmark</button>
-        <button class="touch-btn" @click="touchTodo">Todo</button>
-        <button class="touch-btn" @click="touchNote">Note</button>
-        <button class="touch-btn touch-btn-close" @click="clearSelection">✕</button>
-      </div>
-    </Teleport>
   </div>
 </template>
 
@@ -116,7 +106,6 @@ export default {
       loading: false,
       error: null,
       sseStatus: 'disconnected',
-      selectionFromTouch: false,
     }
   },
   computed: {
@@ -166,9 +155,7 @@ export default {
   beforeUnmount() {
     document.removeEventListener('keydown', this._keyHandler)
     document.removeEventListener('mouseup', this._mouseUpHandler)
-    if (this._docTouchMove) document.removeEventListener('touchmove', this._docTouchMove)
-    if (this._docTouchEnd) document.removeEventListener('touchend', this._docTouchEnd)
-    if (this._sse) this._sse.disconnect()
+if (this._sse) this._sse.disconnect()
   },
   methods: {
     async loadFile(path) {
@@ -201,7 +188,6 @@ export default {
     onDragStart(lineNo) {
       this.dragStart = lineNo
       this.selectedRange = { start: lineNo, end: lineNo }
-      this.selectionFromTouch = false
     },
 
     onDragMove(lineNo) {
@@ -224,63 +210,8 @@ export default {
     onTableMouseLeave() {
     },
 
-    lineNoFromPoint(x, y) {
-      const el = document.elementFromPoint(x, y)
-      const tr = el?.closest('tr')
-      if (!tr) return null
-      const gutter = tr.querySelector('.gutter-cell')
-      if (!gutter) return null
-      const n = parseInt(gutter.textContent, 10)
-      return isNaN(n) ? null : n
-    },
-
-    onTouchDragStart(lineNo) {
-      this.dragStart = lineNo
-      this.selectedRange = { start: lineNo, end: lineNo }
-      this.selectionFromTouch = true
-
-      this._docTouchMove = (ev) => {
-        ev.preventDefault()
-        const t = ev.touches[0]
-        const ln = this.lineNoFromPoint(t.clientX, t.clientY)
-        if (ln !== null) this.onDragMove(ln)
-      }
-      this._docTouchEnd = (ev) => {
-        ev.preventDefault()  // suppresses synthesized mousedown/click
-        document.removeEventListener('touchmove', this._docTouchMove)
-        document.removeEventListener('touchend', this._docTouchEnd)
-        const t = ev.changedTouches[0]
-        const ln = this.lineNoFromPoint(t.clientX, t.clientY)
-        this.onDragEnd(ln ?? this.selectedRange.end ?? this.selectedRange.start)
-        this.selectionFromTouch = true
-      }
-      document.addEventListener('touchmove', this._docTouchMove, { passive: false })
-      document.addEventListener('touchend', this._docTouchEnd, { passive: false })
-    },
-
     clearSelection() {
       this.selectedRange = { start: null, end: null }
-      this.selectionFromTouch = false
-    },
-
-    async touchMark() {
-      await this.markSelected()
-      this.clearSelection()
-    },
-
-    async touchUnmark() {
-      await this.unmarkSelected()
-      this.clearSelection()
-    },
-
-    touchTodo() {
-      this.modalIsTodo = true
-      this.showModal = true
-    },
-
-    touchNote() {
-      this.modalIsTodo = false
-      this.showModal = true
     },
 
     selectedRangeLines() {
@@ -446,39 +377,4 @@ export default {
   color: #842029;
 }
 
-.touch-action-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  gap: 8px;
-  padding: 10px 16px;
-  padding-bottom: calc(10px + env(safe-area-inset-bottom));
-  background: var(--bg-surface);
-  border-top: 1px solid var(--border-mid);
-  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.15);
-  z-index: 200;
-}
-
-.touch-btn {
-  flex: 1;
-  min-height: 44px;
-  border: 1px solid var(--border-mid);
-  border-radius: 6px;
-  background: var(--bg-surface2);
-  color: var(--text);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.touch-btn:active {
-  background: var(--bg-selected);
-}
-
-.touch-btn-close {
-  flex: 0 0 44px;
-  color: var(--text-muted);
-}
 </style>

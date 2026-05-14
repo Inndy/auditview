@@ -5,7 +5,6 @@
     @mousedown.prevent="onMouseDown"
     @mousemove="onMouseMove"
     @mouseup="onMouseUp"
-    @touchstart.prevent="onTouchStart"
   >{{ lineNo }}</td>
 </template>
 
@@ -16,7 +15,7 @@ export default {
     lineNo: { type: Number, required: true },
     isInRange: { type: Boolean, default: false },
   },
-  emits: ['drag-start', 'drag-move', 'drag-end', 'touch-drag-start'],
+  emits: ['drag-start', 'drag-move', 'drag-end'],
   methods: {
     onMouseDown(e) {
       this.$emit('drag-start', this.lineNo)
@@ -29,9 +28,6 @@ export default {
     },
     onMouseUp() {
       this.$emit('drag-end', this.lineNo)
-    },
-    onTouchStart() {
-      this.$emit('touch-drag-start', this.lineNo)
     },
   },
 }
