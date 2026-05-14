@@ -5,7 +5,13 @@
     <div v-else-if="loading" class="no-file">Loading…</div>
     <div v-else-if="error" class="no-file error-text">{{ error }}</div>
     <template v-else>
-      <table class="code-table" @mouseleave="onTableMouseLeave">
+      <table
+        class="code-table"
+        @mouseleave="onTableMouseLeave"
+        @touchstart="onTouchStart"
+        @touchmove="onTouchMove"
+        @touchend="onTouchEnd"
+      >
         <tbody>
           <LineRow
             v-for="line in lines"
@@ -28,6 +34,16 @@
       @submit="onNoteSubmit"
       @cancel="showModal = false"
     />
+
+    <Teleport to="body">
+      <div v-if="isTouchDevice && rangeMin !== null && !showModal" class="touch-action-bar">
+        <button class="touch-btn" @click="touchMark">Mark</button>
+        <button class="touch-btn" @click="touchUnmark">Unmark</button>
+        <button class="touch-btn" @click="touchTodo">Todo</button>
+        <button class="touch-btn" @click="touchNote">Note</button>
+        <button class="touch-btn touch-btn-close" @click="clearSelection">✕</button>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -105,6 +121,7 @@ export default {
       loading: false,
       error: null,
       sseStatus: 'disconnected',
+      isTouchDevice: false,
     }
   },
   computed: {
@@ -129,6 +146,13 @@ export default {
     },
   },
   mounted() {
+    this.isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches
+    this._touchDetectHandler = () => {
+      this.isTouchDevice = true
+      window.removeEventListener('touchstart', this._touchDetectHandler)
+    }
+    window.addEventListener('touchstart', this._touchDetectHandler, { passive: true })
+
     this._keyHandler = this.onKeyDown.bind(this)
     document.addEventListener('keydown', this._keyHandler)
     this._mouseUpHandler = this.onDocMouseUp.bind(this)
@@ -154,6 +178,7 @@ export default {
   beforeUnmount() {
     document.removeEventListener('keydown', this._keyHandler)
     document.removeEventListener('mouseup', this._mouseUpHandler)
+    window.removeEventListener('touchstart', this._touchDetectHandler)
     if (this._sse) this._sse.disconnect()
   },
   methods: {
@@ -207,6 +232,64 @@ export default {
     },
 
     onTableMouseLeave() {
+    },
+
+    lineNoFromPoint(x, y) {
+      const el = document.elementFromPoint(x, y)
+      const tr = el?.closest('tr')
+      if (!tr) return null
+      const gutter = tr.querySelector('.gutter-cell')
+      if (!gutter) return null
+      const n = parseInt(gutter.textContent, 10)
+      return isNaN(n) ? null : n
+    },
+
+    onTouchStart(e) {
+      const touch = e.touches[0]
+      const target = document.elementFromPoint(touch.clientX, touch.clientY)
+      if (!target?.closest('.gutter-cell')) return
+      e.preventDefault()
+      const lineNo = this.lineNoFromPoint(touch.clientX, touch.clientY)
+      if (lineNo !== null) this.onDragStart(lineNo)
+    },
+
+    onTouchMove(e) {
+      if (this.dragStart === null) return
+      e.preventDefault()
+      const touch = e.touches[0]
+      const lineNo = this.lineNoFromPoint(touch.clientX, touch.clientY)
+      if (lineNo !== null) this.onDragMove(lineNo)
+    },
+
+    onTouchEnd(e) {
+      if (this.dragStart === null) return
+      const touch = e.changedTouches[0]
+      const lineNo = this.lineNoFromPoint(touch.clientX, touch.clientY)
+      this.onDragEnd(lineNo ?? this.selectedRange.end ?? this.selectedRange.start)
+    },
+
+    clearSelection() {
+      this.selectedRange = { start: null, end: null }
+    },
+
+    async touchMark() {
+      await this.markSelected()
+      this.clearSelection()
+    },
+
+    async touchUnmark() {
+      await this.unmarkSelected()
+      this.clearSelection()
+    },
+
+    touchTodo() {
+      this.modalIsTodo = true
+      this.showModal = true
+    },
+
+    touchNote() {
+      this.modalIsTodo = false
+      this.showModal = true
     },
 
     selectedRangeLines() {
@@ -370,5 +453,41 @@ export default {
 
 .error-text {
   color: #842029;
+}
+
+.touch-action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-mid);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.15);
+  z-index: 200;
+}
+
+.touch-btn {
+  flex: 1;
+  min-height: 44px;
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  background: var(--bg-surface2);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.touch-btn:active {
+  background: var(--bg-selected);
+}
+
+.touch-btn-close {
+  flex: 0 0 44px;
+  color: var(--text-muted);
 }
 </style>
