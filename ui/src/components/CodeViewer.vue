@@ -1,5 +1,5 @@
 <template>
-  <div class="code-viewer-main" ref="container" style="position:relative">
+  <div class="code-viewer-main" :class="{ 'wrap-lines': wrapLines }" ref="container" style="position:relative">
     <div class="sse-indicator" :class="'sse-' + sseStatus" :title="'Live updates: ' + sseStatus">●</div>
     <div v-if="!filePath" class="no-file">Select a file from the tree.</div>
     <div v-else-if="loading" class="no-file">Loading…</div>
@@ -93,6 +93,7 @@ export default {
     sessionId: [String, Number],
     filePath: { type: String, default: null },
     skipComments: { type: Boolean, default: false },
+    wrapLines: { type: Boolean, default: false },
   },
   emits: ['notes-updated', 'lines-marked', 'file-reloaded', 'show-help'],
   data() {

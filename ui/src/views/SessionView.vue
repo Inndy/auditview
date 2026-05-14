@@ -7,7 +7,9 @@
         :session="session"
         :coverage="coverage"
         :skipComments="skipComments"
+        :wrapLines="wrapLines"
         @skip-comments-change="skipComments = $event"
+        @wrap-lines-change="wrapLines = $event; localStorage.setItem('wrapLines', $event)"
         @show-help="showHelp = true"
       />
       <div class="session-layout">
@@ -21,6 +23,7 @@
           :sessionId="id"
           :filePath="currentFile"
           :skipComments="skipComments"
+          :wrapLines="wrapLines"
           @notes-updated="onNotesUpdated"
           @lines-marked="onLinesMarked"
           @file-reloaded="onFileReloaded"
@@ -79,6 +82,7 @@ export default {
       currentFile: null,
       currentNotes: [],
       skipComments: false,
+      wrapLines: localStorage.getItem('wrapLines') === 'true',
       showHelp: false,
     }
   },
