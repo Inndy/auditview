@@ -36,6 +36,7 @@ def list_files(session_id):
     exclusion_patterns = session["exclusion_patterns"]
 
     rel_paths = scan_folder(root_path, exclusion_patterns)
+    rel_path_set = set(rel_paths)
 
     for rel_path in rel_paths:
         cur.execute(
@@ -43,42 +44,82 @@ def list_files(session_id):
             (session_id, rel_path),
         )
 
-    result = []
-    for rel_path in rel_paths:
-        ext = os.path.splitext(rel_path)[1].lower()
-        full_path = os.path.join(root_path, rel_path)
+    # Fetch cached countable_lines per file
+    file_rows = cur.execute(
+        "SELECT rel_path, countable_lines FROM files WHERE session_id = ?",
+        (session_id,),
+    ).fetchall()
+    countable_map = {}
+    uncached = []
+    for r in file_rows:
+        rp = r[0] if is_apsw else r["rel_path"]
+        cl = r[1] if is_apsw else r["countable_lines"]
+        countable_map[rp] = cl
+        if cl is None and rp in rel_path_set:
+            uncached.append(rp)
 
-        reviewed_rows = cur.execute(
-            "SELECT line_hash, context_hash FROM reviewed_lines WHERE session_id = ? AND file_path = ?",
-            (session_id, rel_path),
-        ).fetchall()
-        if is_apsw:
-            reviewed_set = {(r[0], r[1]) for r in reviewed_rows}
-        else:
-            reviewed_set = {(r["line_hash"], r["context_hash"]) for r in reviewed_rows}
-
+    # Compute and cache for files not yet indexed
+    for rp in uncached:
+        ext = os.path.splitext(rp)[1].lower()
+        full_path = os.path.join(root_path, rp)
         countable = 0
-        reviewed_count = 0
         if os.path.isfile(full_path):
             try:
                 with open(full_path, "r", encoding="utf-8", errors="replace") as f:
-                    file_lines = f.read().splitlines()
-                for i, l in enumerate(file_lines):
-                    if is_countable_line(l, ext):
-                        countable += 1
-                        prev = file_lines[i - 1] if i > 0 else ""
-                        nxt = file_lines[i + 1] if i < len(file_lines) - 1 else ""
-                        if (line_hash(l), context_hash(prev, l, nxt)) in reviewed_set:
-                            reviewed_count += 1
+                    countable = sum(1 for l in f.read().splitlines() if is_countable_line(l, ext))
             except OSError:
                 pass
+        cur.execute(
+            "UPDATE files SET countable_lines = ? WHERE session_id = ? AND rel_path = ?",
+            (countable, session_id, rp),
+        )
+        countable_map[rp] = countable
 
-        coverage = reviewed_count / countable if countable > 0 else 0.0
+    # Batch: reviewed counts per file
+    reviewed_rows = cur.execute(
+        "SELECT file_path, COUNT(*) FROM reviewed_lines WHERE session_id = ? GROUP BY file_path",
+        (session_id,),
+    ).fetchall()
+    reviewed_map = {(r[0] if is_apsw else r["file_path"]): (r[1] if is_apsw else r[1])
+                    for r in reviewed_rows}
+
+    # Batch: note/todo counts per file (live only)
+    note_rows = cur.execute(
+        "SELECT file_path, "
+        "SUM(CASE WHEN is_todo=0 THEN 1 ELSE 0 END), "
+        "SUM(CASE WHEN is_todo=1 THEN 1 ELSE 0 END) "
+        "FROM notes WHERE session_id = ? AND is_orphaned=0 GROUP BY file_path",
+        (session_id,),
+    ).fetchall()
+    notes_map = {(r[0] if is_apsw else r["file_path"]): (
+        (r[1] if is_apsw else r[1]) or 0,
+        (r[2] if is_apsw else r[2]) or 0,
+    ) for r in note_rows}
+
+    result = []
+    for rel_path in rel_paths:
+        countable = countable_map.get(rel_path) or 0
+        reviewed = reviewed_map.get(rel_path, 0)
+        coverage = reviewed / countable if countable > 0 else 0.0
+        notes_c, todos_c = notes_map.get(rel_path, (0, 0))
+
+        if countable == 0:
+            status = "empty"
+        elif reviewed == 0:
+            status = "not_viewed"
+        elif reviewed >= countable:
+            status = "reviewed"
+        else:
+            status = "partial"
+
         result.append({
             "rel_path": rel_path,
             "countable_lines": countable,
-            "reviewed_lines": reviewed_count,
+            "reviewed_lines": reviewed,
             "coverage": coverage,
+            "status": status,
+            "notes_count": notes_c,
+            "todos_count": todos_c,
         })
 
     return jsonify(result)
@@ -134,18 +175,16 @@ def get_file(session_id, fpath):
 
     result_lines = []
     for i, line_content in enumerate(lines):
-        idx = i
-        prev_content = lines[idx - 1] if idx > 0 else ""
-        next_content = lines[idx + 1] if idx < len(lines) - 1 else ""
+        prev_content = lines[i - 1] if i > 0 else ""
+        next_content = lines[i + 1] if i < len(lines) - 1 else ""
         lh = line_hash(line_content)
         ch = context_hash(prev_content, line_content, next_content)
-        is_reviewed = (lh, ch) in reviewed_set
         result_lines.append({
             "line_no": i + 1,
             "content": line_content,
             "line_hash": lh,
             "context_hash": ch,
-            "is_reviewed": is_reviewed,
+            "is_reviewed": (lh, ch) in reviewed_set,
             "is_countable": is_countable_line(line_content, ext, skip_comments),
         })
 
@@ -157,27 +196,12 @@ def get_file(session_id, fpath):
 
     def note_to_dict(r):
         if is_apsw:
-            return {
-                "id": r[0],
-                "start_line": r[1],
-                "end_line": r[2],
-                "content": r[3],
-                "is_todo": bool(r[4]),
-                "is_orphaned": bool(r[5]),
-                "snapshot_text": r[6],
-                "created_at": r[7],
-            }
-        return {
-            "id": r["id"],
-            "start_line": r["start_line"],
-            "end_line": r["end_line"],
-            "content": r["content"],
-            "is_todo": bool(r["is_todo"]),
-            "is_orphaned": bool(r["is_orphaned"]),
-            "snapshot_text": r["snapshot_text"],
-            "created_at": r["created_at"],
-        }
+            return {"id": r[0], "start_line": r[1], "end_line": r[2], "content": r[3],
+                    "is_todo": bool(r[4]), "is_orphaned": bool(r[5]),
+                    "snapshot_text": r[6], "created_at": r[7]}
+        return {"id": r["id"], "start_line": r["start_line"], "end_line": r["end_line"],
+                "content": r["content"], "is_todo": bool(r["is_todo"]),
+                "is_orphaned": bool(r["is_orphaned"]),
+                "snapshot_text": r["snapshot_text"], "created_at": r["created_at"]}
 
-    notes = [note_to_dict(r) for r in note_rows]
-
-    return jsonify({"lines": result_lines, "notes": notes})
+    return jsonify({"lines": result_lines, "notes": [note_to_dict(r) for r in note_rows]})

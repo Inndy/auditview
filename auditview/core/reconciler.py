@@ -2,6 +2,7 @@ import difflib
 import os
 
 from auditview.core.hashing import line_hash, context_hash
+from auditview.core.coverage import is_countable_line
 from auditview.db.checkpoint import CheckpointManager
 
 
@@ -170,11 +171,15 @@ def reconcile_file(conn, session_id, file_path, root_path):
 
         mtime = os.path.getmtime(full_path)
         new_phashes = "\n".join(new_line_hashes)
+        ext = os.path.splitext(file_path)[1].lower()
+        countable = sum(1 for l in new_lines if is_countable_line(l, ext))
         cur.execute(
-            "INSERT INTO files (session_id, rel_path, last_mtime, prev_line_hashes) VALUES (?, ?, ?, ?) "
+            "INSERT INTO files (session_id, rel_path, last_mtime, prev_line_hashes, countable_lines) "
+            "VALUES (?, ?, ?, ?, ?) "
             "ON CONFLICT(session_id, rel_path) DO UPDATE SET "
-            "last_mtime=excluded.last_mtime, prev_line_hashes=excluded.prev_line_hashes",
-            (session_id, file_path, mtime, new_phashes),
+            "last_mtime=excluded.last_mtime, prev_line_hashes=excluded.prev_line_hashes, "
+            "countable_lines=excluded.countable_lines",
+            (session_id, file_path, mtime, new_phashes, countable),
         )
 
         conn.commit()
