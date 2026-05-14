@@ -144,6 +144,8 @@ export default {
         this.loadFile(this.filePath).then(() => {
           this.$emit('file-reloaded')
         })
+      } else {
+        this.$emit('file-reloaded')
       }
     })
     this._sse.connect()
