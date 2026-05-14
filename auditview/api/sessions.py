@@ -1,7 +1,5 @@
-import os
 from flask import Blueprint, request, jsonify, current_app
 from auditview.db.connection import open_db
-from auditview.db.schema import run_migrations
 
 bp = Blueprint("sessions", __name__)
 
@@ -33,20 +31,12 @@ def list_sessions():
 def create_session():
     data = request.get_json(force=True, silent=True) or {}
     label = data.get("label", "").strip()
-    root_path = data.get("root_path", "").strip()
     exclusion_patterns = data.get("exclusion_patterns", "")
 
     if not label:
         return jsonify({"error": "label is required"}), 400
-    if not root_path:
-        return jsonify({"error": "root_path is required"}), 400
-    if not os.path.isdir(root_path):
-        return jsonify({"error": "root_path does not exist or is not a directory"}), 400
 
-    configured_root = os.path.realpath(current_app.config["ROOT_PATH"])
-    candidate = os.path.realpath(root_path)
-    if candidate != configured_root and not candidate.startswith(configured_root + os.sep):
-        return jsonify({"error": "root_path must be within the configured audit root"}), 400
+    root_path = current_app.config["ROOT_PATH"]
 
     conn = open_db(current_app.config["DB_PATH"])
     is_apsw = getattr(conn, '_is_apsw', False)

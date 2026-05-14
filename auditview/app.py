@@ -12,6 +12,7 @@ from auditview.api.notes import bp as notes_bp
 from auditview.api.checkpoints import bp as checkpoints_bp
 from auditview.api.events import bp as events_bp
 from auditview.api.coverage import bp as coverage_bp
+from auditview.api.config import bp as config_bp
 
 
 def create_app(db_path, root_path):
@@ -35,6 +36,7 @@ def create_app(db_path, root_path):
     app.register_blueprint(checkpoints_bp, url_prefix="/api")
     app.register_blueprint(events_bp, url_prefix="/api")
     app.register_blueprint(coverage_bp, url_prefix="/api")
+    app.register_blueprint(config_bp, url_prefix="/api")
 
     @app.route("/", defaults={"path": ""})
     @app.route("/<path:path>")
