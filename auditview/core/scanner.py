@@ -27,6 +27,8 @@ def _load_gitignore_patterns(path):
 
 
 def scan_folder(root, exclusion_patterns_str=""):
+    real_root = os.path.realpath(root)
+
     base_patterns = list(_DEFAULT_EXCLUDES)
     if exclusion_patterns_str:
         for line in exclusion_patterns_str.splitlines():
@@ -48,6 +50,12 @@ def scan_folder(root, exclusion_patterns_str=""):
 
         for fname in filenames:
             full_path = os.path.join(dirpath, fname)
+
+            # Skip symlinks that resolve outside the project root
+            real_path = os.path.realpath(full_path)
+            if not real_path.startswith(real_root + os.sep) and real_path != real_root:
+                continue
+
             rel_path = os.path.relpath(full_path, root).replace(os.sep, "/")
 
             if base_spec.match_file(rel_path):
@@ -63,12 +71,16 @@ def scan_folder(root, exclusion_patterns_str=""):
             if not excluded:
                 result.append(rel_path)
 
-        # Prune dirnames so os.walk skips excluded directories early
-        dirnames[:] = [
-            d for d in dirnames
-            if not base_spec.match_file(
-                os.path.relpath(os.path.join(dirpath, d), root).replace(os.sep, "/") + "/"
-            )
-        ]
+        # Prune dirnames: skip excluded dirs and symlinked dirs outside root
+        kept = []
+        for d in dirnames:
+            full_d = os.path.join(dirpath, d)
+            real_d = os.path.realpath(full_d)
+            if not real_d.startswith(real_root + os.sep) and real_d != real_root:
+                continue
+            rel_d = os.path.relpath(full_d, root).replace(os.sep, "/") + "/"
+            if not base_spec.match_file(rel_d):
+                kept.append(d)
+        dirnames[:] = kept
 
     return sorted(result)
