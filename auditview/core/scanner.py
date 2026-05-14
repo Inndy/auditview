@@ -12,6 +12,19 @@ _DEFAULT_EXCLUDES = [
     "**/static/assets/**",
 ]
 
+_base_spec_cache: dict[str, pathspec.PathSpec] = {}
+
+
+def _base_spec(exclusion_patterns_str: str) -> pathspec.PathSpec:
+    if exclusion_patterns_str not in _base_spec_cache:
+        patterns = list(_DEFAULT_EXCLUDES)
+        for line in exclusion_patterns_str.splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                patterns.append(line)
+        _base_spec_cache[exclusion_patterns_str] = pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+    return _base_spec_cache[exclusion_patterns_str]
+
 
 def _load_gitignore_patterns(path):
     patterns = []
@@ -28,16 +41,8 @@ def _load_gitignore_patterns(path):
 
 def scan_folder(root, exclusion_patterns_str=""):
     real_root = os.path.realpath(root)
+    base_spec = _base_spec(exclusion_patterns_str)
 
-    base_patterns = list(_DEFAULT_EXCLUDES)
-    if exclusion_patterns_str:
-        for line in exclusion_patterns_str.splitlines():
-            line = line.strip()
-            if line and not line.startswith("#"):
-                base_patterns.append(line)
-    base_spec = pathspec.PathSpec.from_lines("gitwildmatch", base_patterns)
-
-    # Map of abs_dir → PathSpec built from that dir's .gitignore
     dir_specs = {}
 
     result = []
@@ -51,11 +56,6 @@ def scan_folder(root, exclusion_patterns_str=""):
         for fname in filenames:
             full_path = os.path.join(dirpath, fname)
 
-            # Skip symlinks that resolve outside the project root
-            real_path = os.path.realpath(full_path)
-            if not real_path.startswith(real_root + os.sep) and real_path != real_root:
-                continue
-
             rel_path = os.path.relpath(full_path, root).replace(os.sep, "/")
 
             if base_spec.match_file(rel_path):
@@ -68,16 +68,19 @@ def scan_folder(root, exclusion_patterns_str=""):
                     excluded = True
                     break
 
-            if not excluded:
-                result.append(rel_path)
+            if excluded:
+                continue
 
-        # Prune dirnames: skip excluded dirs and symlinked dirs outside root
+            # Skip symlinks that resolve outside the project root (checked last, it's rare)
+            real_path = os.path.realpath(full_path)
+            if not real_path.startswith(real_root + os.sep) and real_path != real_root:
+                continue
+
+            result.append(rel_path)
+
         kept = []
         for d in dirnames:
             full_d = os.path.join(dirpath, d)
-            real_d = os.path.realpath(full_d)
-            if not real_d.startswith(real_root + os.sep) and real_d != real_root:
-                continue
             rel_d = os.path.relpath(full_d, root).replace(os.sep, "/") + "/"
             if not base_spec.match_file(rel_d):
                 kept.append(d)
