@@ -110,7 +110,6 @@ export default {
     },
     onNotesUpdated(notes) {
       this.currentNotes = notes
-      this.refreshCoverage()
     },
     async refreshCoverage() {
       try {
