@@ -8,6 +8,8 @@ __pycache__/
 *.pyc
 *.pyo
 .venv/
+build/
+*.egg-info/
 
 # frontend build output
 auditview/static/assets/
