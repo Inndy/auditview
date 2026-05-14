@@ -2,6 +2,10 @@
   <div class="file-tree-sidebar">
     <div class="file-tree-header">
       <strong>Files</strong>
+      <label class="hide-reviewed-label">
+        <input type="checkbox" v-model="hideReviewed" />
+        Hide reviewed
+      </label>
     </div>
     <div v-if="loading" class="tree-loading">Loading…</div>
     <div v-else-if="error" class="tree-error">{{ error }}</div>
@@ -59,11 +63,16 @@ export default {
       loading: true,
       error: null,
       currentFile: null,
+      hideReviewed: false,
     }
   },
   computed: {
+    filteredFiles() {
+      if (!this.hideReviewed) return this.files
+      return this.files.filter((f) => f.status !== 'reviewed')
+    },
     tree() {
-      return buildTree(this.files)
+      return buildTree(this.filteredFiles)
     },
   },
   mounted() {
@@ -113,6 +122,21 @@ export default {
   padding: 10px 12px;
   border-bottom: 1px solid #e0e0e0;
   font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hide-reviewed-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--text-dim);
+  cursor: pointer;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 .tree-loading,
