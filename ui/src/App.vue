@@ -143,6 +143,7 @@ table.code-table tr.reviewed.selected {
   text-align: right;
   padding: 0 8px;
   color: var(--text-gutter);
+  -webkit-user-select: none;
   user-select: none;
   cursor: pointer;
   font-size: 12px;
