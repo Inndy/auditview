@@ -211,7 +211,6 @@ export default {
     },
 
     onDragStart(lineNo) {
-      if (this._suppressMouseUntil && Date.now() < this._suppressMouseUntil) return
       this.dragStart = lineNo
       this.selectedRange = { start: lineNo, end: lineNo }
       this.selectionFromTouch = false
@@ -255,7 +254,6 @@ export default {
       const lineNo = this.lineNoFromPoint(touch.clientX, touch.clientY)
       if (lineNo === null) return
 
-      this._suppressMouseUntil = Date.now() + 500
       this.dragStart = lineNo
       this.selectedRange = { start: lineNo, end: lineNo }
       this.selectionFromTouch = true
@@ -267,12 +265,12 @@ export default {
         if (ln !== null) this.onDragMove(ln)
       }
       this._docTouchEnd = (ev) => {
+        ev.preventDefault()  // suppresses synthesized mousedown/click
         document.removeEventListener('touchmove', this._docTouchMove)
         document.removeEventListener('touchend', this._docTouchEnd)
         const t = ev.changedTouches[0]
         const ln = this.lineNoFromPoint(t.clientX, t.clientY)
         this.onDragEnd(ln ?? this.selectedRange.end ?? this.selectedRange.start)
-        this._suppressMouseUntil = Date.now() + 500
         this.selectionFromTouch = true
       }
       document.addEventListener('touchmove', this._docTouchMove, { passive: false })
