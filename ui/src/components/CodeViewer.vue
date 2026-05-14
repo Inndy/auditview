@@ -211,6 +211,7 @@ export default {
     },
 
     onDragStart(lineNo) {
+      if (this._suppressMouseUntil && Date.now() < this._suppressMouseUntil) return
       this.dragStart = lineNo
       this.selectedRange = { start: lineNo, end: lineNo }
       this.selectionFromTouch = false
@@ -254,9 +255,10 @@ export default {
       const lineNo = this.lineNoFromPoint(touch.clientX, touch.clientY)
       if (lineNo === null) return
 
+      this._suppressMouseUntil = Date.now() + 500
+      this.dragStart = lineNo
+      this.selectedRange = { start: lineNo, end: lineNo }
       this.selectionFromTouch = true
-      this.onDragStart(lineNo)
-      this.selectionFromTouch = true  // onDragStart resets it; restore
 
       this._docTouchMove = (ev) => {
         ev.preventDefault()
@@ -270,6 +272,7 @@ export default {
         const t = ev.changedTouches[0]
         const ln = this.lineNoFromPoint(t.clientX, t.clientY)
         this.onDragEnd(ln ?? this.selectedRange.end ?? this.selectedRange.start)
+        this._suppressMouseUntil = Date.now() + 500
         this.selectionFromTouch = true
       }
       document.addEventListener('touchmove', this._docTouchMove, { passive: false })
