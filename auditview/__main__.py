@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 
 from waitress import serve
@@ -13,7 +14,11 @@ def main():
                    help="SQLite database file path (default: <root>/.auditview.db)")
     p.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
     p.add_argument("--port", type=int, default=5000, help="Bind port (default: 5000)")
+    p.add_argument("--debug", action="store_true", help="Enable debug logging (all requests)")
     args = p.parse_args()
+
+    level = logging.DEBUG if args.debug else logging.WARNING
+    logging.basicConfig(format="%(levelname)s:%(name)s:%(message)s", level=level)
 
     root = os.path.abspath(args.path)
     db_path = os.path.abspath(args.db) if args.db else os.path.join(root, ".auditview.db")
