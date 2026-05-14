@@ -46,7 +46,7 @@ export default {
     filePath: { type: String, default: null },
     skipComments: { type: Boolean, default: false },
   },
-  emits: ['notes-updated', 'lines-marked', 'file-reloaded'],
+  emits: ['notes-updated', 'lines-marked', 'file-reloaded', 'show-help'],
   data() {
     return {
       lines: [],
@@ -167,6 +167,12 @@ export default {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return
 
       const key = e.key
+
+      if (key === '?') {
+        e.preventDefault()
+        this.$emit('show-help')
+        return
+      }
 
       if (key === 'Escape') {
         this.selectedRange = { start: null, end: null }

@@ -8,6 +8,7 @@
         :coverage="coverage"
         :skipComments="skipComments"
         @skip-comments-change="skipComments = $event"
+        @show-help="showHelp = true"
       />
       <div class="session-layout">
         <FileTree
@@ -23,6 +24,7 @@
           @notes-updated="onNotesUpdated"
           @lines-marked="refreshCoverage"
           @file-reloaded="onFileReloaded"
+          @show-help="showHelp = true"
         />
         <div class="right-panels">
           <NotePanel
@@ -40,6 +42,7 @@
           <CheckpointPanel :sessionId="id" ref="checkpointPanel" @reverted="onReverted" />
         </div>
       </div>
+      <KeyboardHelpModal :visible="showHelp" @close="showHelp = false" />
     </template>
   </div>
 </template>
@@ -53,6 +56,7 @@ import CodeViewer from '../components/CodeViewer.vue'
 import NotePanel from '../components/NotePanel.vue'
 import OrphanPanel from '../components/OrphanPanel.vue'
 import CheckpointPanel from '../components/CheckpointPanel.vue'
+import KeyboardHelpModal from '../components/KeyboardHelpModal.vue'
 
 export default {
   name: 'SessionView',
@@ -63,6 +67,7 @@ export default {
     NotePanel,
     OrphanPanel,
     CheckpointPanel,
+    KeyboardHelpModal,
   },
   data() {
     return {
@@ -74,6 +79,7 @@ export default {
       currentFile: null,
       currentNotes: [],
       skipComments: false,
+      showHelp: false,
     }
   },
   mounted() {

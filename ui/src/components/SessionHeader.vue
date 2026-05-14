@@ -11,6 +11,7 @@
       <span v-if="coverage && !coverage.supports_checkpoints" class="warn-badge">No checkpoints</span>
     </div>
     <SkipCommentsToggle :modelValue="skipComments" @change="$emit('skip-comments-change', $event)" />
+    <button class="help-btn" title="Keyboard shortcuts (?)" @click="$emit('show-help')">?</button>
   </div>
 </template>
 
@@ -25,7 +26,7 @@ export default {
     coverage: { type: Object, default: null },
     skipComments: { type: Boolean, default: false },
   },
-  emits: ['skip-comments-change'],
+  emits: ['skip-comments-change', 'show-help'],
   computed: {
     coveragePct() {
       if (!this.coverage) return 0
@@ -62,6 +63,25 @@ export default {
 .session-coverage {
   margin-left: auto;
   color: #555;
+}
+
+.help-btn {
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  color: #555;
+  flex-shrink: 0;
+}
+
+.help-btn:hover {
+  background: #e0e0e0;
 }
 
 .warn-badge {
