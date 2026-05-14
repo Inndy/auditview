@@ -39,6 +39,52 @@ import { SSEClient } from '../api/events.js'
 import LineRow from './LineRow.vue'
 import CreateNoteModal from './CreateNoteModal.vue'
 
+const EXT_LANG = {
+  py: 'python', js: 'javascript', ts: 'typescript', jsx: 'javascript',
+  tsx: 'typescript', vue: 'xml', html: 'html', css: 'css', scss: 'scss',
+  json: 'json', md: 'markdown', sh: 'bash', bash: 'bash', go: 'go',
+  rs: 'rust', c: 'c', cpp: 'cpp', h: 'c', java: 'java', rb: 'ruby',
+  yaml: 'yaml', yml: 'yaml', toml: 'ini', sql: 'sql', xml: 'xml',
+}
+
+function highlightFile(hljs, path, lines) {
+  const ext = path.split('.').pop().toLowerCase()
+  const lang = EXT_LANG[ext]
+  const src = lines.map((l) => l.content).join('\n')
+  if (lang && hljs.getLanguage(lang)) {
+    return hljs.highlight(src, { language: lang }).value
+  }
+  return hljs.highlightAuto(src).value
+}
+
+function splitHighlightedLines(html) {
+  const lines = []
+  const openSpans = []
+  let cur = ''
+  let i = 0
+  while (i < html.length) {
+    if (html[i] === '\n') {
+      lines.push(cur + openSpans.map(() => '</span>').join(''))
+      cur = openSpans.join('')
+      i++
+    } else if (html.startsWith('</span>', i)) {
+      cur += '</span>'
+      openSpans.pop()
+      i += 7
+    } else if (html[i] === '<') {
+      const end = html.indexOf('>', i)
+      const tag = html.slice(i, end + 1)
+      cur += tag
+      openSpans.push(tag)
+      i = end + 1
+    } else {
+      cur += html[i++]
+    }
+  }
+  if (cur) lines.push(cur + openSpans.map(() => '</span>').join(''))
+  return lines
+}
+
 export default {
   name: 'CodeViewer',
   components: { LineRow, CreateNoteModal },
@@ -117,9 +163,12 @@ export default {
       try {
         const data = await getFile(this.sessionId, path, this.skipComments)
         const hljs = this.$hljs
-        this.lines = data.lines.map((line) => ({
+        const highlightedLines = hljs
+          ? splitHighlightedLines(highlightFile(hljs, path, data.lines))
+          : data.lines.map((l) => this.escapeHtml(l.content))
+        this.lines = data.lines.map((line, i) => ({
           ...line,
-          highlightedContent: hljs ? hljs.highlightAuto(line.content).value : this.escapeHtml(line.content),
+          highlightedContent: highlightedLines[i] ?? this.escapeHtml(line.content),
         }))
         this.notes = data.notes || []
         this.$emit('notes-updated', this.notes)
