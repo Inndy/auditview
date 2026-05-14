@@ -17,8 +17,9 @@ def main():
     p.add_argument("--debug", action="store_true", help="Enable debug logging (all requests)")
     args = p.parse_args()
 
-    level = logging.DEBUG if args.debug else logging.WARNING
-    logging.basicConfig(format="%(levelname)s:%(name)s:%(message)s", level=level)
+    logging.basicConfig(format="%(levelname)s:%(name)s:%(message)s", level=logging.WARNING)
+    if args.debug:
+        logging.getLogger("auditview").setLevel(logging.DEBUG)
 
     root = os.path.abspath(args.path)
     db_path = os.path.abspath(args.db) if args.db else os.path.join(root, ".auditview.db")
