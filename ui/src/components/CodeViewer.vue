@@ -9,8 +9,6 @@
         class="code-table"
         @mouseleave="onTableMouseLeave"
         @touchstart="onTouchStart"
-        @touchmove="onTouchMove"
-        @touchend="onTouchEnd"
       >
         <tbody>
           <LineRow
@@ -36,7 +34,7 @@
     />
 
     <Teleport to="body">
-      <div v-if="isTouchDevice && rangeMin !== null && !showModal" class="touch-action-bar">
+      <div v-if="selectionFromTouch && rangeMin !== null && !showModal" class="touch-action-bar">
         <button class="touch-btn" @click="touchMark">Mark</button>
         <button class="touch-btn" @click="touchUnmark">Unmark</button>
         <button class="touch-btn" @click="touchTodo">Todo</button>
@@ -122,6 +120,7 @@ export default {
       error: null,
       sseStatus: 'disconnected',
       isTouchDevice: false,
+      selectionFromTouch: false,
     }
   },
   computed: {
@@ -179,6 +178,8 @@ export default {
     document.removeEventListener('keydown', this._keyHandler)
     document.removeEventListener('mouseup', this._mouseUpHandler)
     window.removeEventListener('touchstart', this._touchDetectHandler)
+    if (this._docTouchMove) document.removeEventListener('touchmove', this._docTouchMove)
+    if (this._docTouchEnd) document.removeEventListener('touchend', this._docTouchEnd)
     if (this._sse) this._sse.disconnect()
   },
   methods: {
@@ -212,6 +213,7 @@ export default {
     onDragStart(lineNo) {
       this.dragStart = lineNo
       this.selectedRange = { start: lineNo, end: lineNo }
+      this.selectionFromTouch = false
     },
 
     onDragMove(lineNo) {
@@ -250,26 +252,33 @@ export default {
       if (!target?.closest('.gutter-cell')) return
       e.preventDefault()
       const lineNo = this.lineNoFromPoint(touch.clientX, touch.clientY)
-      if (lineNo !== null) this.onDragStart(lineNo)
-    },
+      if (lineNo === null) return
 
-    onTouchMove(e) {
-      if (this.dragStart === null) return
-      e.preventDefault()
-      const touch = e.touches[0]
-      const lineNo = this.lineNoFromPoint(touch.clientX, touch.clientY)
-      if (lineNo !== null) this.onDragMove(lineNo)
-    },
+      this.selectionFromTouch = true
+      this.onDragStart(lineNo)
+      this.selectionFromTouch = true  // onDragStart resets it; restore
 
-    onTouchEnd(e) {
-      if (this.dragStart === null) return
-      const touch = e.changedTouches[0]
-      const lineNo = this.lineNoFromPoint(touch.clientX, touch.clientY)
-      this.onDragEnd(lineNo ?? this.selectedRange.end ?? this.selectedRange.start)
+      this._docTouchMove = (ev) => {
+        ev.preventDefault()
+        const t = ev.touches[0]
+        const ln = this.lineNoFromPoint(t.clientX, t.clientY)
+        if (ln !== null) this.onDragMove(ln)
+      }
+      this._docTouchEnd = (ev) => {
+        document.removeEventListener('touchmove', this._docTouchMove)
+        document.removeEventListener('touchend', this._docTouchEnd)
+        const t = ev.changedTouches[0]
+        const ln = this.lineNoFromPoint(t.clientX, t.clientY)
+        this.onDragEnd(ln ?? this.selectedRange.end ?? this.selectedRange.start)
+        this.selectionFromTouch = true
+      }
+      document.addEventListener('touchmove', this._docTouchMove, { passive: false })
+      document.addEventListener('touchend', this._docTouchEnd, { passive: false })
     },
 
     clearSelection() {
       this.selectedRange = { start: null, end: null }
+      this.selectionFromTouch = false
     },
 
     async touchMark() {
@@ -312,7 +321,7 @@ export default {
       }
 
       if (key === 'Escape') {
-        this.selectedRange = { start: null, end: null }
+        this.clearSelection()
         return
       }
 
