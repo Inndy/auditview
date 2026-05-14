@@ -25,6 +25,9 @@ class _Handler(FileSystemEventHandler):
             self._svc._handle_change(event.src_path)
 
 
+_DEBOUNCE_DELAY = 0.3  # seconds
+
+
 class WatcherService:
     def __init__(self, db_path, root_path):
         self._db_path = db_path
@@ -34,6 +37,7 @@ class WatcherService:
         self._lock = threading.Lock()
         self._clients = {}
         self._scan_cache = {}  # session_id → list[str] | None (None = invalid)
+        self._debounce_timers = {}  # abs_path → Timer
         self._conn = None
 
     def start(self):
@@ -44,6 +48,10 @@ class WatcherService:
     def stop(self):
         self._observer.stop()
         self._observer.join()
+        with self._lock:
+            for t in self._debounce_timers.values():
+                t.cancel()
+            self._debounce_timers.clear()
         if self._conn:
             self._conn.close()
             self._conn = None
@@ -75,6 +83,17 @@ class WatcherService:
         return result
 
     def _handle_change(self, abs_path):
+        with self._lock:
+            existing = self._debounce_timers.pop(abs_path, None)
+            if existing:
+                existing.cancel()
+            t = threading.Timer(_DEBOUNCE_DELAY, self._process_change, args=(abs_path,))
+            self._debounce_timers[abs_path] = t
+        t.start()
+
+    def _process_change(self, abs_path):
+        with self._lock:
+            self._debounce_timers.pop(abs_path, None)
         if not abs_path.startswith(self._root_path):
             return
         rel_path = os.path.relpath(abs_path, self._root_path).replace(os.sep, "/")
