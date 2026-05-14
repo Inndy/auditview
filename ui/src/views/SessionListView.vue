@@ -1,7 +1,10 @@
 <template>
   <div class="session-list-page">
     <div class="page-header">
-      <h1>auditview</h1>
+      <div>
+        <h1>auditview</h1>
+        <div v-if="config" class="server-root" title="Audit root">{{ config.root_path }}</div>
+      </div>
       <button class="dark-btn" :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'" @click="onToggleDark">{{ darkMode ? '☀️' : '🌙' }}</button>
     </div>
     <div v-if="error" class="error-msg">{{ error }}</div>
@@ -13,11 +16,7 @@
         <input v-model="form.label" type="text" placeholder="e.g. First pass" />
       </div>
       <div class="form-group">
-        <label>Root path</label>
-        <input v-model="form.root_path" type="text" placeholder="/home/user/myproject" />
-      </div>
-      <div class="form-group">
-        <label>Exclusion patterns (gitignore syntax, one per line)</label>
+        <label>Exclusion patterns <span class="label-hint">(gitignore syntax, one per line)</span></label>
         <textarea v-model="form.exclusion_patterns" rows="3" placeholder="*.log&#10;build/"></textarea>
       </div>
       <button class="btn-primary" @click="submitCreate" :disabled="creating">
@@ -34,7 +33,6 @@
           <tr>
             <th>ID</th>
             <th>Label</th>
-            <th>Root path</th>
             <th>Created</th>
             <th></th>
           </tr>
@@ -43,7 +41,6 @@
           <tr v-for="s in sessions" :key="s.id">
             <td>{{ s.id }}</td>
             <td>{{ s.label }}</td>
-            <td><code>{{ s.root_path }}</code></td>
             <td>{{ s.created_at }}</td>
             <td><a :href="'/sessions/' + s.id" @click.prevent="openSession(s.id)">Open</a></td>
           </tr>
@@ -54,7 +51,7 @@
 </template>
 
 <script>
-import { listSessions, createSession } from '../api/sessions.js'
+import { listSessions, createSession, getConfig } from '../api/sessions.js'
 import { isDark, toggleDark } from '../darkMode.js'
 
 export default {
@@ -62,13 +59,13 @@ export default {
   data() {
     return {
       sessions: [],
+      config: null,
       loading: true,
       error: null,
       creating: false,
       darkMode: isDark(),
       form: {
         label: '',
-        root_path: '',
         exclusion_patterns: '',
       },
     }
@@ -81,7 +78,9 @@ export default {
       this.loading = true
       this.error = null
       try {
-        this.sessions = await listSessions()
+        const [sessions, config] = await Promise.all([listSessions(), getConfig()])
+        this.sessions = sessions
+        this.config = config
       } catch (e) {
         this.error = e.message
       } finally {
@@ -89,8 +88,8 @@ export default {
       }
     },
     async submitCreate() {
-      if (!this.form.label || !this.form.root_path) {
-        this.error = 'Label and root path are required.'
+      if (!this.form.label) {
+        this.error = 'Label is required.'
         return
       }
       this.creating = true
@@ -98,11 +97,10 @@ export default {
       try {
         const s = await createSession({
           label: this.form.label,
-          root_path: this.form.root_path,
           exclusion_patterns: this.form.exclusion_patterns,
         })
         this.sessions.push(s)
-        this.form = { label: '', root_path: '', exclusion_patterns: '' }
+        this.form = { label: '', exclusion_patterns: '' }
       } catch (e) {
         this.error = e.message
       } finally {
@@ -129,13 +127,20 @@ export default {
 
 .page-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 32px;
 }
 
 h1 {
   font-size: 28px;
+}
+
+.server-root {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: monospace;
+  margin-top: 4px;
 }
 
 h2 {
@@ -150,6 +155,7 @@ h2 {
   font-size: 20px;
   padding: 0;
   line-height: 1;
+  margin-top: 4px;
 }
 
 .create-session-form {
@@ -169,6 +175,11 @@ h2 {
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 4px;
+}
+
+.label-hint {
+  font-weight: 400;
+  color: var(--text-muted);
 }
 
 .form-group input,

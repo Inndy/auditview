@@ -10,3 +10,7 @@ export function createSession(data) {
     body: JSON.stringify(data),
   });
 }
+
+export function getConfig() {
+  return apiFetch('/api/config');
+}
