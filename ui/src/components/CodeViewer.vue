@@ -1,5 +1,6 @@
 <template>
-  <div class="code-viewer-main" ref="container">
+  <div class="code-viewer-main" ref="container" style="position:relative">
+    <div class="sse-indicator" :class="'sse-' + sseStatus" :title="'Live updates: ' + sseStatus">●</div>
     <div v-if="!filePath" class="no-file">Select a file from the tree.</div>
     <div v-else-if="loading" class="no-file">Loading…</div>
     <div v-else-if="error" class="no-file error-text">{{ error }}</div>
@@ -57,6 +58,7 @@ export default {
       modalIsTodo: false,
       loading: false,
       error: null,
+      sseStatus: 'disconnected',
     }
   },
   computed: {
@@ -87,6 +89,9 @@ export default {
     document.addEventListener('mouseup', this._mouseUpHandler)
 
     this._sse = new SSEClient(this.sessionId)
+    this._sse.on('status', ({ status }) => {
+      this.sseStatus = status
+    })
     this._sse.on('file_changed', (data) => {
       if (data.rel_path === this.filePath) {
         this.loadFile(this.filePath).then(() => {
@@ -278,6 +283,19 @@ export default {
 </script>
 
 <style scoped>
+.sse-indicator {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 10px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.sse-connected    { color: #4caf50; }
+.sse-connecting   { color: #ff9800; }
+.sse-disconnected { color: #e53935; }
+
 .no-file {
   padding: 40px;
   color: #aaa;

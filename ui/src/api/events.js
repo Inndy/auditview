@@ -5,6 +5,7 @@ export class SSEClient {
     this.es = null;
     this.retryDelay = 1000;
     this._stopped = false;
+    this.status = 'disconnected';
   }
 
   on(event, cb) {
@@ -16,6 +17,7 @@ export class SSEClient {
 
   connect() {
     this._stopped = false;
+    this._setStatus('connecting');
     this._open();
   }
 
@@ -40,14 +42,24 @@ export class SSEClient {
       this.es.close();
       this.es = null;
       if (!this._stopped) {
-        setTimeout(() => this._open(), this.retryDelay);
+        this._setStatus('disconnected');
+        setTimeout(() => {
+          this._setStatus('connecting');
+          this._open();
+        }, this.retryDelay);
         this.retryDelay = Math.min(this.retryDelay * 2, 30000);
       }
     };
 
     this.es.onopen = () => {
       this.retryDelay = 1000;
+      this._setStatus('connected');
     };
+  }
+
+  _setStatus(status) {
+    this.status = status;
+    this._dispatch('status', { status });
   }
 
   _dispatch(event, data) {
@@ -64,5 +76,6 @@ export class SSEClient {
       this.es.close();
       this.es = null;
     }
+    this._setStatus('disconnected');
   }
 }
