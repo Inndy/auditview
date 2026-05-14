@@ -1,6 +1,17 @@
 <template>
   <div class="panel-section">
     <h3>Checkpoints</h3>
+    <div class="cp-create">
+      <input
+        v-model="newLabel"
+        class="cp-label-input"
+        placeholder="Label (optional)"
+        @keydown.enter="createCheckpoint"
+      />
+      <button class="btn-primary cp-create-btn" @click="createCheckpoint" :disabled="creating">
+        {{ creating ? '…' : 'Save' }}
+      </button>
+    </div>
     <div v-if="loading" class="empty-msg">Loading…</div>
     <div v-else-if="error" class="error-msg">{{ error }}</div>
     <div v-else-if="checkpoints.length === 0" class="empty-msg">No checkpoints.</div>
@@ -17,20 +28,22 @@
 </template>
 
 <script>
-import { listCheckpoints, revertCheckpoint } from '../api/checkpoints.js'
+import { listCheckpoints, createCheckpoint, revertCheckpoint } from '../api/checkpoints.js'
 
 export default {
   name: 'CheckpointPanel',
   props: {
     sessionId: [String, Number],
   },
-  emits: ['reverted'],
+  emits: ['reverted', 'created'],
   data() {
     return {
       checkpoints: [],
       loading: true,
       error: null,
       reverting: null,
+      creating: false,
+      newLabel: '',
     }
   },
   mounted() {
@@ -46,6 +59,20 @@ export default {
         this.error = e.message
       } finally {
         this.loading = false
+      }
+    },
+    async createCheckpoint() {
+      this.creating = true
+      this.error = null
+      try {
+        await createCheckpoint(this.sessionId, this.newLabel.trim() || 'manual')
+        this.newLabel = ''
+        await this.load()
+        this.$emit('created')
+      } catch (e) {
+        this.error = e.message
+      } finally {
+        this.creating = false
       }
     },
     async revert(cid) {
@@ -74,8 +101,8 @@ export default {
 }
 
 .checkpoint-item {
-  background: #fff;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-mid);
   border-radius: 4px;
   padding: 6px 8px;
   font-size: 12px;
@@ -94,7 +121,7 @@ export default {
 }
 
 .cp-time {
-  color: #aaa;
+  color: var(--text-muted);
   font-size: 10px;
 }
 
@@ -103,9 +130,36 @@ export default {
   font-size: 11px;
 }
 
+.cp-create {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.cp-label-input {
+  flex: 1;
+  font-size: 12px;
+  padding: 3px 6px;
+  border: 1px solid var(--border-mid);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text);
+  min-width: 0;
+}
+
+.cp-label-input:focus {
+  outline: none;
+  border-color: #4a9eff;
+}
+
+.cp-create-btn {
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
 .empty-msg {
   font-size: 12px;
-  color: #aaa;
+  color: var(--text-muted);
 }
 
 .error-msg {
