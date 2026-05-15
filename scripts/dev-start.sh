@@ -23,7 +23,7 @@ if [ "${AUDITVIEW_DEV_FRONTEND:-}" = 1 ]; then
     trap '[ -n "$child" ] && kill "$child" 2>/dev/null; rm -f "$FRONTEND_PID" "$FRONTEND_RESTART"' EXIT
     while :; do
         rm -f "$FRONTEND_RESTART"
-        pnpm run dev & child=$!
+        pnpm run dev --host & child=$!
         echo "$child" > "$FRONTEND_PID"
         wait "$child"
         [ -f "$FRONTEND_RESTART" ] || break

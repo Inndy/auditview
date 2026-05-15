@@ -71,6 +71,19 @@ export default {
       showHelp: false,
     }
   },
+  mounted() {
+    const fileParam = this.$route.query.file
+    if (fileParam) {
+      this.currentFile = fileParam
+    }
+  },
+  watch: {
+    '$route.query.file'(newFile) {
+      if (newFile) {
+        this.currentFile = newFile
+      }
+    },
+  },
   methods: {
     openFile(path) {
       this.currentFile = path

@@ -67,10 +67,15 @@
             <h4>Attached Notes</h4>
             <div v-if="issueNotes.length === 0" class="empty-notes">No notes attached.</div>
             <div v-else class="notes-list">
-              <div v-for="note in issueNotes" :key="note.id" class="note-item">
+              <router-link
+                v-for="note in issueNotes"
+                :key="note.id"
+                :to="`/sessions/${session.id}/code?file=${encodeURIComponent(note.file_path)}`"
+                class="note-item note-link"
+              >
                 <div class="note-file">{{ note.file_path }}:{{ note.start_line }}</div>
                 <div class="note-content">{{ note.content }}</div>
-              </div>
+              </router-link>
             </div>
           </div>
         </div>
@@ -460,6 +465,16 @@ export default {
   display: flex;
   align-items: flex-start;
   gap: 8px;
+}
+
+.note-link {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.note-link:hover {
+  background: var(--bg-highlight, rgba(74, 158, 255, 0.05));
 }
 
 .note-checkbox {
