@@ -5,8 +5,8 @@
       <span v-if="note.is_todo" class="badge badge-todo">TODO</span>
       <span v-if="note.is_orphaned" class="badge badge-orphan">orphan</span>
       <span class="note-actions">
-        <button class="btn-icon" title="Edit" @click="startEdit">✏️</button>
-        <button class="btn-icon" title="Delete" @click="remove">🗑️</button>
+        <button class="btn-icon" title="Edit" @click.stop="startEdit">✏️</button>
+        <button class="btn-icon" title="Delete" @click.stop="remove">🗑️</button>
       </span>
       <span class="note-time">{{ note.created_at }}</span>
     </div>
