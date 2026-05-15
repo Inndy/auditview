@@ -149,7 +149,7 @@ export default {
 
 .cp-label-input:focus {
   outline: none;
-  border-color: #4a9eff;
+  border-color: var(--primary);
 }
 
 .cp-create-btn {
@@ -164,6 +164,6 @@ export default {
 
 .error-msg {
   font-size: 12px;
-  color: #842029;
+  color: var(--badge-orphan-text);
 }
 </style>

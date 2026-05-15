@@ -141,10 +141,10 @@ export default {
 .error-full {
   padding: 40px;
   font-size: 14px;
-  color: #888;
+  color: var(--text-muted);
 }
 
 .error-full {
-  color: #842029;
+  color: var(--badge-orphan-text);
 }
 </style>

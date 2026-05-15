@@ -83,7 +83,7 @@ export default {
 .note-time {
   float: right;
   font-size: 10px;
-  color: #aaa;
+  color: var(--text-faint);
 }
 
 .note-actions {
@@ -135,15 +135,16 @@ export default {
   padding: 3px 10px;
   font-size: 12px;
   border-radius: 3px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   cursor: pointer;
-  background: #fff;
+  background: var(--bg-surface);
+  color: var(--text);
 }
 
 .btn-sm.btn-primary {
-  background: #0066cc;
+  background: var(--primary);
   color: #fff;
-  border-color: #0066cc;
+  border-color: var(--primary);
 }
 
 .note-snapshot {

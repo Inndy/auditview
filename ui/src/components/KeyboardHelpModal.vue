@@ -53,7 +53,7 @@ export default {
   border: none;
   cursor: pointer;
   font-size: 14px;
-  color: #888;
+  color: var(--text-muted);
   padding: 0;
 }
 
@@ -85,6 +85,6 @@ export default {
 .help-hint {
   margin-top: 12px;
   font-size: 11px;
-  color: #888;
+  color: var(--text-muted);
 }
 </style>

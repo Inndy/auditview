@@ -35,6 +35,6 @@ export default {
 <style scoped>
 .empty-msg {
   font-size: 12px;
-  color: #aaa;
+  color: var(--text-faint);
 }
 </style>

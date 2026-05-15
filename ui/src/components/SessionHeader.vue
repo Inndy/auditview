@@ -101,8 +101,8 @@ export default {
 }
 
 .help-btn {
-  background: #f0f0f0;
-  border: 1px solid #ccc;
+  background: var(--border-light);
+  border: 1px solid var(--border);
   border-radius: 50%;
   width: 22px;
   height: 22px;
@@ -111,17 +111,17 @@ export default {
   cursor: pointer;
   padding: 0;
   line-height: 1;
-  color: #555;
+  color: var(--text-dim);
   flex-shrink: 0;
 }
 
 .help-btn:hover {
-  background: #e0e0e0;
+  background: var(--border-mid);
 }
 
 .warn-badge {
-  background: #fff3cd;
-  color: #856404;
+  background: var(--badge-todo-bg);
+  color: var(--badge-todo-text);
   padding: 1px 6px;
   border-radius: 3px;
   font-size: 11px;

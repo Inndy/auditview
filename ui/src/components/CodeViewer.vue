@@ -414,17 +414,17 @@ export default {
   pointer-events: none;
 }
 
-.sse-connected    { color: #4caf50; }
-.sse-connecting   { color: #ff9800; }
-.sse-disconnected { color: #e53935; }
+.sse-connected    { color: var(--status-success); }
+.sse-connecting   { color: var(--status-warning); }
+.sse-disconnected { color: var(--status-error); }
 
 .no-file {
   padding: 40px;
-  color: #aaa;
+  color: var(--text-faint);
   font-size: 14px;
 }
 
 .error-text {
-  color: #842029;
+  color: var(--badge-orphan-text);
 }
 </style>

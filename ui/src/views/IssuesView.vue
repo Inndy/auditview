@@ -284,7 +284,7 @@ export default {
   display: flex;
   flex: 1;
   overflow: hidden;
-  background: var(--bg);
+  background: var(--bg-surface);
 }
 
 .loading {
@@ -311,7 +311,7 @@ export default {
 .issues-panel,
 .details-panel,
 .orphan-panel {
-  background: var(--bg);
+  background: var(--bg-surface);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -347,7 +347,7 @@ export default {
   font-size: 11px;
   border: 1px solid var(--border);
   border-radius: 3px;
-  background: var(--bg);
+  background: var(--bg-surface);
   color: var(--text-muted);
   cursor: pointer;
   text-decoration: none;
@@ -452,7 +452,7 @@ export default {
 
 .status-resolved {
   background: var(--bg-reviewed);
-  color: #2e7d32;
+  color: var(--status-success);
 }
 
 .status-dismissed {
@@ -509,7 +509,7 @@ export default {
   border: 1px solid var(--border);
   border-radius: 4px;
   font-size: 13px;
-  background: var(--bg);
+  background: var(--bg-surface);
   color: var(--text);
   font-family: inherit;
 }
@@ -530,17 +530,17 @@ export default {
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  background: var(--bg);
+  background: var(--bg-surface);
   color: var(--text);
 }
 
 .btn-resolve {
-  border-color: #2e7d32;
-  color: #2e7d32;
+  border-color: var(--status-success);
+  color: var(--status-success);
 }
 
 .btn-resolve:hover {
-  background: #2e7d32;
+  background: var(--status-success);
   color: white;
 }
 

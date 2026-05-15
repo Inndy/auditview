@@ -120,7 +120,7 @@ export default {
 
 .file-tree-header {
   padding: 10px 12px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-mid);
   font-size: 13px;
   display: flex;
   align-items: center;
@@ -143,7 +143,7 @@ export default {
 .tree-error {
   padding: 10px 12px;
   font-size: 12px;
-  color: #888;
+  color: var(--text-muted);
 }
 
 .tree-root {

@@ -9,36 +9,73 @@ export default {
 </script>
 
 <style>
+/*
+ * Theme variables. All colors must reference a variable here — no inline hex
+ * literals in component styles. Add a new variable rather than introducing one
+ * inline, so dark mode keeps working.
+ *
+ * Categories:
+ *   bg-*       page/panel/row backgrounds
+ *   border-*   dividers and outlines
+ *   text-*     foreground text (text > dim > muted > faint > gutter)
+ *   link/primary  brand color (interactive accents)
+ *   danger     destructive/error accent
+ *   badge-*    label backgrounds + matching text (todo, orphan)
+ *   severity-* P0/P1/P2/NONE issue indicators
+ *   status-*   reviewed/partial/connected/error state dots and pills
+ *   shadow/overlay  modal scrims
+ */
 :root {
-  --bg-base:              #f5f5f5;
-  --bg-surface:           #ffffff;
-  --bg-surface2:          #fafafa;
-  --bg-gutter:            #f8f8f8;
-  --bg-hover:             #f0f4ff;
-  --bg-reviewed:          #e6ffe6;
-  --bg-selected:          #cce5ff;
-  --bg-reviewed-selected: #b3d9ff;
-  --bg-gutter-selected:   #b3ccff;
-  --bg-active-file:       #dce8ff;
-  --border:               #dddddd;
-  --border-light:         #f0f0f0;
-  --border-mid:           #e0e0e0;
+  /* Backgrounds */
+  --bg-base:              #f5f5f5;  /* page */
+  --bg-surface:           #ffffff;  /* cards, modals, code area */
+  --bg-surface2:          #fafafa;  /* right-pane panels */
+  --bg-gutter:            #f8f8f8;  /* code line gutter */
+  --bg-hover:             #f0f4ff;  /* row hover */
+  --bg-selected:          #cce5ff;  /* selected line/row */
+  --bg-reviewed:          #e6ffe6;  /* reviewed line row */
+  --bg-reviewed-selected: #b3d9ff;  /* reviewed + selected */
+  --bg-gutter-selected:   #b3ccff;  /* gutter on selected line */
+  --bg-active-file:       #dce8ff;  /* current file in tree */
+
+  /* Borders */
+  --border:               #dddddd;  /* default */
+  --border-light:         #f0f0f0;  /* subtle row dividers */
+  --border-mid:           #e0e0e0;  /* between sections */
+
+  /* Text (decreasing contrast: text > dim > muted > faint > gutter) */
   --text:                 #333333;
-  --text-muted:           #888888;
   --text-dim:             #555555;
-  --text-gutter:          #999999;
+  --text-muted:           #888888;
+  --text-faint:           #aaaaaa;  /* timestamps, empty-state hints */
+  --text-gutter:          #999999;  /* line numbers */
+
+  /* Brand */
   --link:                 #0066cc;
   --primary:              #0066cc;
   --primary-hover:        #0052a3;
+
+  /* Destructive */
   --danger:               #dc3545;
+
+  /* Badges (background + paired text color) */
   --badge-todo-bg:        #fff3cd;
   --badge-todo-text:      #856404;
   --badge-orphan-bg:      #f8d7da;
   --badge-orphan-text:    #842029;
+
+  /* Issue severity (P0/P1/P2/NONE dots and pills) */
   --severity-p0:          #dc3545;
   --severity-p1:          #fd7e14;
   --severity-p2:          #0dcaf0;
   --severity-none:        #adb5bd;
+
+  /* Status indicators (file review state, SSE connection, issue resolution) */
+  --status-success:       #4caf50;  /* reviewed, connected, resolved */
+  --status-warning:       #ff9800;  /* partial, connecting */
+  --status-error:         #e53935;  /* disconnected */
+
+  /* Effects */
   --shadow:               rgba(0,0,0,0.18);
   --overlay:              rgba(0,0,0,0.4);
 }
@@ -49,8 +86,8 @@ html.dark {
   --bg-surface2:          #2d2d2d;
   --bg-gutter:            #2a2a2a;
   --bg-hover:             #2a2d3e;
-  --bg-reviewed:          #1a3320;
   --bg-selected:          #1e3a58;
+  --bg-reviewed:          #1a3320;
   --bg-reviewed-selected: #1a2f47;
   --bg-gutter-selected:   #2a3f5f;
   --bg-active-file:       #1e3a5f;
@@ -58,8 +95,9 @@ html.dark {
   --border-light:         #2a2a2a;
   --border-mid:           #383838;
   --text:                 #d4d4d4;
-  --text-muted:           #858585;
   --text-dim:             #9d9d9d;
+  --text-muted:           #858585;
+  --text-faint:           #6e7681;
   --text-gutter:          #6e7681;
   --link:                 #4d9de0;
   --primary:              #4d9de0;
@@ -73,6 +111,9 @@ html.dark {
   --severity-p1:          #ff9f43;
   --severity-p2:          #4dd0e1;
   --severity-none:        #6c757d;
+  --status-success:       #66bb6a;
+  --status-warning:       #ffa726;
+  --status-error:         #ef5350;
   --shadow:               rgba(0,0,0,0.5);
   --overlay:              rgba(0,0,0,0.6);
 }

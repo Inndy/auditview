@@ -106,8 +106,8 @@ export default {
   flex-shrink: 0;
 }
 
-.status-reviewed   { background: #4caf50; }
-.status-partial    { background: #ff9800; }
+.status-reviewed   { background: var(--status-success); }
+.status-partial    { background: var(--status-warning); }
 .status-not_viewed { background: var(--bg-base); }
 .status-empty      { display: none; }
 
