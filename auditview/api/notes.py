@@ -19,6 +19,7 @@ def _note_row(r, is_apsw):
             "is_orphaned": bool(r[6]),
             "snapshot_text": r[7],
             "created_at": r[8],
+            "issue_id": r[9],
         }
     return {
         "id": r["id"],
@@ -30,6 +31,7 @@ def _note_row(r, is_apsw):
         "is_orphaned": bool(r["is_orphaned"]),
         "snapshot_text": r["snapshot_text"],
         "created_at": r["created_at"],
+        "issue_id": r["issue_id"],
     }
 
 
@@ -44,7 +46,7 @@ def list_notes(session_id):
         return jsonify({"error": "Session not found"}), 404
 
     rows = cur.execute(
-        "SELECT id, file_path, start_line, end_line, content, is_todo, is_orphaned, snapshot_text, created_at "
+        "SELECT id, file_path, start_line, end_line, content, is_todo, is_orphaned, snapshot_text, created_at, issue_id "
         "FROM notes WHERE session_id = ? ORDER BY file_path, start_line",
         (session_id,),
     ).fetchall()
@@ -113,7 +115,7 @@ def create_note(session_id):
         row_id = cur.lastrowid
 
     row = cur.execute(
-        "SELECT id, file_path, start_line, end_line, content, is_todo, is_orphaned, snapshot_text, created_at "
+        "SELECT id, file_path, start_line, end_line, content, is_todo, is_orphaned, snapshot_text, created_at, issue_id "
         "FROM notes WHERE id = ?",
         (row_id,),
     ).fetchone()
@@ -157,7 +159,7 @@ def update_note(session_id, note_id):
     )
 
     row = cur.execute(
-        "SELECT id, file_path, start_line, end_line, content, is_todo, is_orphaned, snapshot_text, created_at "
+        "SELECT id, file_path, start_line, end_line, content, is_todo, is_orphaned, snapshot_text, created_at, issue_id "
         "FROM notes WHERE id = ?",
         (note_id,),
     ).fetchone()

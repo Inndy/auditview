@@ -4,6 +4,10 @@ export function getNotes(sid) {
   return apiFetch(`/api/sessions/${sid}/notes`);
 }
 
+export function listNotes(sid) {
+  return apiFetch(`/api/sessions/${sid}/notes`);
+}
+
 export function createNote(sid, data) {
   return apiFetch(`/api/sessions/${sid}/notes`, {
     method: 'POST',
