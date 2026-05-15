@@ -51,7 +51,10 @@
                 @click="toggleMcpSession(s.id)"
               >{{ s.id === mcpSessionId ? '⬡ active' : '⬡ inactive' }}</button>
             </td>
-            <td><a :href="'/sessions/' + s.id" @click.prevent="openSession(s.id)">Open</a></td>
+            <td>
+              <router-link :to="`/sessions/${s.id}/code`" class="nav-link">Code</router-link>
+              <router-link :to="`/sessions/${s.id}/issues`" class="nav-link">Issues</router-link>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -131,9 +134,6 @@ export default {
       } catch (e) {
         this.error = e.message
       }
-    },
-    openSession(id) {
-      this.$router.push(`/sessions/${id}`)
     },
     onToggleDark() {
       toggleDark()
@@ -278,5 +278,20 @@ td {
 
 .mcp-active-row {
   background: var(--bg-highlight, rgba(74, 158, 255, 0.05));
+}
+
+.nav-link {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--accent, #4a9eff);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+.nav-link:hover {
+  background: var(--bg-surface);
 }
 </style>
