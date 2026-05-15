@@ -49,6 +49,7 @@ export default {
       if (s === 'reviewed') return 'Fully reviewed'
       if (s === 'partial') return 'Partially reviewed'
       if (s === 'not_viewed') return 'Not viewed'
+      if (s === 'empty') return 'Empty file'
       return 'No countable lines'
     },
   },
@@ -109,7 +110,7 @@ export default {
 .status-reviewed   { background: var(--status-success); }
 .status-partial    { background: var(--status-warning); }
 .status-not_viewed { background: var(--bg-base); }
-.status-empty      { display: none; }
+.status-empty      { background: transparent; border: 1px dashed var(--text-faint); }
 
 .badge-todo-count,
 .badge-note-count {

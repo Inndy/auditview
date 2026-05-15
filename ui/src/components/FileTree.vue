@@ -4,7 +4,7 @@
       <strong>Files</strong>
       <label class="hide-reviewed-label">
         <input type="checkbox" v-model="hideReviewed" />
-        Hide reviewed
+        Hide reviewed or empty
       </label>
     </div>
     <div v-if="loading" class="tree-loading">Loading…</div>
@@ -63,13 +63,18 @@ export default {
       loading: true,
       error: null,
       currentFile: null,
-      hideReviewed: false,
+      hideReviewed: localStorage.getItem('hideReviewed') === 'true',
     }
+  },
+  watch: {
+    hideReviewed(val) {
+      localStorage.setItem('hideReviewed', val)
+    },
   },
   computed: {
     filteredFiles() {
       if (!this.hideReviewed) return this.files
-      return this.files.filter((f) => f.status !== 'reviewed')
+      return this.files.filter((f) => f.status !== 'reviewed' && f.status !== 'empty')
     },
     tree() {
       return buildTree(this.filteredFiles)
