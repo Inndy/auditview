@@ -27,7 +27,16 @@
       :startLine="selectedRange.start"
       :endLine="selectedRange.end"
       @submit="onNoteSubmit"
+      @pick-issue="onPickIssue"
       @cancel="showModal = false"
+    />
+    <IssuePickerModal
+      v-if="showIssuePicker"
+      :sessionId="sessionId"
+      :startLine="rangeMin"
+      :endLine="rangeMax"
+      @picked="onIssuePicked"
+      @cancel="showIssuePicker = false"
     />
   </div>
 </template>
@@ -39,6 +48,7 @@ import { createNote } from '../api/notes.js'
 import { SSEClient } from '../api/events.js'
 import LineRow from './LineRow.vue'
 import CreateNoteModal from './CreateNoteModal.vue'
+import IssuePickerModal from './IssuePickerModal.vue'
 
 const EXT_LANG = {
   py: 'python', js: 'javascript', ts: 'typescript', jsx: 'javascript',
@@ -88,7 +98,7 @@ function splitHighlightedLines(html) {
 
 export default {
   name: 'CodeViewer',
-  components: { LineRow, CreateNoteModal },
+  components: { LineRow, CreateNoteModal, IssuePickerModal },
   props: {
     sessionId: [String, Number],
     filePath: { type: String, default: null },
@@ -104,6 +114,8 @@ export default {
       dragStart: null,
       showModal: false,
       modalIsTodo: false,
+      showIssuePicker: false,
+      pendingNote: null,
       loading: false,
       error: null,
       sseStatus: 'disconnected',
@@ -344,6 +356,32 @@ export default {
           end_line: this.rangeMax,
           content,
           is_todo,
+        })
+        this.notes.push(note)
+        this.$emit('notes-updated', this.notes)
+      } catch (e) {
+        console.error('createNote error:', e.message)
+      }
+    },
+
+    onPickIssue({ content, is_todo }) {
+      this.pendingNote = { content, is_todo }
+      this.showModal = false
+      this.showIssuePicker = true
+    },
+
+    async onIssuePicked({ issue_id }) {
+      this.showIssuePicker = false
+      const pending = this.pendingNote || { content: '', is_todo: false }
+      this.pendingNote = null
+      try {
+        const note = await createNote(this.sessionId, {
+          file_path: this.filePath,
+          start_line: this.rangeMin,
+          end_line: this.rangeMax,
+          content: pending.content,
+          is_todo: pending.is_todo,
+          issue_id,
         })
         this.notes.push(note)
         this.$emit('notes-updated', this.notes)

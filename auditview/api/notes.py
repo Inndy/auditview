@@ -74,11 +74,12 @@ def create_note(session_id):
     end_line = data.get("end_line")
     content = data.get("content", "").strip()
     is_todo = bool(data.get("is_todo", False))
+    issue_id = data.get("issue_id")
 
     if not file_path:
         return jsonify({"error": "file_path is required"}), 400
-    if not content:
-        return jsonify({"error": "content is required"}), 400
+    if not content and not issue_id:
+        return jsonify({"error": "content or issue_id is required"}), 400
     if start_line is None or end_line is None:
         return jsonify({"error": "start_line and end_line are required"}), 400
     if not isinstance(start_line, int) or not isinstance(end_line, int):
@@ -105,9 +106,9 @@ def create_note(session_id):
     snapshot_text = "\n".join(file_lines[start_idx:end_idx + 1])
 
     cur.execute(
-        "INSERT INTO notes (session_id, file_path, start_line, end_line, start_hash, end_hash, snapshot_text, content, is_todo) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (session_id, file_path, start_line, end_line, start_hash, end_hash, snapshot_text, content, int(is_todo)),
+        "INSERT INTO notes (session_id, file_path, start_line, end_line, start_hash, end_hash, snapshot_text, content, is_todo, issue_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (session_id, file_path, start_line, end_line, start_hash, end_hash, snapshot_text, content, int(is_todo), issue_id),
     )
     if is_apsw:
         row_id = conn.last_insert_rowid()

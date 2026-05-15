@@ -10,6 +10,7 @@
       ></textarea>
       <div class="modal-actions">
         <button @click="cancel">Cancel</button>
+        <button @click="pickIssue">Add to Issue Instead</button>
         <button class="btn-primary" @click="submit" :disabled="!content.trim()">Submit</button>
       </div>
     </div>
@@ -25,7 +26,7 @@ export default {
     startLine: { type: Number, default: null },
     endLine: { type: Number, default: null },
   },
-  emits: ['submit', 'cancel'],
+  emits: ['submit', 'cancel', 'pick-issue'],
   data() {
     return { content: '' }
   },
@@ -43,6 +44,10 @@ export default {
     submit() {
       if (!this.content.trim()) return
       this.$emit('submit', { content: this.content, is_todo: this.isTodo })
+      this.content = ''
+    },
+    pickIssue() {
+      this.$emit('pick-issue', { content: this.content, is_todo: this.isTodo })
       this.content = ''
     },
     cancel() {
