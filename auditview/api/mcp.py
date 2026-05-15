@@ -1,30 +1,12 @@
 import os
 from flask import Blueprint, request, jsonify, current_app
 from auditview.db.connection import open_db
-from auditview.core.hashing import line_hash, context_hash
-from auditview.core.coverage import is_countable_line
-from auditview.core.reconciler import reconcile_file
+from auditview.core.hashing import line_hash
 from auditview.api.util import safe_path
 
 bp = Blueprint("mcp", __name__)
 
 _TOOLS = [
-    {
-        "name": "list_files",
-        "description": "List all files in the active audit session with their review coverage stats and note/todo counts.",
-        "inputSchema": {"type": "object", "properties": {}, "required": []},
-    },
-    {
-        "name": "read_file",
-        "description": "Read a file's content with line numbers from the active audit session.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "Relative path to the file within the session root"},
-            },
-            "required": ["path"],
-        },
-    },
     {
         "name": "list_notes",
         "description": "List all audit notes and todos in the session, optionally filtered by file.",
@@ -130,121 +112,6 @@ def _get_mcp_session(conn):
     if is_apsw:
         return {"id": srow[0], "label": srow[1], "root_path": srow[2], "exclusion_patterns": srow[3]}
     return {"id": srow["id"], "label": srow["label"], "root_path": srow["root_path"], "exclusion_patterns": srow["exclusion_patterns"]}
-
-
-def _tool_list_files(args, conn, session):
-    is_apsw = getattr(conn, '_is_apsw', False)
-    cur = conn.cursor()
-    session_id = session["id"]
-    root_path = session["root_path"]
-    exclusion_patterns = session["exclusion_patterns"]
-
-    rel_paths = current_app.watcher.get_scan(session_id, root_path, exclusion_patterns)
-    rel_path_set = set(rel_paths)
-
-    for rp in rel_paths:
-        cur.execute(
-            "INSERT INTO files (session_id, rel_path) VALUES (?, ?) ON CONFLICT DO NOTHING",
-            (session_id, rp),
-        )
-
-    file_rows = cur.execute(
-        "SELECT rel_path, countable_lines FROM files WHERE session_id = ?", (session_id,)
-    ).fetchall()
-    countable_map = {}
-    uncached = []
-    for r in file_rows:
-        rp = r[0] if is_apsw else r["rel_path"]
-        cl = r[1] if is_apsw else r["countable_lines"]
-        countable_map[rp] = cl
-        if cl is None and rp in rel_path_set:
-            uncached.append(rp)
-
-    for rp in uncached:
-        ext = os.path.splitext(rp)[1].lower()
-        full_path = os.path.join(root_path, rp)
-        countable = 0
-        if os.path.isfile(full_path):
-            try:
-                with open(full_path, "r", encoding="utf-8", errors="replace") as f:
-                    countable = sum(1 for line in f.read().splitlines() if is_countable_line(line, ext))
-            except OSError:
-                pass
-        cur.execute(
-            "UPDATE files SET countable_lines = ? WHERE session_id = ? AND rel_path = ?",
-            (countable, session_id, rp),
-        )
-        countable_map[rp] = countable
-
-    reviewed_rows = cur.execute(
-        "SELECT file_path, COUNT(*) FROM reviewed_lines WHERE session_id = ? GROUP BY file_path",
-        (session_id,),
-    ).fetchall()
-    reviewed_map = {(r[0] if is_apsw else r["file_path"]): (r[1] if is_apsw else r[1]) for r in reviewed_rows}
-
-    note_rows = cur.execute(
-        "SELECT file_path, "
-        "SUM(CASE WHEN is_todo=0 THEN 1 ELSE 0 END), "
-        "SUM(CASE WHEN is_todo=1 THEN 1 ELSE 0 END) "
-        "FROM notes WHERE session_id = ? AND is_orphaned=0 GROUP BY file_path",
-        (session_id,),
-    ).fetchall()
-    notes_map = {(r[0] if is_apsw else r["file_path"]): (
-        (r[1] if is_apsw else r[1]) or 0,
-        (r[2] if is_apsw else r[2]) or 0,
-    ) for r in note_rows}
-
-    lines = [f"Session: {session['label']} ({len(rel_paths)} files)\n"]
-    lines.append("path | reviewed/countable | notes | todos")
-    lines.append("-" * 60)
-    for rp in rel_paths:
-        countable = countable_map.get(rp) or 0
-        reviewed = reviewed_map.get(rp, 0)
-        coverage = f"{reviewed}/{countable}" if countable > 0 else "empty"
-        notes_c, todos_c = notes_map.get(rp, (0, 0))
-        lines.append(f"{rp} | {coverage} | {notes_c} | {todos_c}")
-
-    return _tool_ok("\n".join(lines))
-
-
-def _tool_read_file(args, conn, session):
-    is_apsw = getattr(conn, '_is_apsw', False)
-    cur = conn.cursor()
-    session_id = session["id"]
-    root_path = session["root_path"]
-
-    path = (args.get("path") or "").strip()
-    if not path:
-        raise ValueError("path is required")
-
-    full_path = safe_path(root_path, path)
-    if full_path is None:
-        raise ValueError("invalid path")
-    if not os.path.isfile(full_path):
-        raise ValueError(f"file not found: {path}")
-
-    cur.execute(
-        "INSERT INTO files (session_id, rel_path) VALUES (?, ?) ON CONFLICT DO NOTHING",
-        (session_id, path),
-    )
-
-    file_row = cur.execute(
-        "SELECT last_mtime FROM files WHERE session_id = ? AND rel_path = ?",
-        (session_id, path),
-    ).fetchone()
-    current_mtime = os.path.getmtime(full_path)
-    stored_mtime = (file_row[0] if is_apsw else file_row["last_mtime"]) if file_row else None
-    if stored_mtime is None or abs(stored_mtime - current_mtime) > 1e-6:
-        reconcile_file(conn, session_id, path, root_path)
-
-    with open(full_path, "r", encoding="utf-8", errors="replace") as f:
-        file_lines = f.read().splitlines()
-
-    output = [f"File: {path} ({len(file_lines)} lines)\n"]
-    for i, line in enumerate(file_lines):
-        output.append(f"{i + 1:5d} | {line}")
-
-    return _tool_ok("\n".join(output))
 
 
 def _tool_list_notes(args, conn, session):
@@ -439,8 +306,6 @@ def _tool_update_issue(args, conn, session):
 
 
 _TOOL_HANDLERS = {
-    "list_files": _tool_list_files,
-    "read_file": _tool_read_file,
     "list_notes": _tool_list_notes,
     "create_note": _tool_create_note,
     "list_issues": _tool_list_issues,
