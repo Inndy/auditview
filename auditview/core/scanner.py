@@ -1,5 +1,8 @@
 import os
 import pathspec
+import logging
+
+logger = logging.getLogger("auditview")
 
 _DEFAULT_EXCLUDES = [
     "**/__pycache__/**",
@@ -59,12 +62,17 @@ def scan_folder(root, exclusion_patterns_str=""):
             rel_path = os.path.relpath(full_path, root).replace(os.sep, "/")
 
             if base_spec.match_file(rel_path):
+                logger.debug('path %s ignored by base_sepc rule %r', rel_path, base_spec)
                 continue
 
             excluded = False
             for spec_dir, spec in dir_specs.items():
+                spec_dir_prefix = spec_dir.rstrip(os.sep) + os.sep
+                if not full_path.startswith(spec_dir_prefix):
+                    continue
                 rel_to_spec = os.path.relpath(full_path, spec_dir).replace(os.sep, "/")
                 if spec.match_file(rel_to_spec):
+                    logger.debug('path %s ignored by dir_spec %s rule %r', rel_path, spec_dir, spec)
                     excluded = True
                     break
 
@@ -82,7 +90,18 @@ def scan_folder(root, exclusion_patterns_str=""):
         for d in dirnames:
             full_d = os.path.join(dirpath, d)
             rel_d = os.path.relpath(full_d, root).replace(os.sep, "/") + "/"
-            if not base_spec.match_file(rel_d):
+            if base_spec.match_file(rel_d):
+                continue
+            dir_excluded = False
+            for spec_dir, spec in dir_specs.items():
+                spec_dir_prefix = spec_dir.rstrip(os.sep) + os.sep
+                if not full_d.startswith(spec_dir_prefix):
+                    continue
+                rel_to_spec = os.path.relpath(full_d, spec_dir).replace(os.sep, "/") + "/"
+                if spec.match_file(rel_to_spec):
+                    dir_excluded = True
+                    break
+            if not dir_excluded:
                 kept.append(d)
         dirnames[:] = kept
 

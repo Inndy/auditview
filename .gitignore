@@ -12,12 +12,4 @@ build/
 *.egg-info/
 
 # frontend build output
-auditview/static/assets/
-auditview/static/index.html
-
-# node
-ui/node_modules/
-ui/.eslintcache
-
-# misc
-chrome-dev-profile/
+auditview/static/
