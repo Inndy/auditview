@@ -35,8 +35,16 @@ def setup_mcp(quart_app):
     _quart_app = quart_app
 
 
-def get_mcp_asgi():
-    return mcp.streamable_http_app()
+def get_mcp_handler():
+    """Return the raw ASGI handler for /mcp requests.
+
+    Initializes the session manager lazily (side effect of streamable_http_app).
+    The caller is responsible for starting and stopping the session manager via
+    mcp.session_manager.run() — see setup in app.py before_serving/after_serving.
+    """
+    from mcp.server.fastmcp.server import StreamableHTTPASGIApp
+    mcp.streamable_http_app()  # ensures _session_manager is created
+    return StreamableHTTPASGIApp(mcp.session_manager)
 
 
 class _SessionAPI:

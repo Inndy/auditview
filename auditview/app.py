@@ -16,7 +16,7 @@ from auditview.api.issues import bp as issues_bp
 from auditview.api.events import bp as events_bp
 from auditview.api.coverage import bp as coverage_bp
 from auditview.api.config import bp as config_bp
-from auditview.api.mcp import setup_mcp, get_mcp_asgi
+from auditview.api.mcp import setup_mcp, get_mcp_handler, mcp as _mcp
 
 
 logger = logging.getLogger("auditview")
@@ -68,7 +68,27 @@ def create_app(db_path, root_path):
     app.register_blueprint(config_bp, url_prefix="/api")
 
     setup_mcp(app)
-    mcp_asgi = get_mcp_asgi()
+    mcp_handler = get_mcp_handler()
+
+    @app.before_serving
+    async def _start_mcp():
+        stop = asyncio.Event()
+        app._mcp_stop = stop
+
+        async def _run():
+            async with _mcp.session_manager.run():
+                await stop.wait()
+
+        app._mcp_task = asyncio.create_task(_run())
+        await asyncio.sleep(0)  # yield so task group initializes before first request
+
+    @app.after_serving
+    async def _stop_mcp():
+        app._mcp_stop.set()
+        try:
+            await asyncio.wait_for(app._mcp_task, timeout=5.0)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            pass
 
     @app.route("/", defaults={"path": ""})
     @app.route("/<path:path>")
@@ -83,7 +103,7 @@ def create_app(db_path, root_path):
 
     async def asgi_app(scope, receive, send):
         if scope.get("path", "").startswith("/mcp"):
-            await mcp_asgi(scope, receive, send)
+            await mcp_handler(scope, receive, send)
         else:
             await app(scope, receive, send)
 
