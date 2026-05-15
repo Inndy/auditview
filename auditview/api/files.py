@@ -33,6 +33,31 @@ async def list_files(session_id):
             )
 
         cur = await conn.execute(
+            "SELECT rel_path FROM files WHERE session_id = ?", (session_id,)
+        )
+        stale_paths = {r["rel_path"] for r in await cur.fetchall()} - rel_path_set
+        if stale_paths:
+            await conn.execute("BEGIN")
+            try:
+                for stale in stale_paths:
+                    await conn.execute(
+                        "UPDATE notes SET is_orphaned = 1 WHERE session_id = ? AND file_path = ? AND is_orphaned = 0",
+                        (session_id, stale),
+                    )
+                    await conn.execute(
+                        "DELETE FROM reviewed_lines WHERE session_id = ? AND file_path = ?",
+                        (session_id, stale),
+                    )
+                    await conn.execute(
+                        "DELETE FROM files WHERE session_id = ? AND rel_path = ?",
+                        (session_id, stale),
+                    )
+                await conn.execute("COMMIT")
+            except Exception:
+                await conn.execute("ROLLBACK")
+                raise
+
+        cur = await conn.execute(
             "SELECT rel_path, countable_lines FROM files WHERE session_id = ?",
             (session_id,),
         )
@@ -78,7 +103,7 @@ async def list_files(session_id):
     result = []
     for rel_path in rel_paths:
         countable = countable_map.get(rel_path) or 0
-        reviewed = reviewed_map.get(rel_path, 0)
+        reviewed = min(reviewed_map.get(rel_path, 0), countable)
         coverage = reviewed / countable if countable > 0 else 0.0
         notes_c, todos_c = notes_map.get(rel_path, (0, 0))
 
