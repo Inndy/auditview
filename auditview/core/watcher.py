@@ -145,6 +145,10 @@ class WatcherService:
                             "DELETE FROM reviewed_lines WHERE session_id = ? AND file_path = ?",
                             (sid, rel_path),
                         )
+                        await conn.execute(
+                            "DELETE FROM files WHERE session_id = ? AND rel_path = ?",
+                            (sid, rel_path),
+                        )
                         await conn.execute("COMMIT")
                     except Exception:
                         await conn.execute("ROLLBACK")

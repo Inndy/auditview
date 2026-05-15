@@ -116,6 +116,23 @@ async def reconcile_file(conn, session_id, file_path, root_path):
         with open(full_path, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
     except OSError:
+        await conn.execute("BEGIN")
+        try:
+            await conn.execute(
+                "UPDATE notes SET is_orphaned = 1 WHERE session_id = ? AND file_path = ? AND is_orphaned = 0",
+                (session_id, file_path),
+            )
+            await conn.execute(
+                "DELETE FROM reviewed_lines WHERE session_id = ? AND file_path = ?",
+                (session_id, file_path),
+            )
+            await conn.execute(
+                "DELETE FROM files WHERE session_id = ? AND rel_path = ?",
+                (session_id, file_path),
+            )
+            await conn.execute("COMMIT")
+        except Exception:
+            await conn.execute("ROLLBACK")
         return
 
     new_lines = content.splitlines()
