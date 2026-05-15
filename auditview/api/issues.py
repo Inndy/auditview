@@ -36,6 +36,10 @@ async def create_issue(session_id):
         return jsonify({"error": "severity must be P0, P1, or P2"}), 400
 
     async with open_db(current_app.config["DB_PATH"]) as conn:
+        cur = await conn.execute("SELECT id FROM sessions WHERE id = ?", (session_id,))
+        if await cur.fetchone() is None:
+            return jsonify({"error": "Session not found"}), 404
+
         cur = await conn.execute(
             "INSERT INTO issues (session_id, title, severity) VALUES (?, ?, ?)",
             (session_id, title, severity),
@@ -124,6 +128,18 @@ async def attach_note_to_issue(session_id, note_id):
         return jsonify({"error": "issue_id is required"}), 400
 
     async with open_db(current_app.config["DB_PATH"]) as conn:
+        cur = await conn.execute(
+            "SELECT id FROM notes WHERE id = ? AND session_id = ?", (note_id, session_id)
+        )
+        if await cur.fetchone() is None:
+            return jsonify({"error": "Note not found"}), 404
+
+        cur = await conn.execute(
+            "SELECT id FROM issues WHERE id = ? AND session_id = ?", (issue_id, session_id)
+        )
+        if await cur.fetchone() is None:
+            return jsonify({"error": "Issue not found"}), 404
+
         await conn.execute(
             "UPDATE notes SET issue_id = ? WHERE id = ? AND session_id = ?",
             (issue_id, note_id, session_id),
