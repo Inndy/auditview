@@ -14,7 +14,9 @@ active, stop and tell the user to open the auditview web UI and activate a sessi
 ## Workflow
 1. `check_context` — confirm session and root path
 2. `list_issues` — see existing open issues (default: open)
-3. `list_notes` — browse existing notes/TODOs, optionally filtered by file
+3. `list_notes` — browse existing notes/TODOs, optionally filtered by file;
+   pass include_context=true to include the current code snippet (or original
+   snapshot for orphaned notes)
 4. `create_note` — attach a note or TODO to a line range in a file
 5. `create_issue` — open a new issue (severity: P0=critical, P1=high, P2=medium)
 6. `update_issue` — change title, severity, or status (open/resolved/dismissed)
@@ -107,9 +109,28 @@ async def check_context() -> str:
     )
 
 
+async def _fetch_file_lines(api: _SessionAPI, file_path: str) -> dict[int, str]:
+    """Return {line_no: content} for a file, empty dict on failure."""
+    try:
+        data = await api.get(f"/files/{file_path}")
+        return {l["line_no"]: l["content"] for l in data["lines"]}
+    except Exception:
+        return {}
+
+
+def _code_block(lines: list[str], indent: str = "  ") -> list[str]:
+    return [f"{indent}```", *[f"{indent}{l}" for l in lines], f"{indent}```"]
+
+
 @mcp.tool()
-async def list_notes(file_path: Optional[str] = None) -> str:
-    """List all audit notes and todos in the session, optionally filtered by file."""
+async def list_notes(file_path: Optional[str] = None, include_context: bool = False) -> str:
+    """List all audit notes and todos in the session, optionally filtered by file.
+
+    Args:
+        file_path: Filter notes to this relative file path
+        include_context: Include the current code snippet for each note.
+            For orphaned notes, shows the original snapshot instead.
+    """
     api = await _session_api()
     notes = await api.get("/notes")
 
@@ -118,12 +139,31 @@ async def list_notes(file_path: Optional[str] = None) -> str:
     if not notes:
         return "No notes found."
 
+    file_cache: dict[str, dict[int, str]] = {}
+    if include_context:
+        unique_files = {n["file_path"] for n in notes if not n["is_orphaned"]}
+        for fp in unique_files:
+            file_cache[fp] = await _fetch_file_lines(api, fp)
+
     lines = []
     for n in notes:
         kind = "TODO" if n["is_todo"] else "NOTE"
         tags = (" [ORPHANED]" if n["is_orphaned"] else "") + (f" [issue:#{n['issue_id']}]" if n.get("issue_id") else "")
         lines.append(f"[#{n['id']}] {kind}{tags}  {n['file_path']}:{n['start_line']}-{n['end_line']}")
         lines.append(f"  {n['content']}")
+
+        if include_context:
+            if n["is_orphaned"]:
+                snapshot = (n.get("snapshot_text") or "").strip()
+                if snapshot:
+                    lines.append("  [original snapshot]")
+                    lines.extend(_code_block(snapshot.splitlines()))
+            else:
+                file_lines = file_cache.get(n["file_path"], {})
+                snippet = [file_lines[ln] for ln in range(n["start_line"], n["end_line"] + 1) if ln in file_lines]
+                if snippet:
+                    lines.extend(_code_block(snippet))
+
         lines.append("")
     return "\n".join(lines)
 
