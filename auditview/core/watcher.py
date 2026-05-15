@@ -25,6 +25,10 @@ class _Handler(FileSystemEventHandler):
         if not event.is_directory:
             self._svc._handle_change(event.src_path)
 
+    def on_deleted(self, event):
+        if not event.is_directory:
+            self._svc._handle_change(event.src_path)
+
 
 class WatcherService:
     def __init__(self, db_path, root_path):
@@ -82,7 +86,7 @@ class WatcherService:
             cached = self._scan_cache.get(session_id)
         if cached is not None:
             return cached
-        result = await asyncio.get_event_loop().run_in_executor(
+        result = await asyncio.get_running_loop().run_in_executor(
             None, scan_folder, root_path, exclusion_patterns
         )
         with self._lock:
@@ -104,7 +108,7 @@ class WatcherService:
         self._loop.call_soon_threadsafe(self._work_queue.put_nowait, abs_path)
 
     async def _do_process_change(self, abs_path):
-        if not abs_path.startswith(self._root_path):
+        if not abs_path.startswith(self._root_path + os.sep):
             return
         rel_path = os.path.relpath(abs_path, self._root_path).replace(os.sep, "/")
 
@@ -126,13 +130,29 @@ class WatcherService:
                             self._scan_cache[r["id"]] = None
                 return
 
+            file_deleted = not os.path.isfile(abs_path)
             for row in rows:
                 sid = row["session_id"]
                 sess_root = row["root_path"]
-                try:
-                    await reconcile_file(conn, sid, rel_path, sess_root)
-                except Exception:
-                    pass
+                if file_deleted:
+                    try:
+                        await conn.execute("BEGIN")
+                        await conn.execute(
+                            "UPDATE notes SET is_orphaned = 1 WHERE session_id = ? AND file_path = ? AND is_orphaned = 0",
+                            (sid, rel_path),
+                        )
+                        await conn.execute(
+                            "DELETE FROM reviewed_lines WHERE session_id = ? AND file_path = ?",
+                            (sid, rel_path),
+                        )
+                        await conn.execute("COMMIT")
+                    except Exception:
+                        await conn.execute("ROLLBACK")
+                else:
+                    try:
+                        await reconcile_file(conn, sid, rel_path, sess_root)
+                    except Exception:
+                        pass
 
                 event = {"type": "file_changed", "rel_path": rel_path}
                 with self._lock:
