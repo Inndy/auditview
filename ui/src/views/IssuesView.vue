@@ -108,7 +108,11 @@
           >
             <input type="checkbox" :checked="selectedNoteIds.has(note.id)" class="note-checkbox" />
             <div class="note-info">
-              <div class="note-file">{{ note.file_path }}:{{ note.start_line }}-{{ note.end_line }}</div>
+              <router-link
+                class="note-file note-file-link"
+                :to="`/sessions/${session.id}/code?file=${encodeURIComponent(note.file_path)}&line=${note.start_line}&endLine=${note.end_line}`"
+                @click.stop
+              >{{ note.file_path }}:{{ note.start_line }}-{{ note.end_line }}</router-link>
               <div class="note-content">{{ note.content }}</div>
             </div>
           </div>
@@ -630,6 +634,15 @@ export default {
   color: var(--text-muted);
   font-family: monospace;
   margin-bottom: 2px;
+}
+
+.note-file-link {
+  text-decoration: none;
+  display: block;
+}
+
+.note-file-link:hover {
+  color: var(--primary);
 }
 
 .note-content {
