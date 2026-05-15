@@ -30,7 +30,6 @@
           @note-updated="onNoteUpdated"
           @note-deleted="onNoteDeleted"
         />
-        <CheckpointPanel :sessionId="id" ref="checkpointPanel" @reverted="onReverted" />
       </div>
     </div>
     <KeyboardHelpModal :visible="showHelp" @close="showHelp = false" />
@@ -43,7 +42,6 @@ import FileTree from '../components/FileTree.vue'
 import CodeViewer from '../components/CodeViewer.vue'
 import NotePanel from '../components/NotePanel.vue'
 import OrphanPanel from '../components/OrphanPanel.vue'
-import CheckpointPanel from '../components/CheckpointPanel.vue'
 import KeyboardHelpModal from '../components/KeyboardHelpModal.vue'
 
 export default {
@@ -53,7 +51,6 @@ export default {
     CodeViewer,
     NotePanel,
     OrphanPanel,
-    CheckpointPanel,
     KeyboardHelpModal,
   },
   props: {
@@ -111,12 +108,6 @@ export default {
     },
     onNoteDeleted(id) {
       this.currentNotes = this.currentNotes.filter((n) => n.id !== id)
-    },
-    onReverted() {
-      this.$refs.fileTree?.refresh()
-      this.refreshCoverage()
-      this.currentNotes = []
-      this.$refs.codeViewer?.reload()
     },
   },
 }
