@@ -62,6 +62,11 @@ CREATE INDEX IF NOT EXISTS idx_notes_session_file
     ON notes(session_id, file_path);
 CREATE INDEX IF NOT EXISTS idx_checkpoints_session
     ON checkpoints(session_id);
+
+CREATE TABLE IF NOT EXISTS app_config (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
 """
 
 _MIGRATIONS = [
@@ -72,6 +77,7 @@ _MIGRATIONS = [
     "CREATE INDEX IF NOT EXISTS idx_notes_session_file ON notes(session_id, file_path)",
     "CREATE INDEX IF NOT EXISTS idx_checkpoints_session ON checkpoints(session_id)",
     "ALTER TABLE checkpoints ADD COLUMN checkpoint_type TEXT NOT NULL DEFAULT 'changeset'",
+    "CREATE TABLE IF NOT EXISTS app_config (key TEXT PRIMARY KEY, value TEXT)",
 ]
 
 

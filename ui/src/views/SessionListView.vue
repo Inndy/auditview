@@ -34,14 +34,23 @@
             <th>ID</th>
             <th>Label</th>
             <th>Created</th>
+            <th>MCP</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="s in sessions" :key="s.id">
+          <tr v-for="s in sessions" :key="s.id" :class="{ 'mcp-active-row': s.id === mcpSessionId }">
             <td>{{ s.id }}</td>
             <td>{{ s.label }}</td>
             <td>{{ s.created_at }}</td>
+            <td>
+              <button
+                class="mcp-btn"
+                :class="{ active: s.id === mcpSessionId }"
+                :title="s.id === mcpSessionId ? 'Deactivate MCP target' : 'Set as MCP target'"
+                @click="toggleMcpSession(s.id)"
+              >{{ s.id === mcpSessionId ? '⬡ active' : '⬡ inactive' }}</button>
+            </td>
             <td><a :href="'/sessions/' + s.id" @click.prevent="openSession(s.id)">Open</a></td>
           </tr>
         </tbody>
@@ -51,7 +60,8 @@
 </template>
 
 <script>
-import { listSessions, createSession, getConfig } from '../api/sessions.js'
+import { listSessions, createSession } from '../api/sessions.js'
+import { getConfig, setMcpSession, clearMcpSession } from '../api/config.js'
 import { isDark, toggleDark } from '../darkMode.js'
 
 export default {
@@ -60,6 +70,7 @@ export default {
     return {
       sessions: [],
       config: null,
+      mcpSessionId: null,
       loading: true,
       error: null,
       creating: false,
@@ -81,6 +92,7 @@ export default {
         const [sessions, config] = await Promise.all([listSessions(), getConfig()])
         this.sessions = sessions
         this.config = config
+        this.mcpSessionId = config.mcp_session ? config.mcp_session.id : null
       } catch (e) {
         this.error = e.message
       } finally {
@@ -105,6 +117,19 @@ export default {
         this.error = e.message
       } finally {
         this.creating = false
+      }
+    },
+    async toggleMcpSession(id) {
+      try {
+        if (this.mcpSessionId === id) {
+          await clearMcpSession()
+          this.mcpSessionId = null
+        } else {
+          const res = await setMcpSession(id)
+          this.mcpSessionId = res.mcp_session ? res.mcp_session.id : null
+        }
+      } catch (e) {
+        this.error = e.message
       }
     },
     openSession(id) {
@@ -232,5 +257,26 @@ td {
 .empty {
   color: var(--text-muted);
   font-size: 13px;
+}
+
+.mcp-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-muted);
+  min-width: 6em;
+}
+
+.mcp-btn.active {
+  border-color: var(--accent, #4a9eff);
+  color: var(--accent, #4a9eff);
+  font-weight: 600;
+}
+
+.mcp-active-row {
+  background: var(--bg-highlight, rgba(74, 158, 255, 0.05));
 }
 </style>
