@@ -22,7 +22,6 @@ active, stop and tell the user to open the auditview web UI and activate a sessi
 ## Rules
 - Always use relative file paths (relative to root_path)
 - Notes must reference real line ranges in the file you are reviewing
-- Do not mark lines as reviewed — that action is reserved for humans in the UI
 - Prefer attaching notes to an existing issue via issue_id over creating duplicates
 """.strip()
 
