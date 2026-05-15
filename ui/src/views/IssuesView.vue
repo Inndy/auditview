@@ -1,7 +1,7 @@
 <template>
   <div class="issues-view">
     <div v-if="loadingIssues" class="loading">Loading issues…</div>
-    <div v-else class="issues-content" :class="{ 'has-detail': !!selectedIssueId }">
+    <div v-else class="issues-content">
       <div class="issues-panel">
         <div class="panel-header">
           <h3>Issues</h3>
@@ -88,6 +88,9 @@
         </div>
         <div v-else class="empty">Issue not found.</div>
       </div>
+      <div v-else class="details-panel no-selection">
+        <div class="no-selection-hint">Select an issue to view details</div>
+      </div>
 
       <div class="orphan-panel">
         <div class="panel-header">
@@ -134,7 +137,7 @@ import { listNotes } from '../api/notes.js'
 import CreateIssueModal from '../components/CreateIssueModal.vue'
 
 const FILTER_OPTIONS = [
-  { value: '', label: 'all' },
+  { value: 'all', label: 'all' },
   { value: 'open', label: 'open' },
   { value: 'resolved', label: 'resolved' },
   { value: 'dismissed', label: 'dismissed' },
@@ -159,22 +162,21 @@ export default {
   },
   computed: {
     statusFilter() {
-      return this.$route.query.status ?? ''
+      return this.$route.query.status ?? 'open'
     },
     selectedIssueId() {
       const id = this.$route.params.issueId
       return id ? parseInt(id) : null
     },
     filteredIssues() {
-      if (!this.statusFilter) return this.issues
+      if (this.statusFilter === 'all') return this.issues
       return this.issues.filter((i) => i.status === this.statusFilter)
     },
     selectedIssue() {
       return this.issues.find((i) => i.id === this.selectedIssueId)
     },
     closeRoute() {
-      const query = this.statusFilter ? { status: this.statusFilter } : {}
-      return { path: `/sessions/${this.session.id}/issues`, query }
+      return { path: `/sessions/${this.session.id}/issues`, query: { status: this.statusFilter } }
     },
   },
   mounted() {
@@ -223,8 +225,7 @@ export default {
       const path = this.selectedIssueId
         ? `/sessions/${this.session.id}/issues/${this.selectedIssueId}`
         : `/sessions/${this.session.id}/issues`
-      const query = value ? { status: value } : {}
-      return { path, query }
+      return { path, query: { status: value } }
     },
     toggleNoteSelection(noteId) {
       if (this.selectedNoteIds.has(noteId)) {
@@ -297,15 +298,11 @@ export default {
 
 .issues-content {
   display: grid;
-  grid-template-columns: 300px 300px;
+  grid-template-columns: 300px 1fr 300px;
   gap: 1px;
   flex: 1;
   overflow: hidden;
   background: var(--bg-base);
-}
-
-.issues-content.has-detail {
-  grid-template-columns: 300px 1fr 300px;
 }
 
 .issues-panel,
@@ -467,6 +464,15 @@ export default {
 .details-panel,
 .orphan-panel {
   border-left: 1px solid var(--border);
+}
+
+.no-selection-hint {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 
 .close-btn {
