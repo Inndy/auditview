@@ -1,124 +1,57 @@
-from quart import Blueprint, request, jsonify, current_app
+from typing import Optional
 
-bp = Blueprint("mcp", __name__)
+from mcp.server.fastmcp import FastMCP
 
-_TOOLS = [
-    {
-        "name": "list_notes",
-        "description": "List all audit notes and todos in the session, optionally filtered by file.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "file_path": {"type": "string", "description": "Filter notes to this relative file path"},
-            },
-        },
-    },
-    {
-        "name": "create_note",
-        "description": "Create an audit note or todo on a specific range of lines in a file.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "file_path": {"type": "string", "description": "Relative file path within the session root"},
-                "start_line": {"type": "integer", "description": "First line number (1-indexed)"},
-                "end_line": {"type": "integer", "description": "Last line number (1-indexed, inclusive)"},
-                "content": {"type": "string", "description": "The note text"},
-                "is_todo": {"type": "boolean", "description": "Mark as a todo/action item (default: false)"},
-                "issue_id": {"type": "integer", "description": "Attach to an existing issue by ID"},
-            },
-            "required": ["file_path", "start_line", "end_line", "content"],
-        },
-    },
-    {
-        "name": "list_issues",
-        "description": "List issues in the active audit session.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "status": {
-                    "type": "string",
-                    "enum": ["open", "resolved", "dismissed"],
-                    "description": "Filter by status (omit for all)",
-                },
-            },
-        },
-    },
-    {
-        "name": "create_issue",
-        "description": "Create a new issue in the active audit session.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "title": {"type": "string", "description": "Issue title"},
-                "severity": {
-                    "type": "string",
-                    "enum": ["P0", "P1", "P2"],
-                    "description": "P0=critical, P1=high, P2=medium",
-                },
-            },
-            "required": ["title", "severity"],
-        },
-    },
-    {
-        "name": "update_issue",
-        "description": "Update an existing issue's title, severity, or status.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "issue_id": {"type": "integer", "description": "The issue ID to update"},
-                "title": {"type": "string"},
-                "severity": {"type": "string", "enum": ["P0", "P1", "P2"]},
-                "status": {"type": "string", "enum": ["open", "resolved", "dismissed"]},
-            },
-            "required": ["issue_id"],
-        },
-    },
-]
+mcp = FastMCP("auditview", stateless_http=True)
+
+_quart_app = None
 
 
-def _ok(req_id, result):
-    return jsonify({"jsonrpc": "2.0", "id": req_id, "result": result})
+def setup_mcp(quart_app):
+    global _quart_app
+    _quart_app = quart_app
 
 
-def _err(req_id, code, message):
-    return jsonify({"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}})
-
-
-def _tool_error(text):
-    return {"content": [{"type": "text", "text": text}], "isError": True}
-
-
-def _tool_ok(text):
-    return {"content": [{"type": "text", "text": str(text)}]}
+def get_mcp_asgi():
+    return mcp.streamable_http_app()
 
 
 async def _api(method, path, data=None):
-    async with current_app.test_client() as client:
+    async with _quart_app.test_client() as client:
         fn = getattr(client, method)
         return await (fn(path, json=data) if data is not None else fn(path))
 
 
-async def _get_mcp_session():
+async def _get_session():
     resp = await _api("get", "/api/config")
     if resp.status_code != 200:
         return None
     return (await resp.get_json()).get("mcp_session")
 
 
-async def _tool_list_notes(args, session):
+def _require_session(session):
+    if session is None:
+        raise ValueError("No MCP session is active. A human must activate a session in the web UI first.")
+
+
+@mcp.tool()
+async def list_notes(file_path: Optional[str] = None) -> str:
+    """List all audit notes and todos in the session, optionally filtered by file."""
+    session = await _get_session()
+    _require_session(session)
+
     resp = await _api("get", f"/api/sessions/{session['id']}/notes")
     if resp.status_code != 200:
-        return _tool_error((await resp.get_json()).get("error", "failed to list notes"))
+        raise RuntimeError((await resp.get_json()).get("error", "failed to list notes"))
     notes = await resp.get_json()
 
-    file_path = (args.get("file_path") or "").strip()
     if file_path:
-        notes = [n for n in notes if n["file_path"] == file_path]
+        notes = [n for n in notes if n["file_path"] == file_path.strip()]
 
     if not notes:
-        return _tool_ok("No notes found.")
+        return "No notes found."
 
-    output = []
+    lines = []
     for n in notes:
         kind = "TODO" if n["is_todo"] else "NOTE"
         tags = ""
@@ -126,114 +59,112 @@ async def _tool_list_notes(args, session):
             tags += " [ORPHANED]"
         if n.get("issue_id"):
             tags += f" [issue:#{n['issue_id']}]"
-        output.append(f"[#{n['id']}] {kind}{tags}  {n['file_path']}:{n['start_line']}-{n['end_line']}")
-        output.append(f"  {n['content']}")
-        output.append("")
-    return _tool_ok("\n".join(output))
+        lines.append(f"[#{n['id']}] {kind}{tags}  {n['file_path']}:{n['start_line']}-{n['end_line']}")
+        lines.append(f"  {n['content']}")
+        lines.append("")
+    return "\n".join(lines)
 
 
-async def _tool_create_note(args, session):
-    resp = await _api("post", f"/api/sessions/{session['id']}/notes", args)
+@mcp.tool()
+async def create_note(
+    file_path: str,
+    start_line: int,
+    end_line: int,
+    content: str,
+    is_todo: bool = False,
+    issue_id: Optional[int] = None,
+) -> str:
+    """Create an audit note or todo on a specific range of lines in a file.
+
+    Args:
+        file_path: Relative file path within the session root
+        start_line: First line number (1-indexed)
+        end_line: Last line number (1-indexed, inclusive)
+        content: The note text
+        is_todo: Mark as a todo/action item
+        issue_id: Attach to an existing issue by ID
+    """
+    session = await _get_session()
+    _require_session(session)
+
+    payload = {"file_path": file_path, "start_line": start_line, "end_line": end_line, "content": content, "is_todo": is_todo}
+    if issue_id is not None:
+        payload["issue_id"] = issue_id
+
+    resp = await _api("post", f"/api/sessions/{session['id']}/notes", payload)
     data = await resp.get_json()
     if resp.status_code not in (200, 201):
-        return _tool_error(data.get("error", "failed to create note"))
+        raise RuntimeError(data.get("error", "failed to create note"))
     kind = "todo" if data["is_todo"] else "note"
-    return _tool_ok(f"Created {kind} #{data['id']} on {data['file_path']}:{data['start_line']}-{data['end_line']}")
+    return f"Created {kind} #{data['id']} on {data['file_path']}:{data['start_line']}-{data['end_line']}"
 
 
-async def _tool_list_issues(args, session):
+@mcp.tool()
+async def list_issues(status: Optional[str] = None) -> str:
+    """List issues in the active audit session.
+
+    Args:
+        status: Filter by status — 'open', 'resolved', or 'dismissed' (omit for all)
+    """
+    session = await _get_session()
+    _require_session(session)
+
     url = f"/api/sessions/{session['id']}/issues"
-    if args.get("status"):
-        url += f"?status={args['status']}"
+    if status:
+        url += f"?status={status}"
     resp = await _api("get", url)
     if resp.status_code != 200:
-        return _tool_error((await resp.get_json()).get("error", "failed to list issues"))
+        raise RuntimeError((await resp.get_json()).get("error", "failed to list issues"))
     issues = await resp.get_json()
 
     if not issues:
-        return _tool_ok("No issues found.")
-
-    output = [f"[#{i['id']}] [{i['severity']}] [{i['status']}] {i['title']}" for i in issues]
-    return _tool_ok("\n".join(output))
+        return "No issues found."
+    return "\n".join(f"[#{i['id']}] [{i['severity']}] [{i['status']}] {i['title']}" for i in issues)
 
 
-async def _tool_create_issue(args, session):
-    resp = await _api("post", f"/api/sessions/{session['id']}/issues", args)
+@mcp.tool()
+async def create_issue(title: str, severity: str) -> str:
+    """Create a new issue in the active audit session.
+
+    Args:
+        title: Issue title
+        severity: P0=critical, P1=high, P2=medium
+    """
+    session = await _get_session()
+    _require_session(session)
+
+    resp = await _api("post", f"/api/sessions/{session['id']}/issues", {"title": title, "severity": severity})
     data = await resp.get_json()
     if resp.status_code not in (200, 201):
-        return _tool_error(data.get("error", "failed to create issue"))
-    return _tool_ok(f"Created issue #{data['id']}: [{data['severity']}] {data['title']}")
+        raise RuntimeError(data.get("error", "failed to create issue"))
+    return f"Created issue #{data['id']}: [{data['severity']}] {data['title']}"
 
 
-async def _tool_update_issue(args, session):
-    issue_id = args.get("issue_id")
-    if not isinstance(issue_id, int):
-        return _tool_error("issue_id must be an integer")
-    payload = {k: v for k, v in args.items() if k != "issue_id"}
+@mcp.tool()
+async def update_issue(
+    issue_id: int,
+    title: Optional[str] = None,
+    severity: Optional[str] = None,
+    status: Optional[str] = None,
+) -> str:
+    """Update an existing issue's title, severity, or status.
+
+    Args:
+        issue_id: The issue ID to update
+        title: New title
+        severity: New severity (P0/P1/P2)
+        status: New status (open/resolved/dismissed)
+    """
+    session = await _get_session()
+    _require_session(session)
+
+    payload = {k: v for k, v in {"title": title, "severity": severity, "status": status}.items() if v is not None}
+    if not payload:
+        raise ValueError("At least one field to update is required")
+
     resp = await _api("patch", f"/api/sessions/{session['id']}/issues/{issue_id}", payload)
     data = await resp.get_json()
     if resp.status_code != 200:
-        return _tool_error(data.get("error", "failed to update issue"))
+        raise RuntimeError(data.get("error", "failed to update issue"))
     changes = ", ".join(f"{k}={v}" for k, v in payload.items())
-    return _tool_ok(f"Updated issue #{issue_id}: {changes}")
-
-
-_TOOL_HANDLERS = {
-    "list_notes": _tool_list_notes,
-    "create_note": _tool_create_note,
-    "list_issues": _tool_list_issues,
-    "create_issue": _tool_create_issue,
-    "update_issue": _tool_update_issue,
-}
-
-
-@bp.route("/mcp", methods=["POST"])
-async def mcp_endpoint():
-    body = await request.get_json(force=True, silent=True)
-    if not body:
-        return _err(None, -32700, "Parse error"), 400
-
-    method = body.get("method", "")
-    params = body.get("params") or {}
-
-    if "id" not in body:
-        return "", 202
-
-    req_id = body.get("id")
-
-    if method == "initialize":
-        client_version = params.get("protocolVersion", "2024-11-05")
-        version = client_version if client_version in ("2024-11-05", "2025-03-26") else "2024-11-05"
-        return _ok(req_id, {
-            "protocolVersion": version,
-            "capabilities": {"tools": {}},
-            "serverInfo": {"name": "auditview", "version": "1.0.0"},
-        })
-
-    if method == "ping":
-        return _ok(req_id, {})
-
-    if method == "tools/list":
-        return _ok(req_id, {"tools": _TOOLS})
-
-    if method == "tools/call":
-        name = (params.get("name") or "").strip()
-        args = params.get("arguments") or {}
-
-        handler = _TOOL_HANDLERS.get(name)
-        if handler is None:
-            return _ok(req_id, _tool_error(f"Unknown tool: {name}"))
-
-        session = await _get_mcp_session()
-        if session is None:
-            return _ok(req_id, _tool_error(
-                "No MCP session is active. A human must activate a session in the web UI first."
-            ))
-
-        try:
-            result = await handler(args, session)
-            return _ok(req_id, result)
-        except Exception as e:
-            return _ok(req_id, _tool_error(f"Internal error: {e}"))
-
-    return _err(req_id, -32601, f"Method not found: {method}")
+    return f"Updated issue #{issue_id}: {changes}"

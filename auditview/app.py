@@ -16,7 +16,7 @@ from auditview.api.issues import bp as issues_bp
 from auditview.api.events import bp as events_bp
 from auditview.api.coverage import bp as coverage_bp
 from auditview.api.config import bp as config_bp
-from auditview.api.mcp import bp as mcp_bp
+from auditview.api.mcp import setup_mcp, get_mcp_asgi
 
 
 logger = logging.getLogger("auditview")
@@ -66,7 +66,9 @@ def create_app(db_path, root_path):
     app.register_blueprint(events_bp, url_prefix="/api")
     app.register_blueprint(coverage_bp, url_prefix="/api")
     app.register_blueprint(config_bp, url_prefix="/api")
-    app.register_blueprint(mcp_bp)
+
+    setup_mcp(app)
+    mcp_asgi = get_mcp_asgi()
 
     @app.route("/", defaults={"path": ""})
     @app.route("/<path:path>")
@@ -79,4 +81,10 @@ def create_app(db_path, root_path):
             return await send_from_directory(static, path)
         return await send_from_directory(static, "index.html")
 
-    return app
+    async def asgi_app(scope, receive, send):
+        if scope.get("path", "").startswith("/mcp"):
+            await mcp_asgi(scope, receive, send)
+        else:
+            await app(scope, receive, send)
+
+    return asgi_app
