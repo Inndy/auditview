@@ -30,6 +30,7 @@
           :sessionId="id"
           @note-updated="onNoteUpdated"
           @note-deleted="onNoteDeleted"
+          @jump="onNoteJump"
         />
       </div>
     </div>
@@ -67,19 +68,18 @@ export default {
       currentFile: null,
       currentNotes: [],
       showHelp: false,
+      pendingJump: null,
     }
   },
   mounted() {
-    const fileParam = this.$route.query.file
-    if (fileParam) {
-      this.currentFile = fileParam
-    }
+    const { file, line, endLine } = this.$route.query
+    if (file) this.currentFile = file
+    if (line) this.pendingJump = { start: parseInt(line), end: parseInt(endLine || line) }
   },
   watch: {
-    '$route.query.file'(newFile) {
-      if (newFile) {
-        this.currentFile = newFile
-      }
+    '$route.query'({ file, line, endLine }) {
+      if (file) this.currentFile = file
+      this.pendingJump = line ? { start: parseInt(line), end: parseInt(endLine || line) } : null
     },
   },
   methods: {
@@ -89,6 +89,11 @@ export default {
     },
     onNotesUpdated(notes) {
       this.currentNotes = notes
+      if (this.pendingJump) {
+        const { start, end } = this.pendingJump
+        this.pendingJump = null
+        this.$nextTick(() => this.$refs.codeViewer?.jumpToRange(start, end))
+      }
     },
     onLinesMarked({ filePath, countable, reviewed }) {
       this.$refs.fileTree?.updateFile(filePath, { countable_lines: countable, reviewed_lines: reviewed })

@@ -8,6 +8,7 @@
       :sessionId="sessionId"
       @updated="$emit('note-updated', $event)"
       @deleted="$emit('note-deleted', $event)"
+      @jump="$emit('jump', $event)"
     />
   </div>
 </template>
@@ -22,7 +23,7 @@ export default {
     notes: { type: Array, default: () => [] },
     sessionId: { type: [String, Number], required: true },
   },
-  emits: ['note-updated', 'note-deleted'],
+  emits: ['note-updated', 'note-deleted', 'jump'],
   computed: {
     orphanNotes() {
       return this.notes.filter((n) => n.is_orphaned)

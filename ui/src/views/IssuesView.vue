@@ -77,7 +77,7 @@
               <router-link
                 v-for="note in issueNotes"
                 :key="note.id"
-                :to="`/sessions/${session.id}/code?file=${encodeURIComponent(note.file_path)}`"
+                :to="`/sessions/${session.id}/code?file=${encodeURIComponent(note.file_path)}&line=${note.start_line}&endLine=${note.end_line}`"
                 class="note-item note-link"
               >
                 <div class="note-file">{{ note.file_path }}:{{ note.start_line }}</div>
