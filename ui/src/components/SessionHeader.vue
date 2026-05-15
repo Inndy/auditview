@@ -1,5 +1,6 @@
 <template>
   <div class="session-header">
+    <router-link to="/" class="back-btn" title="Back to session list">&#8592;</router-link>
     <div class="session-title">
       <strong>{{ session.label }}</strong>
       <span class="session-path">{{ session.root_path }}</span>
@@ -99,4 +100,16 @@ export default {
   background: var(--border-mid);
 }
 
+.back-btn {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+  padding: 2px 4px;
+}
+
+.back-btn:hover {
+  color: var(--text);
+}
 </style>
