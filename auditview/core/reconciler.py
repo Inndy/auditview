@@ -15,52 +15,53 @@ def build_line_map(old_lines, new_lines):
     return line_map
 
 
-async def _reconcile_reviewed(conn, rows, new_lines, new_line_hashes, old_line_hashes):
+async def _reconcile_reviewed(conn, rows, new_lines, new_line_hashes, line_map):
     if not rows:
         return
 
     row_ids = [r["id"] for r in rows]
     old_line_nos = [r["line_no"] for r in rows]
 
-    if old_line_hashes:
-        full_map = build_line_map(old_line_hashes, new_line_hashes)
+    updates = []
+    delete_ids = []
+
+    if line_map is not None:
         for row_id, old_ln in zip(row_ids, old_line_nos):
             old_idx = old_ln - 1
-            new_idx = full_map.get(old_idx)
+            new_idx = line_map.get(old_idx)
             if new_idx is None:
-                await conn.execute("DELETE FROM reviewed_lines WHERE id = ?", (row_id,))
+                delete_ids.append(row_id)
             else:
                 new_ln = new_idx + 1
                 prev_content = new_lines[new_idx - 1] if new_idx > 0 else ""
                 curr_content = new_lines[new_idx]
                 next_content = new_lines[new_idx + 1] if new_idx < len(new_lines) - 1 else ""
-                new_ctx_hash = context_hash(prev_content, curr_content, next_content)
-                new_lh = line_hash(curr_content)
-                await conn.execute(
-                    "UPDATE reviewed_lines SET line_no = ?, line_hash = ?, context_hash = ? WHERE id = ?",
-                    (new_ln, new_lh, new_ctx_hash, row_id),
-                )
+                updates.append((new_ln, line_hash(curr_content), context_hash(prev_content, curr_content, next_content), row_id))
     else:
         old_actual_lines = [r["line_hash"] for r in rows]
-        line_map = build_line_map(old_actual_lines, new_line_hashes)
+        fallback_map = build_line_map(old_actual_lines, new_line_hashes)
         for i, row_id in enumerate(row_ids):
-            if i in line_map:
-                new_idx = line_map[i]
+            if i in fallback_map:
+                new_idx = fallback_map[i]
                 new_ln = new_idx + 1
                 prev_content = new_lines[new_idx - 1] if new_idx > 0 else ""
                 curr_content = new_lines[new_idx]
                 next_content = new_lines[new_idx + 1] if new_idx < len(new_lines) - 1 else ""
-                new_ctx_hash = context_hash(prev_content, curr_content, next_content)
-                new_lh = line_hash(curr_content)
-                await conn.execute(
-                    "UPDATE reviewed_lines SET line_no = ?, line_hash = ?, context_hash = ? WHERE id = ?",
-                    (new_ln, new_lh, new_ctx_hash, row_id),
-                )
+                updates.append((new_ln, line_hash(curr_content), context_hash(prev_content, curr_content, next_content), row_id))
             else:
-                await conn.execute("DELETE FROM reviewed_lines WHERE id = ?", (row_id,))
+                delete_ids.append(row_id)
+
+    if updates:
+        await conn.executemany(
+            "UPDATE reviewed_lines SET line_no = ?, line_hash = ?, context_hash = ? WHERE id = ?",
+            updates,
+        )
+    if delete_ids:
+        placeholders = ",".join("?" * len(delete_ids))
+        await conn.execute(f"DELETE FROM reviewed_lines WHERE id IN ({placeholders})", delete_ids)
 
 
-async def _reconcile_notes(conn, session_id, file_path, new_lines, new_line_hashes, old_line_hashes):
+async def _reconcile_notes(conn, session_id, file_path, new_lines, new_line_hashes, line_map):
     cur = await conn.execute(
         "SELECT id, start_line, end_line, start_hash, end_hash FROM notes "
         "WHERE session_id = ? AND file_path = ? AND is_orphaned = 0",
@@ -70,8 +71,6 @@ async def _reconcile_notes(conn, session_id, file_path, new_lines, new_line_hash
 
     if not note_rows:
         return
-
-    full_map = build_line_map(old_line_hashes, new_line_hashes) if old_line_hashes else None
 
     for note in note_rows:
         note_id = note["id"]
@@ -83,9 +82,9 @@ async def _reconcile_notes(conn, session_id, file_path, new_lines, new_line_hash
         start_orig_idx = start_line - 1
         end_orig_idx = end_line - 1
 
-        if full_map is not None:
-            new_start_idx = full_map.get(start_orig_idx)
-            new_end_idx = full_map.get(end_orig_idx)
+        if line_map is not None:
+            new_start_idx = line_map.get(start_orig_idx)
+            new_end_idx = line_map.get(end_orig_idx)
 
             if new_start_idx is None or new_end_idx is None:
                 await conn.execute("UPDATE notes SET is_orphaned = 1 WHERE id = ?", (note_id,))
@@ -134,6 +133,8 @@ async def reconcile_file(conn, session_id, file_path, root_path):
         stored_phashes = file_row["prev_line_hashes"]
         old_line_hashes = stored_phashes.split("\n") if stored_phashes else None
 
+    line_map = build_line_map(old_line_hashes, new_line_hashes) if old_line_hashes else None
+
     cur = await conn.execute(
         "SELECT id, line_no, line_hash, context_hash FROM reviewed_lines "
         "WHERE session_id = ? AND file_path = ? ORDER BY line_no",
@@ -143,8 +144,8 @@ async def reconcile_file(conn, session_id, file_path, root_path):
 
     await conn.execute("BEGIN")
     try:
-        await _reconcile_reviewed(conn, rows, new_lines, new_line_hashes, old_line_hashes)
-        await _reconcile_notes(conn, session_id, file_path, new_lines, new_line_hashes, old_line_hashes)
+        await _reconcile_reviewed(conn, rows, new_lines, new_line_hashes, line_map)
+        await _reconcile_notes(conn, session_id, file_path, new_lines, new_line_hashes, line_map)
 
         mtime = os.path.getmtime(full_path)
         new_phashes = "\n".join(new_line_hashes)
