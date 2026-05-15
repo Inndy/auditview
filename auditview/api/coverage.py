@@ -12,27 +12,24 @@ async def get_coverage(session_id):
             return jsonify({"error": "Session not found"}), 404
 
         cur = await conn.execute(
-            """
-            SELECT
-                COUNT(f.id) AS total_files,
-                COALESCE(SUM(f.countable_lines), 0) AS total_countable,
-                COUNT(DISTINCT rl.file_path || '|' || rl.line_hash || '|' || rl.context_hash)
-                    AS total_reviewed
-            FROM files f
-            LEFT JOIN reviewed_lines rl
-                ON rl.session_id = f.session_id AND rl.file_path = f.rel_path
-            WHERE f.session_id = ? AND f.countable_lines IS NOT NULL
-            """,
+            "SELECT COUNT(*) AS total_files, COALESCE(SUM(countable_lines), 0) AS total_countable "
+            "FROM files WHERE session_id = ? AND countable_lines IS NOT NULL",
             (session_id,),
         )
-        agg = await cur.fetchone()
+        file_agg = await cur.fetchone()
 
-    total_countable = agg["total_countable"]
-    total_reviewed = agg["total_reviewed"]
+        cur = await conn.execute(
+            "SELECT COUNT(*) AS total_reviewed FROM reviewed_lines WHERE session_id = ?",
+            (session_id,),
+        )
+        rl_agg = await cur.fetchone()
+
+    total_countable = file_agg["total_countable"]
+    total_reviewed = rl_agg["total_reviewed"]
     coverage = total_reviewed / total_countable if total_countable > 0 else 0.0
 
     return jsonify({
-        "total_files": agg["total_files"],
+        "total_files": file_agg["total_files"],
         "total_countable_lines": total_countable,
         "total_reviewed_lines": total_reviewed,
         "coverage": coverage,
