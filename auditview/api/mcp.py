@@ -1,8 +1,4 @@
-import os
 from flask import Blueprint, request, jsonify, current_app
-from auditview.db.connection import open_db
-from auditview.core.hashing import line_hash
-from auditview.api.util import safe_path
 
 bp = Blueprint("mcp", __name__)
 
@@ -96,212 +92,89 @@ def _tool_ok(text):
     return {"content": [{"type": "text", "text": str(text)}]}
 
 
-def _get_mcp_session(conn):
-    is_apsw = getattr(conn, '_is_apsw', False)
-    row = conn.cursor().execute(
-        "SELECT value FROM app_config WHERE key = 'mcp_session_id'"
-    ).fetchone()
-    if not row:
-        return None
-    session_id = int(row[0] if is_apsw else row["value"])
-    srow = conn.cursor().execute(
-        "SELECT id, label, root_path, exclusion_patterns FROM sessions WHERE id = ?", (session_id,)
-    ).fetchone()
-    if not srow:
-        return None
-    if is_apsw:
-        return {"id": srow[0], "label": srow[1], "root_path": srow[2], "exclusion_patterns": srow[3]}
-    return {"id": srow["id"], "label": srow["label"], "root_path": srow["root_path"], "exclusion_patterns": srow["exclusion_patterns"]}
+def _api(method, path, data=None):
+    client = current_app.test_client()
+    fn = getattr(client, method)
+    return fn(path, json=data) if data is not None else fn(path)
 
 
-def _tool_list_notes(args, conn, session):
-    is_apsw = getattr(conn, '_is_apsw', False)
-    cur = conn.cursor()
-    session_id = session["id"]
+def _get_mcp_session():
+    resp = _api("get", "/config")
+    if resp.status_code != 200:
+        return None
+    return resp.get_json().get("mcp_session")
+
+
+def _tool_list_notes(args, session):
+    resp = _api("get", f"/sessions/{session['id']}/notes")
+    if resp.status_code != 200:
+        return _tool_error(resp.get_json().get("error", "failed to list notes"))
+    notes = resp.get_json()
 
     file_path = (args.get("file_path") or "").strip()
     if file_path:
-        rows = cur.execute(
-            "SELECT id, file_path, start_line, end_line, content, is_todo, is_orphaned, created_at, issue_id "
-            "FROM notes WHERE session_id = ? AND file_path = ? ORDER BY start_line",
-            (session_id, file_path),
-        ).fetchall()
-    else:
-        rows = cur.execute(
-            "SELECT id, file_path, start_line, end_line, content, is_todo, is_orphaned, created_at, issue_id "
-            "FROM notes WHERE session_id = ? ORDER BY file_path, start_line",
-            (session_id,),
-        ).fetchall()
+        notes = [n for n in notes if n["file_path"] == file_path]
 
-    if not rows:
+    if not notes:
         return _tool_ok("No notes found.")
 
     output = []
-    for r in rows:
-        if is_apsw:
-            nid, fp, sl, el, content, is_todo, is_orphaned, created_at, issue_id = r[0], r[1], r[2], r[3], r[4], bool(r[5]), bool(r[6]), r[7], r[8]
-        else:
-            nid, fp, sl, el, content, is_todo, is_orphaned, created_at, issue_id = r["id"], r["file_path"], r["start_line"], r["end_line"], r["content"], bool(r["is_todo"]), bool(r["is_orphaned"]), r["created_at"], r["issue_id"]
-
-        kind = "TODO" if is_todo else "NOTE"
+    for n in notes:
+        kind = "TODO" if n["is_todo"] else "NOTE"
         tags = ""
-        if is_orphaned:
+        if n["is_orphaned"]:
             tags += " [ORPHANED]"
-        if issue_id:
-            tags += f" [issue:#{issue_id}]"
-        output.append(f"[#{nid}] {kind}{tags}  {fp}:{sl}-{el}")
-        output.append(f"  {content}")
+        if n.get("issue_id"):
+            tags += f" [issue:#{n['issue_id']}]"
+        output.append(f"[#{n['id']}] {kind}{tags}  {n['file_path']}:{n['start_line']}-{n['end_line']}")
+        output.append(f"  {n['content']}")
         output.append("")
-
     return _tool_ok("\n".join(output))
 
 
-def _tool_create_note(args, conn, session):
-    is_apsw = getattr(conn, '_is_apsw', False)
-    cur = conn.cursor()
-    session_id = session["id"]
-    root_path = session["root_path"]
-
-    file_path = (args.get("file_path") or "").strip()
-    start_line = args.get("start_line")
-    end_line = args.get("end_line")
-    content = (args.get("content") or "").strip()
-    is_todo = bool(args.get("is_todo", False))
-    issue_id = args.get("issue_id")
-
-    if not file_path:
-        raise ValueError("file_path is required")
-    if not content:
-        raise ValueError("content is required")
-    if not isinstance(start_line, int) or not isinstance(end_line, int):
-        raise ValueError("start_line and end_line must be integers")
-    if start_line < 1 or start_line > end_line:
-        raise ValueError("invalid line range")
-
-    full_path = safe_path(root_path, file_path)
-    if full_path is None:
-        raise ValueError("invalid path")
-    if not os.path.isfile(full_path):
-        raise ValueError(f"file not found: {file_path}")
-
-    with open(full_path, "r", encoding="utf-8", errors="replace") as f:
-        file_lines = f.read().splitlines()
-
-    if start_line > len(file_lines) or end_line > len(file_lines):
-        raise ValueError(f"line range out of bounds (file has {len(file_lines)} lines)")
-
-    start_idx = start_line - 1
-    end_idx = end_line - 1
-    start_hash = line_hash(file_lines[start_idx])
-    end_hash = line_hash(file_lines[end_idx])
-    snapshot_text = "\n".join(file_lines[start_idx:end_idx + 1])
-
-    if issue_id is not None:
-        issue_row = cur.execute(
-            "SELECT id FROM issues WHERE id = ? AND session_id = ?", (issue_id, session_id)
-        ).fetchone()
-        if issue_row is None:
-            raise ValueError(f"issue #{issue_id} not found")
-
-    cur.execute(
-        "INSERT INTO notes (session_id, file_path, start_line, end_line, start_hash, end_hash, snapshot_text, content, is_todo, issue_id) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (session_id, file_path, start_line, end_line, start_hash, end_hash, snapshot_text, content, int(is_todo), issue_id),
-    )
-    new_id = conn.last_insert_rowid() if is_apsw else cur.lastrowid
-    kind = "todo" if is_todo else "note"
-    return _tool_ok(f"Created {kind} #{new_id} on {file_path}:{start_line}-{end_line}")
+def _tool_create_note(args, session):
+    resp = _api("post", f"/sessions/{session['id']}/notes", args)
+    data = resp.get_json()
+    if resp.status_code not in (200, 201):
+        return _tool_error(data.get("error", "failed to create note"))
+    kind = "todo" if data["is_todo"] else "note"
+    return _tool_ok(f"Created {kind} #{data['id']} on {data['file_path']}:{data['start_line']}-{data['end_line']}")
 
 
-def _tool_list_issues(args, conn, session):
-    is_apsw = getattr(conn, '_is_apsw', False)
-    cur = conn.cursor()
-    session_id = session["id"]
+def _tool_list_issues(args, session):
+    url = f"/sessions/{session['id']}/issues"
+    if args.get("status"):
+        url += f"?status={args['status']}"
+    resp = _api("get", url)
+    if resp.status_code != 200:
+        return _tool_error(resp.get_json().get("error", "failed to list issues"))
+    issues = resp.get_json()
 
-    status = args.get("status")
-    if status and status not in ("open", "resolved", "dismissed"):
-        raise ValueError("status must be open, resolved, or dismissed")
-
-    if status:
-        rows = cur.execute(
-            "SELECT id, title, severity, status, created_at FROM issues "
-            "WHERE session_id = ? AND status = ? ORDER BY severity, created_at",
-            (session_id, status),
-        ).fetchall()
-    else:
-        rows = cur.execute(
-            "SELECT id, title, severity, status, created_at FROM issues "
-            "WHERE session_id = ? ORDER BY severity, created_at",
-            (session_id,),
-        ).fetchall()
-
-    if not rows:
+    if not issues:
         return _tool_ok("No issues found.")
 
-    output = []
-    for r in rows:
-        if is_apsw:
-            iid, title, severity, istatus = r[0], r[1], r[2], r[3]
-        else:
-            iid, title, severity, istatus = r["id"], r["title"], r["severity"], r["status"]
-        output.append(f"[#{iid}] [{severity}] [{istatus}] {title}")
-
+    output = [f"[#{i['id']}] [{i['severity']}] [{i['status']}] {i['title']}" for i in issues]
     return _tool_ok("\n".join(output))
 
 
-def _tool_create_issue(args, conn, session):
-    is_apsw = getattr(conn, '_is_apsw', False)
-    cur = conn.cursor()
-    session_id = session["id"]
-
-    title = (args.get("title") or "").strip()
-    severity = (args.get("severity") or "").strip()
-    if not title:
-        raise ValueError("title is required")
-    if severity not in ("P0", "P1", "P2"):
-        raise ValueError("severity must be P0, P1, or P2")
-
-    cur.execute(
-        "INSERT INTO issues (session_id, title, severity) VALUES (?, ?, ?)",
-        (session_id, title, severity),
-    )
-    new_id = conn.last_insert_rowid() if is_apsw else cur.lastrowid
-    return _tool_ok(f"Created issue #{new_id}: [{severity}] {title}")
+def _tool_create_issue(args, session):
+    resp = _api("post", f"/sessions/{session['id']}/issues", args)
+    data = resp.get_json()
+    if resp.status_code not in (200, 201):
+        return _tool_error(data.get("error", "failed to create issue"))
+    return _tool_ok(f"Created issue #{data['id']}: [{data['severity']}] {data['title']}")
 
 
-def _tool_update_issue(args, conn, session):
-    is_apsw = getattr(conn, '_is_apsw', False)
-    cur = conn.cursor()
-    session_id = session["id"]
-
+def _tool_update_issue(args, session):
     issue_id = args.get("issue_id")
     if not isinstance(issue_id, int):
-        raise ValueError("issue_id must be an integer")
-
-    row = cur.execute(
-        "SELECT id FROM issues WHERE id = ? AND session_id = ?", (issue_id, session_id)
-    ).fetchone()
-    if row is None:
-        raise ValueError(f"issue #{issue_id} not found")
-
-    updates = {}
-    if args.get("title"):
-        updates["title"] = args["title"].strip()
-    if "severity" in args:
-        if args["severity"] not in ("P0", "P1", "P2"):
-            raise ValueError("severity must be P0, P1, or P2")
-        updates["severity"] = args["severity"]
-    if "status" in args:
-        if args["status"] not in ("open", "resolved", "dismissed"):
-            raise ValueError("status must be open, resolved, or dismissed")
-        updates["status"] = args["status"]
-
-    if not updates:
-        raise ValueError("nothing to update — provide title, severity, and/or status")
-
-    set_clause = ", ".join(f"{k} = ?" for k in updates)
-    cur.execute(f"UPDATE issues SET {set_clause} WHERE id = ?", (*updates.values(), issue_id))
-    changes = ", ".join(f"{k}={v}" for k, v in updates.items())
+        return _tool_error("issue_id must be an integer")
+    payload = {k: v for k, v in args.items() if k != "issue_id"}
+    resp = _api("patch", f"/sessions/{session['id']}/issues/{issue_id}", payload)
+    data = resp.get_json()
+    if resp.status_code != 200:
+        return _tool_error(data.get("error", "failed to update issue"))
+    changes = ", ".join(f"{k}={v}" for k, v in payload.items())
     return _tool_ok(f"Updated issue #{issue_id}: {changes}")
 
 
@@ -323,7 +196,6 @@ def mcp_endpoint():
     method = body.get("method", "")
     params = body.get("params") or {}
 
-    # Notifications have no id and require no response
     if "id" not in body:
         return "", 202
 
@@ -352,18 +224,15 @@ def mcp_endpoint():
         if handler is None:
             return _ok(req_id, _tool_error(f"Unknown tool: {name}"))
 
-        conn = open_db(current_app.config["DB_PATH"])
-        session = _get_mcp_session(conn)
+        session = _get_mcp_session()
         if session is None:
             return _ok(req_id, _tool_error(
                 "No MCP session is active. A human must activate a session in the web UI first."
             ))
 
         try:
-            result = handler(args, conn, session)
+            result = handler(args, session)
             return _ok(req_id, result)
-        except ValueError as e:
-            return _ok(req_id, _tool_error(str(e)))
         except Exception as e:
             return _ok(req_id, _tool_error(f"Internal error: {e}"))
 
