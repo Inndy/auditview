@@ -108,7 +108,7 @@ export default {
 
 .status-reviewed   { background: #4caf50; }
 .status-partial    { background: #ff9800; }
-.status-not_viewed { background: var(--border-mid); }
+.status-not_viewed { background: var(--bg-base); }
 .status-empty      { display: none; }
 
 .badge-todo-count,

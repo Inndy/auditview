@@ -251,7 +251,7 @@ export default {
   gap: 1px;
   flex: 1;
   overflow: hidden;
-  background: var(--border);
+  background: var(--bg-base);
 }
 
 .issues-panel,
@@ -378,7 +378,8 @@ export default {
   color: var(--text-muted);
 }
 
-.details-panel {
+.details-panel,
+.orphan-panel {
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
 }

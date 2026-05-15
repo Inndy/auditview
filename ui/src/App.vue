@@ -250,7 +250,7 @@ table.code-table tr.reviewed.selected {
 
 .coverage-bar-wrap {
   height: 6px;
-  background: var(--border-mid);
+  background: var(--bg-base);
   border-radius: 3px;
   overflow: hidden;
   margin-top: 2px;
