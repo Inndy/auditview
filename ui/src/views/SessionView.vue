@@ -114,7 +114,7 @@ export default {
 
 .nav-tab.active {
   color: var(--text);
-  border-bottom-color: var(--accent, #4a9eff);
+  border-bottom-color: var(--primary);
 }
 
 .loading-full,

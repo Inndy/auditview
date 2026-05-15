@@ -189,7 +189,7 @@ export default {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  background: var(--bg-highlight, rgba(74, 158, 255, 0.1));
+  background: var(--bg-selected);
   border: 1px solid var(--border);
   border-radius: 4px;
   font-size: 12px;
@@ -222,9 +222,9 @@ export default {
 }
 
 .btn-create {
-  background: var(--accent, #4a9eff);
+  background: var(--primary);
   color: white;
-  border-color: var(--accent, #4a9eff);
+  border-color: var(--primary);
 }
 
 .btn-create:disabled {
@@ -233,7 +233,7 @@ export default {
 }
 
 .btn-cancel:hover {
-  background: var(--bg-highlight, rgba(74, 158, 255, 0.05));
+  background: var(--bg-hover);
 }
 
 .btn-create:hover:not(:disabled) {

@@ -271,13 +271,13 @@ td {
 }
 
 .mcp-btn.active {
-  border-color: var(--accent, #4a9eff);
-  color: var(--accent, #4a9eff);
+  border-color: var(--primary);
+  color: var(--primary);
   font-weight: 600;
 }
 
 .mcp-active-row {
-  background: var(--bg-highlight, rgba(74, 158, 255, 0.05));
+  background: var(--bg-hover);
 }
 
 .nav-link {
@@ -285,7 +285,7 @@ td {
   margin-right: 8px;
   padding: 4px 10px;
   font-size: 12px;
-  color: var(--accent, #4a9eff);
+  color: var(--primary);
   text-decoration: none;
   border: 1px solid var(--border);
   border-radius: 3px;

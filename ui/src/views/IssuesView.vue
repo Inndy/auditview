@@ -1,66 +1,73 @@
 <template>
   <div class="issues-view">
     <div v-if="loadingIssues" class="loading">Loading issues…</div>
-    <div v-else class="issues-content">
+    <div v-else class="issues-content" :class="{ 'has-detail': !!selectedIssueId }">
       <div class="issues-panel">
         <div class="panel-header">
           <h3>Issues</h3>
           <div class="filters">
-            <button
-              v-for="st in ['open', 'resolved', 'dismissed']"
-              :key="st"
+            <router-link
+              v-for="opt in filterOptions"
+              :key="opt.value"
               class="filter-btn"
-              :class="{ active: statusFilter === st }"
-              @click="statusFilter = statusFilter === st ? null : st"
-            >{{ st }}</button>
+              :class="{ active: statusFilter === opt.value }"
+              :to="filterRoute(opt.value)"
+            >{{ opt.label }}</router-link>
           </div>
         </div>
         <div v-if="filteredIssues.length === 0" class="empty">No issues.</div>
         <div v-else class="issues-list">
-          <div
+          <router-link
             v-for="issue in filteredIssues"
             :key="issue.id"
+            :to="issueRoute(issue.id)"
             class="issue-item"
             :class="{ selected: selectedIssueId === issue.id }"
-            @click="selectIssue(issue.id)"
           >
             <div class="issue-header">
               <span class="severity-badge" :class="'severity-' + issue.severity">{{ issue.severity }}</span>
               <span class="title">{{ issue.title }}</span>
             </div>
-            <div class="issue-meta">{{ issue.status }} • {{ formatDate(issue.created_at) }}</div>
-          </div>
+            <div class="issue-meta">
+              <span class="status-pill" :class="'status-' + issue.status">{{ issue.status }}</span>
+              <span class="meta-date">{{ formatDate(issue.created_at) }}</span>
+            </div>
+          </router-link>
         </div>
       </div>
 
       <div v-if="selectedIssueId" class="details-panel">
         <div class="panel-header">
           <h3>Issue #{{ selectedIssueId }}</h3>
-          <button class="close-btn" @click="selectedIssueId = null">✕</button>
+          <router-link :to="closeRoute" class="close-btn" title="Back to list">✕</router-link>
         </div>
         <div v-if="selectedIssue" class="issue-details">
           <div class="detail-row">
             <label>Title</label>
-            <input v-model="selectedIssue.title" @blur="updateIssue('title')" type="text" />
+            <input v-model="selectedIssue.title" @blur="updateField('title')" type="text" />
           </div>
           <div class="detail-row">
             <label>Severity</label>
-            <select v-model="selectedIssue.severity" @change="updateIssue('severity')">
+            <select v-model="selectedIssue.severity" @change="updateField('severity')">
               <option value="P0">P0</option>
               <option value="P1">P1</option>
               <option value="P2">P2</option>
             </select>
           </div>
           <div class="detail-row">
-            <label>Status</label>
-            <select v-model="selectedIssue.status" @change="updateIssue('status')">
-              <option value="open">Open</option>
-              <option value="resolved">Resolved</option>
-              <option value="dismissed">Dismissed</option>
-            </select>
+            <label>Status: <span class="status-pill" :class="'status-' + selectedIssue.status">{{ selectedIssue.status }}</span></label>
+            <div class="status-actions">
+              <template v-if="selectedIssue.status === 'open'">
+                <button class="btn-resolve" @click="setStatus('resolved')">Resolve</button>
+                <button class="btn-dismiss" @click="setStatus('dismissed')">Dismiss</button>
+              </template>
+              <template v-else>
+                <button class="btn-reopen" @click="setStatus('open')">Reopen</button>
+              </template>
+            </div>
           </div>
           <div class="detail-row">
-            <button class="delete-btn" @click="deleteIssue">Delete Issue</button>
+            <button class="delete-btn" @click="onDeleteIssue">Delete Issue</button>
           </div>
 
           <div class="notes-section">
@@ -74,11 +81,12 @@
                 class="note-item note-link"
               >
                 <div class="note-file">{{ note.file_path }}:{{ note.start_line }}</div>
-                <div class="note-content">{{ note.content }}</div>
+                <div class="note-content">{{ note.content || '(no content)' }}</div>
               </router-link>
             </div>
           </div>
         </div>
+        <div v-else class="empty">Issue not found.</div>
       </div>
 
       <div class="orphan-panel">
@@ -121,9 +129,16 @@
 </template>
 
 <script>
-import { listIssues, updateIssue, deleteIssue, getIssueNotes } from '../api/issues.js'
+import { listIssues, updateIssue as apiUpdateIssue, deleteIssue as apiDeleteIssue, getIssueNotes } from '../api/issues.js'
 import { listNotes } from '../api/notes.js'
 import CreateIssueModal from '../components/CreateIssueModal.vue'
+
+const FILTER_OPTIONS = [
+  { value: '', label: 'all' },
+  { value: 'open', label: 'open' },
+  { value: 'resolved', label: 'resolved' },
+  { value: 'dismissed', label: 'dismissed' },
+]
 
 export default {
   name: 'IssuesView',
@@ -137,13 +152,19 @@ export default {
       orphanNotes: [],
       issueNotes: [],
       loadingIssues: true,
-      statusFilter: null,
-      selectedIssueId: null,
       selectedNoteIds: new Set(),
       showCreateIssueModal: false,
+      filterOptions: FILTER_OPTIONS,
     }
   },
   computed: {
+    statusFilter() {
+      return this.$route.query.status ?? ''
+    },
+    selectedIssueId() {
+      const id = this.$route.params.issueId
+      return id ? parseInt(id) : null
+    },
     filteredIssues() {
       if (!this.statusFilter) return this.issues
       return this.issues.filter((i) => i.status === this.statusFilter)
@@ -151,9 +172,22 @@ export default {
     selectedIssue() {
       return this.issues.find((i) => i.id === this.selectedIssueId)
     },
+    closeRoute() {
+      const query = this.statusFilter ? { status: this.statusFilter } : {}
+      return { path: `/sessions/${this.session.id}/issues`, query }
+    },
   },
   mounted() {
     this.load()
+  },
+  watch: {
+    selectedIssueId(id) {
+      if (id) {
+        this.loadIssueNotes(id)
+      } else {
+        this.issueNotes = []
+      }
+    },
   },
   methods: {
     async load() {
@@ -165,19 +199,13 @@ export default {
         ])
         this.issues = issues
         this.orphanNotes = notes.filter((n) => !n.issue_id)
+        if (this.selectedIssueId) {
+          this.loadIssueNotes(this.selectedIssueId)
+        }
       } catch (e) {
         console.error('Failed to load:', e.message)
       } finally {
         this.loadingIssues = false
-      }
-    },
-    selectIssue(id) {
-      if (this.selectedIssueId === id) {
-        this.selectedIssueId = null
-        this.issueNotes = []
-      } else {
-        this.selectedIssueId = id
-        this.loadIssueNotes(id)
       }
     },
     async loadIssueNotes(issueId) {
@@ -187,6 +215,17 @@ export default {
         console.error('Failed to load issue notes:', e.message)
       }
     },
+    issueRoute(id) {
+      const query = this.statusFilter ? { status: this.statusFilter } : {}
+      return { path: `/sessions/${this.session.id}/issues/${id}`, query }
+    },
+    filterRoute(value) {
+      const path = this.selectedIssueId
+        ? `/sessions/${this.session.id}/issues/${this.selectedIssueId}`
+        : `/sessions/${this.session.id}/issues`
+      const query = value ? { status: value } : {}
+      return { path, query }
+    },
     toggleNoteSelection(noteId) {
       if (this.selectedNoteIds.has(noteId)) {
         this.selectedNoteIds.delete(noteId)
@@ -195,31 +234,42 @@ export default {
       }
       this.$forceUpdate()
     },
-    async updateIssue(field) {
+    async updateField(field) {
+      if (!this.selectedIssue) return
       try {
         const updates = {}
         updates[field] = this.selectedIssue[field]
-        const updated = await updateIssue(this.session.id, this.selectedIssueId, updates)
+        const updated = await apiUpdateIssue(this.session.id, this.selectedIssueId, updates)
         const idx = this.issues.findIndex((i) => i.id === this.selectedIssueId)
         if (idx !== -1) this.issues.splice(idx, 1, updated)
       } catch (e) {
         console.error('Failed to update:', e.message)
       }
     },
-    async deleteIssue() {
+    async setStatus(newStatus) {
+      if (!this.selectedIssue) return
+      try {
+        const updated = await apiUpdateIssue(this.session.id, this.selectedIssueId, { status: newStatus })
+        const idx = this.issues.findIndex((i) => i.id === this.selectedIssueId)
+        if (idx !== -1) this.issues.splice(idx, 1, updated)
+      } catch (e) {
+        console.error('Failed to update status:', e.message)
+      }
+    },
+    async onDeleteIssue() {
       if (!confirm('Delete this issue?')) return
       try {
-        await deleteIssue(this.session.id, this.selectedIssueId)
+        await apiDeleteIssue(this.session.id, this.selectedIssueId)
         this.issues = this.issues.filter((i) => i.id !== this.selectedIssueId)
-        this.selectedIssueId = null
+        this.$router.push(this.closeRoute)
       } catch (e) {
         console.error('Failed to delete:', e.message)
       }
     },
     onIssueCreated(issue) {
       this.issues.push(issue)
-      this.selectedNoteIds.clear()
       this.orphanNotes = this.orphanNotes.filter((n) => !this.selectedNoteIds.has(n.id))
+      this.selectedNoteIds.clear()
       this.showCreateIssueModal = false
     },
     formatDate(isoString) {
@@ -247,11 +297,15 @@ export default {
 
 .issues-content {
   display: grid;
-  grid-template-columns: 300px 1fr 300px;
+  grid-template-columns: 300px 300px;
   gap: 1px;
   flex: 1;
   overflow: hidden;
   background: var(--bg-base);
+}
+
+.issues-content.has-detail {
+  grid-template-columns: 300px 1fr 300px;
 }
 
 .issues-panel,
@@ -296,12 +350,18 @@ export default {
   background: var(--bg);
   color: var(--text-muted);
   cursor: pointer;
+  text-decoration: none;
+  user-select: none;
+}
+
+.filter-btn:hover {
+  background: var(--bg-hover);
 }
 
 .filter-btn.active {
-  background: var(--accent, #4a9eff);
+  background: var(--primary);
   color: white;
-  border-color: var(--accent, #4a9eff);
+  border-color: var(--primary);
 }
 
 .empty {
@@ -325,16 +385,19 @@ export default {
   border-bottom: 1px solid var(--border-light);
   cursor: pointer;
   user-select: none;
+  color: var(--text);
+  text-decoration: none;
+  display: block;
 }
 
 .issue-item:hover,
 .note-item:hover {
-  background: var(--bg-highlight, rgba(74, 158, 255, 0.05));
+  background: var(--bg-hover);
 }
 
 .issue-item.selected,
 .note-item.selected {
-  background: var(--bg-highlight, rgba(74, 158, 255, 0.1));
+  background: var(--bg-selected);
 }
 
 .issue-header {
@@ -352,17 +415,9 @@ export default {
   color: white;
 }
 
-.severity-P0 {
-  background: var(--severity-p0);
-}
-
-.severity-P1 {
-  background: var(--severity-p1);
-}
-
-.severity-P2 {
-  background: var(--severity-p2);
-}
+.severity-P0 { background: var(--severity-p0); }
+.severity-P1 { background: var(--severity-p1); }
+.severity-P2 { background: var(--severity-p2); }
 
 .title {
   flex: 1;
@@ -376,12 +431,42 @@ export default {
 .issue-meta {
   font-size: 11px;
   color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-open {
+  background: var(--badge-todo-bg);
+  color: var(--badge-todo-text);
+}
+
+.status-resolved {
+  background: var(--bg-reviewed);
+  color: #2e7d32;
+}
+
+.status-dismissed {
+  background: var(--bg-base);
+  color: var(--text-muted);
+}
+
+.meta-date {
+  margin-left: auto;
 }
 
 .details-panel,
 .orphan-panel {
   border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border);
 }
 
 .close-btn {
@@ -391,6 +476,8 @@ export default {
   font-size: 18px;
   color: var(--text-muted);
   padding: 0 4px;
+  text-decoration: none;
+  line-height: 1;
 }
 
 .close-btn:hover {
@@ -425,6 +512,50 @@ export default {
   background: var(--bg);
   color: var(--text);
   font-family: inherit;
+}
+
+.status-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.btn-resolve,
+.btn-dismiss,
+.btn-reopen {
+  flex: 1;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.btn-resolve {
+  border-color: #2e7d32;
+  color: #2e7d32;
+}
+
+.btn-resolve:hover {
+  background: #2e7d32;
+  color: white;
+}
+
+.btn-dismiss {
+  border-color: var(--text-muted);
+  color: var(--text-muted);
+}
+
+.btn-dismiss:hover {
+  background: var(--text-muted);
+  color: white;
+}
+
+.btn-reopen:hover {
+  background: var(--bg-hover);
 }
 
 .delete-btn {
@@ -475,7 +606,7 @@ export default {
 }
 
 .note-link:hover {
-  background: var(--bg-highlight, rgba(74, 158, 255, 0.05));
+  background: var(--bg-hover);
 }
 
 .note-checkbox {
@@ -515,7 +646,7 @@ export default {
 
 .create-issue-btn {
   padding: 6px 12px;
-  background: var(--accent, #4a9eff);
+  background: var(--primary);
   color: white;
   border: none;
   border-radius: 4px;
@@ -525,6 +656,6 @@ export default {
 }
 
 .create-issue-btn:hover {
-  opacity: 0.9;
+  background: var(--primary-hover);
 }
 </style>

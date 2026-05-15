@@ -14,6 +14,7 @@ const router = createRouter({
       children: [
         { path: 'code', component: CodeView },
         { path: 'issues', component: IssuesView },
+        { path: 'issues/:issueId', component: IssuesView },
       ],
     },
   ],
