@@ -24,6 +24,17 @@
       </button>
     </div>
 
+    <div v-if="mcpSessionId !== null && config && config.mcp_session" class="mcp-guide">
+      <div class="mcp-guide-header">
+        <span class="mcp-guide-title">MCP active &mdash; {{ config.mcp_session.label }}</span>
+        <button class="mcp-copy-btn" @click="copySnippet" :title="copied ? 'Copied!' : 'Copy to clipboard'">{{ copied ? 'Copied!' : 'Copy' }}</button>
+      </div>
+      <p class="mcp-guide-desc">Add this to your <code>.claude/settings.json</code> to connect an AI agent:</p>
+      <pre class="mcp-snippet">{{ mcpSettingsSnippet }}</pre>
+      <p class="mcp-guide-note">Available tools: list_files, read_file, list_notes, create_note, list_issues, create_issue, update_issue<br>
+      <strong>Note:</strong> AI agents cannot mark lines as reviewed &mdash; that action is reserved for humans.</p>
+    </div>
+
     <div class="session-list">
       <h2>Sessions</h2>
       <div v-if="loading">Loading…</div>
@@ -77,12 +88,21 @@ export default {
       loading: true,
       error: null,
       creating: false,
+      copied: false,
       darkMode: isDark(),
       form: {
         label: '',
         exclusion_patterns: '',
       },
     }
+  },
+  computed: {
+    mcpUrl() {
+      return `${window.location.origin}/mcp`
+    },
+    mcpSettingsSnippet() {
+      return JSON.stringify({ mcpServers: { auditview: { type: 'http', url: this.mcpUrl } } }, null, 2)
+    },
   },
   mounted() {
     this.load()
@@ -138,6 +158,15 @@ export default {
     onToggleDark() {
       toggleDark()
       this.darkMode = isDark()
+    },
+    async copySnippet() {
+      try {
+        await navigator.clipboard.writeText(this.mcpSettingsSnippet)
+        this.copied = true
+        setTimeout(() => { this.copied = false }, 2000)
+      } catch {
+        this.copied = false
+      }
     },
   },
 }
@@ -293,5 +322,74 @@ td {
 
 .nav-link:hover {
   background: var(--bg-surface);
+}
+
+.mcp-guide {
+  background: var(--bg-surface);
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+}
+
+.mcp-guide-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.mcp-guide-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.mcp-copy-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.mcp-copy-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.mcp-guide-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+
+.mcp-guide-desc code {
+  font-family: monospace;
+  background: var(--bg-hover);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.mcp-snippet {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-family: monospace;
+  white-space: pre;
+  overflow-x: auto;
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+
+.mcp-guide-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.6;
 }
 </style>
