@@ -6,7 +6,7 @@ try:
 except ImportError:
     _HAS_APSW = False
 
-_MAX_CHECKPOINTS = 1000
+_MAX_CHECKPOINTS = 50
 
 
 class CheckpointManager:
