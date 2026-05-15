@@ -8,13 +8,13 @@
       <span class="tree-icon">{{ node.isFile ? '📄' : (expanded ? '📂' : '📁') }}</span>
       <span class="tree-name">{{ node.name }}</span>
       <template v-if="node.isFile && node.fileData">
+        <span v-if="node.fileData.todos_count" class="badge-todo-count" title="TODOs">{{ node.fileData.todos_count }}</span>
+        <span v-if="node.fileData.notes_count" class="badge-note-count" title="Notes">{{ node.fileData.notes_count }}</span>
         <span
           class="status-dot"
           :class="'status-' + node.fileData.status"
           :title="statusTitle"
         ></span>
-        <span v-if="node.fileData.todos_count" class="badge-todo-count" title="TODOs">{{ node.fileData.todos_count }}</span>
-        <span v-if="node.fileData.notes_count" class="badge-note-count" title="Notes">{{ node.fileData.notes_count }}</span>
       </template>
     </div>
     <div v-if="!node.isFile && expanded" class="tree-children">
