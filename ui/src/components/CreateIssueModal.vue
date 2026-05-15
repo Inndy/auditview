@@ -2,7 +2,7 @@
   <div class="modal-overlay" @click.self="$emit('close')">
     <div class="modal">
       <div class="modal-header">
-        <h3>Create Issue from {{ selectedNoteIds.size }} Note(s)</h3>
+        <h3>Create Issue from {{ selectedNoteIds.length }} Note(s)</h3>
         <button class="close-btn" @click="$emit('close')">✕</button>
       </div>
 
@@ -47,7 +47,7 @@ import { createIssue, attachNoteToIssue } from '../api/issues.js'
 export default {
   name: 'CreateIssueModal',
   props: {
-    selectedNoteIds: Set,
+    selectedNoteIds: Array,
     sessionId: Number,
   },
   emits: ['created', 'close'],

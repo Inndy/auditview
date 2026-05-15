@@ -103,10 +103,10 @@
             v-for="note in orphanNotes"
             :key="note.id"
             class="note-item"
-            :class="{ selected: selectedNoteIds.has(note.id) }"
+            :class="{ selected: selectedNoteIds.includes(note.id) }"
             @click="toggleNoteSelection(note.id)"
           >
-            <input type="checkbox" :checked="selectedNoteIds.has(note.id)" class="note-checkbox" />
+            <input type="checkbox" :checked="selectedNoteIds.includes(note.id)" class="note-checkbox" />
             <div class="note-info">
               <router-link
                 class="note-file note-file-link"
@@ -118,8 +118,8 @@
           </div>
         </div>
 
-        <div v-if="selectedNoteIds.size > 0" class="action-bar">
-          <span>{{ selectedNoteIds.size }} selected</span>
+        <div v-if="selectedNoteIds.length > 0" class="action-bar">
+          <span>{{ selectedNoteIds.length }} selected</span>
           <button class="create-issue-btn" @click="showCreateIssueModal = true">Create Issue</button>
         </div>
       </div>
@@ -159,7 +159,7 @@ export default {
       orphanNotes: [],
       issueNotes: [],
       loadingIssues: true,
-      selectedNoteIds: new Set(),
+      selectedNoteIds: [],
       showCreateIssueModal: false,
       filterOptions: FILTER_OPTIONS,
     }
@@ -204,7 +204,7 @@ export default {
           listNotes(this.session.id),
         ])
         this.issues = issues
-        this.orphanNotes = notes.filter((n) => !n.issue_id)
+        this.orphanNotes = notes.filter((n) => !n.issue_id && !n.is_orphaned)
         if (this.selectedIssueId) {
           this.loadIssueNotes(this.selectedIssueId)
         }
@@ -232,12 +232,12 @@ export default {
       return { path, query: { status: value } }
     },
     toggleNoteSelection(noteId) {
-      if (this.selectedNoteIds.has(noteId)) {
-        this.selectedNoteIds.delete(noteId)
+      const idx = this.selectedNoteIds.indexOf(noteId)
+      if (idx !== -1) {
+        this.selectedNoteIds.splice(idx, 1)
       } else {
-        this.selectedNoteIds.add(noteId)
+        this.selectedNoteIds.push(noteId)
       }
-      this.$forceUpdate()
     },
     async updateField(field) {
       if (!this.selectedIssue) return
@@ -273,8 +273,8 @@ export default {
     },
     onIssueCreated(issue) {
       this.issues.push(issue)
-      this.orphanNotes = this.orphanNotes.filter((n) => !this.selectedNoteIds.has(n.id))
-      this.selectedNoteIds.clear()
+      this.orphanNotes = this.orphanNotes.filter((n) => !this.selectedNoteIds.includes(n.id))
+      this.selectedNoteIds = []
       this.showCreateIssueModal = false
     },
     formatDate(isoString) {
