@@ -24,6 +24,7 @@
 <script>
 import { listFiles } from '../api/files.js'
 import TreeNode from './TreeNode.vue'
+import { getBoolPref, setBoolPref } from '../prefs.js'
 
 function buildTree(files) {
   const root = []
@@ -63,12 +64,12 @@ export default {
       loading: true,
       error: null,
       currentFile: null,
-      hideReviewed: localStorage.getItem('hideReviewed') === 'true',
+      hideReviewed: getBoolPref('hideReviewed'),
     }
   },
   watch: {
     hideReviewed(val) {
-      localStorage.setItem('hideReviewed', val)
+      setBoolPref('hideReviewed', val)
     },
   },
   computed: {

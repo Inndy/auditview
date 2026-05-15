@@ -9,7 +9,7 @@
         :skipComments="skipComments"
         :wrapLines="wrapLines"
         @skip-comments-change="skipComments = $event"
-        @wrap-lines-change="wrapLines = $event; localStorage.setItem('wrapLines', $event)"
+        @wrap-lines-change="setWrapLines($event)"
         @show-help="showHelp = true"
       />
       <div class="nav-tabs">
@@ -22,7 +22,7 @@
         :skipComments="skipComments"
         :wrapLines="wrapLines"
         @skip-comments-change="skipComments = $event"
-        @wrap-lines-change="wrapLines = $event; localStorage.setItem('wrapLines', $event)"
+        @wrap-lines-change="setWrapLines($event)"
         @show-help="showHelp = true"
       />
       <KeyboardHelpModal :visible="showHelp" @close="showHelp = false" />
@@ -35,6 +35,7 @@ import { listSessions } from '../api/sessions.js'
 import { getCoverage } from '../api/coverage.js'
 import SessionHeader from '../components/SessionHeader.vue'
 import KeyboardHelpModal from '../components/KeyboardHelpModal.vue'
+import { getBoolPref, setBoolPref } from '../prefs.js'
 
 export default {
   name: 'SessionView',
@@ -50,7 +51,7 @@ export default {
       loadingSession: true,
       sessionError: null,
       skipComments: false,
-      wrapLines: localStorage.getItem('wrapLines') === 'true',
+      wrapLines: getBoolPref('wrapLines'),
       showHelp: false,
     }
   },
@@ -58,6 +59,10 @@ export default {
     this.loadSession()
   },
   methods: {
+    setWrapLines(val) {
+      this.wrapLines = val
+      setBoolPref('wrapLines', val)
+    },
     async loadSession() {
       this.loadingSession = true
       this.sessionError = null

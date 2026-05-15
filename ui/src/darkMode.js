@@ -1,7 +1,7 @@
 import lightCss from 'highlight.js/styles/github.css?inline'
 import darkCss from 'highlight.js/styles/github-dark-dimmed.css?inline'
+import { getBoolPref, setBoolPref } from './prefs.js'
 
-const STORAGE_KEY = 'auditview-dark'
 let hljsEl = null
 
 function injectHljs(css) {
@@ -19,7 +19,7 @@ export function isDark() {
 
 export function setDark(dark) {
   document.documentElement.classList.toggle('dark', dark)
-  localStorage.setItem(STORAGE_KEY, dark ? '1' : '0')
+  setBoolPref('dark', dark)
   injectHljs(dark ? darkCss : lightCss)
 }
 
@@ -28,7 +28,6 @@ export function toggleDark() {
 }
 
 export function initDark() {
-  const stored = localStorage.getItem(STORAGE_KEY)
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-  setDark(stored !== null ? stored === '1' : prefersDark)
+  setDark(getBoolPref('dark', prefersDark))
 }
