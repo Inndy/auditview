@@ -188,8 +188,9 @@ def get_file(session_id, fpath):
         })
 
     note_rows = cur.execute(
-        "SELECT id, start_line, end_line, content, is_todo, is_orphaned, snapshot_text, created_at "
-        "FROM notes WHERE session_id = ? AND file_path = ? ORDER BY start_line",
+        "SELECT n.id, n.start_line, n.end_line, n.content, n.is_todo, n.is_orphaned, n.snapshot_text, n.created_at, n.issue_id, i.severity "
+        "FROM notes n LEFT JOIN issues i ON n.issue_id = i.id "
+        "WHERE n.session_id = ? AND n.file_path = ? ORDER BY n.start_line",
         (session_id, fpath),
     ).fetchall()
 
@@ -197,10 +198,12 @@ def get_file(session_id, fpath):
         if is_apsw:
             return {"id": r[0], "start_line": r[1], "end_line": r[2], "content": r[3],
                     "is_todo": bool(r[4]), "is_orphaned": bool(r[5]),
-                    "snapshot_text": r[6], "created_at": r[7]}
+                    "snapshot_text": r[6], "created_at": r[7],
+                    "issue_id": r[8], "issue_severity": r[9]}
         return {"id": r["id"], "start_line": r["start_line"], "end_line": r["end_line"],
                 "content": r["content"], "is_todo": bool(r["is_todo"]),
                 "is_orphaned": bool(r["is_orphaned"]),
-                "snapshot_text": r["snapshot_text"], "created_at": r["created_at"]}
+                "snapshot_text": r["snapshot_text"], "created_at": r["created_at"],
+                "issue_id": r["issue_id"], "issue_severity": r["severity"]}
 
     return jsonify({"lines": result_lines, "notes": [note_to_dict(r) for r in note_rows]})

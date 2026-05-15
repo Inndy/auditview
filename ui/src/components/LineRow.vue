@@ -11,6 +11,7 @@
     <LineGutter
       :lineNo="line.line_no"
       :isInRange="isSelected"
+      :severity="severity"
       @drag-start="(n) => $emit('drag-start', n)"
       @drag-move="(n) => $emit('drag-move', n)"
       @drag-end="(n) => $emit('drag-end', n)"
@@ -37,6 +38,7 @@ export default {
   props: {
     line: { type: Object, required: true },
     isSelected: { type: Boolean, default: false },
+    severity: { type: String, default: null },
   },
   emits: ['drag-start', 'drag-move', 'drag-end'],
   methods: {

@@ -35,6 +35,10 @@ export default {
   --badge-todo-text:      #856404;
   --badge-orphan-bg:      #f8d7da;
   --badge-orphan-text:    #842029;
+  --severity-p0:          #dc3545;
+  --severity-p1:          #fd7e14;
+  --severity-p2:          #0dcaf0;
+  --severity-none:        #adb5bd;
   --shadow:               rgba(0,0,0,0.18);
   --overlay:              rgba(0,0,0,0.4);
 }
@@ -65,6 +69,10 @@ html.dark {
   --badge-todo-text:      #e6b800;
   --badge-orphan-bg:      #3a1a1a;
   --badge-orphan-text:    #f1534a;
+  --severity-p0:          #e74c3c;
+  --severity-p1:          #ff9f43;
+  --severity-p2:          #4dd0e1;
+  --severity-none:        #6c757d;
   --shadow:               rgba(0,0,0,0.5);
   --overlay:              rgba(0,0,0,0.6);
 }

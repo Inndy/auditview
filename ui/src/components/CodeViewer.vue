@@ -12,6 +12,7 @@
             :key="line.line_no"
             :line="line"
             :isSelected="isInRange(line.line_no)"
+            :severity="lineSeverityMap[line.line_no] || null"
             @drag-start="onDragStart"
             @drag-move="onDragMove"
             @drag-end="onDragEnd"
@@ -116,6 +117,20 @@ export default {
     rangeMax() {
       if (this.selectedRange.start === null) return null
       return Math.max(this.selectedRange.start, this.selectedRange.end ?? this.selectedRange.start)
+    },
+    lineSeverityMap() {
+      const RANK = { P0: 3, P1: 2, P2: 1, NONE: 0 }
+      const map = {}
+      for (const note of this.notes) {
+        if (note.is_orphaned) continue
+        const sev = note.issue_id ? (note.issue_severity || 'NONE') : 'NONE'
+        for (let ln = note.start_line; ln <= note.end_line; ln++) {
+          if (!map[ln] || RANK[sev] > RANK[map[ln]]) {
+            map[ln] = sev
+          }
+        }
+      }
+      return map
     },
   },
   watch: {

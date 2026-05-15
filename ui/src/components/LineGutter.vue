@@ -5,7 +5,7 @@
     @mousedown.prevent="onMouseDown"
     @mousemove="onMouseMove"
     @mouseup="onMouseUp"
-  >{{ lineNo }}</td>
+  ><span v-if="severity" class="severity-dot" :class="'severity-' + severity"></span>{{ lineNo }}</td>
 </template>
 
 <script>
@@ -14,6 +14,7 @@ export default {
   props: {
     lineNo: { type: Number, required: true },
     isInRange: { type: Boolean, default: false },
+    severity: { type: String, default: null },
   },
   emits: ['drag-start', 'drag-move', 'drag-end'],
   methods: {
@@ -32,3 +33,30 @@ export default {
   },
 }
 </script>
+
+<style scoped>
+.severity-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.severity-P0 {
+  background: var(--severity-p0);
+}
+
+.severity-P1 {
+  background: var(--severity-p1);
+}
+
+.severity-P2 {
+  background: var(--severity-p2);
+}
+
+.severity-NONE {
+  background: var(--severity-none);
+}
+</style>

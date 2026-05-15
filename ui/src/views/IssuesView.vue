@@ -353,15 +353,15 @@ export default {
 }
 
 .severity-P0 {
-  background: #dc3545;
+  background: var(--severity-p0);
 }
 
 .severity-P1 {
-  background: #fd7e14;
+  background: var(--severity-p1);
 }
 
 .severity-P2 {
-  background: #0dcaf0;
+  background: var(--severity-p2);
 }
 
 .title {
