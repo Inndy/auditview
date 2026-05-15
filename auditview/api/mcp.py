@@ -1,10 +1,34 @@
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
+from quart import Quart
 
-mcp = FastMCP("auditview", stateless_http=True)
+_INSTRUCTIONS = """
+You are connected to auditview, a line-level code audit tool.
 
-_quart_app = None
+## Before doing anything else
+Call `check_context` first. It returns the active session's label and root_path.
+Verify that root_path matches the repository you are working in. If no session is
+active, stop and tell the user to open the auditview web UI and activate a session.
+
+## Workflow
+1. `check_context` — confirm session and root path
+2. `list_issues` — see existing open issues (default: open)
+3. `list_notes` — browse existing notes/TODOs, optionally filtered by file
+4. `create_note` — attach a note or TODO to a line range in a file
+5. `create_issue` — open a new issue (severity: P0=critical, P1=high, P2=medium)
+6. `update_issue` — change title, severity, or status (open/resolved/dismissed)
+
+## Rules
+- Always use relative file paths (relative to root_path)
+- Notes must reference real line ranges in the file you are reviewing
+- Do not mark lines as reviewed — that action is reserved for humans in the UI
+- Prefer attaching notes to an existing issue via issue_id over creating duplicates
+""".strip()
+
+mcp = FastMCP("auditview", instructions=_INSTRUCTIONS, stateless_http=True)
+
+_quart_app: Quart = None
 
 
 def setup_mcp(quart_app):
@@ -49,6 +73,31 @@ async def _session_api() -> _SessionAPI:
     if session is None:
         raise ValueError("No MCP session is active. A human must activate a session in the web UI first.")
     return _SessionAPI(session)
+
+
+@mcp.tool()
+async def check_context() -> str:
+    """Check the active audit session and confirm your working context.
+
+    Call this before using any other tool. Verify that the returned root_path
+    matches the repository you are working in. If no session is active, stop
+    and ask the user to activate one in the auditview web UI.
+    """
+    async with _quart_app.test_client() as client:
+        resp = await client.get("/api/config")
+    config = await resp.get_json() if resp.status_code == 200 else {}
+    session = config.get("mcp_session")
+    if session is None:
+        return (
+            "NO ACTIVE SESSION. "
+            "Ask the user to open the auditview web UI and activate a session before proceeding."
+        )
+    return (
+        f"Session active.\n"
+        f"  label     : {session['label']}\n"
+        f"  root_path : {session['root_path']}\n\n"
+        f"Confirm this root_path matches the repository you are auditing before calling other tools."
+    )
 
 
 @mcp.tool()
