@@ -1,5 +1,8 @@
+import os
 from quart import Blueprint, request, jsonify, current_app
 from auditview.db.connection import open_db
+from auditview.core.hashing import line_hash, context_hash
+from auditview.core.coverage import is_countable_line
 from auditview.api.util import safe_path
 
 bp = Blueprint("lines", __name__)
@@ -25,8 +28,25 @@ async def mark_lines(session_id):
             return jsonify({"error": "file_path, lines, and reviewed are required"}), 400
         if not isinstance(lines, list):
             return jsonify({"error": "lines must be an array"}), 400
-        if safe_path(root_path, file_path) is None:
+        full_path = safe_path(root_path, file_path)
+        if full_path is None:
             return jsonify({"error": "Invalid path"}), 400
+        if not os.path.isfile(full_path):
+            return jsonify({"error": "File not found"}), 404
+
+        ext = os.path.splitext(file_path)[1].lower()
+        try:
+            with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+                file_lines = f.read().splitlines()
+        except OSError:
+            return jsonify({"error": "Could not read file"}), 500
+
+        countable_keys = set()
+        for i, content in enumerate(file_lines):
+            if is_countable_line(content, ext):
+                prev_c = file_lines[i - 1] if i > 0 else ""
+                next_c = file_lines[i + 1] if i < len(file_lines) - 1 else ""
+                countable_keys.add((i + 1, line_hash(content), context_hash(prev_c, content, next_c)))
 
         count = 0
         await conn.execute("BEGIN")
@@ -38,6 +58,8 @@ async def mark_lines(session_id):
                 if not lh or not ch or ln is None:
                     continue
                 if reviewed:
+                    if (ln, lh, ch) not in countable_keys:
+                        continue
                     await conn.execute(
                         "INSERT OR REPLACE INTO reviewed_lines "
                         "(session_id, file_path, line_hash, context_hash, line_no) "
