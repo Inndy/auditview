@@ -20,7 +20,7 @@ pid_of() { cat "$1" 2>/dev/null; }
 if [ "${AUDITVIEW_DEV_FRONTEND:-}" = 1 ]; then
     cd "$ROOT/ui"
     child=
-    trap '[ -n "$child" ] && kill "$child" 2>/dev/null; rm -f "$FRONTEND_PID" "$FRONTEND_RESTART"' EXIT
+    trap '[ -n "$child" ] && pkill -P "$child" 2>/dev/null && kill "$child" 2>/dev/null; rm -f "$FRONTEND_PID" "$FRONTEND_RESTART"' EXIT
     while :; do
         rm -f "$FRONTEND_RESTART"
         pnpm run dev --host & child=$!
@@ -51,7 +51,7 @@ cd "$ROOT"
 child=
 trap '
     [ -n "$child" ] && kill "$child" 2>/dev/null
-    alive "$FRONTEND_PID" && kill "$(pid_of "$FRONTEND_PID")" 2>/dev/null
+    alive "$FRONTEND_PID" && pkill -P "$(pid_of "$FRONTEND_PID")" 2>/dev/null && kill "$(pid_of "$FRONTEND_PID")" 2>/dev/null
     rm -f "$BACKEND_PID" "$BACKEND_RESTART"
     true
 ' EXIT

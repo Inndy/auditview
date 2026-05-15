@@ -18,6 +18,7 @@ stop() {
     pid=$(cat "$pidfile" 2>/dev/null)
     [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || return 0
     echo "Stopping $name (PID $pid)..."
+    pkill -P "$pid" 2>/dev/null || true
     kill "$pid" 2>/dev/null || true
 }
 

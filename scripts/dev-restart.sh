@@ -18,5 +18,6 @@ if ! alive "$BACKEND_PID" || ! alive "$FRONTEND_PID"; then
 fi
 
 touch "$BACKEND_RESTART" "$FRONTEND_RESTART"
+pkill -P "$(cat "$BACKEND_PID")" "$(cat "$FRONTEND_PID")" 2>/dev/null || true
 kill "$(cat "$BACKEND_PID")" "$(cat "$FRONTEND_PID")" 2>/dev/null || true
 echo "✓ restart triggered"
