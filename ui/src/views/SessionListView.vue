@@ -5,7 +5,7 @@
         <h1>auditview</h1>
         <div v-if="config" class="server-root" title="Audit root">{{ config.root_path }}</div>
       </div>
-      <button class="dark-btn" :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'" @click="onToggleDark">{{ darkMode ? '☀️' : '🌙' }}</button>
+      <DarkModeToggle style="font-size: 20px; margin-top: 4px" />
     </div>
     <div v-if="error" class="error-msg">{{ error }}</div>
 
@@ -76,10 +76,11 @@
 <script>
 import { listSessions, createSession } from '../api/sessions.js'
 import { getConfig, setMcpSession, clearMcpSession } from '../api/config.js'
-import { isDark, toggleDark } from '../darkMode.js'
+import DarkModeToggle from '../components/DarkModeToggle.vue'
 
 export default {
   name: 'SessionListView',
+  components: { DarkModeToggle },
   data() {
     return {
       sessions: [],
@@ -89,7 +90,6 @@ export default {
       error: null,
       creating: false,
       copied: false,
-      darkMode: isDark(),
       form: {
         label: '',
         exclusion_patterns: '',
@@ -155,10 +155,6 @@ export default {
         this.error = e.message
       }
     },
-    onToggleDark() {
-      toggleDark()
-      this.darkMode = isDark()
-    },
     async copySnippet() {
       try {
         await navigator.clipboard.writeText(this.mcpSettingsSnippet)
@@ -200,16 +196,6 @@ h1 {
 h2 {
   font-size: 18px;
   margin-bottom: 16px;
-}
-
-.dark-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 20px;
-  padding: 0;
-  line-height: 1;
-  margin-top: 4px;
 }
 
 .create-session-form {

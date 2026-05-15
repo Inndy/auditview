@@ -15,18 +15,18 @@
       <input type="checkbox" :checked="wrapLines" @change="$emit('wrap-lines-change', $event.target.checked)" />
       Wrap lines
     </label>
-    <button class="dark-btn" :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'" @click="toggleDark">{{ darkMode ? '☀️' : '🌙' }}</button>
+    <DarkModeToggle style="font-size: 16px" />
     <button class="help-btn" title="Keyboard shortcuts (?)" @click="$emit('show-help')">?</button>
   </div>
 </template>
 
 <script>
 import SkipCommentsToggle from './SkipCommentsToggle.vue'
-import { isDark, toggleDark } from '../darkMode.js'
+import DarkModeToggle from './DarkModeToggle.vue'
 
 export default {
   name: 'SessionHeader',
-  components: { SkipCommentsToggle },
+  components: { SkipCommentsToggle, DarkModeToggle },
   props: {
     session: { type: Object, required: true },
     coverage: { type: Object, default: null },
@@ -34,15 +34,6 @@ export default {
     wrapLines: { type: Boolean, default: false },
   },
   emits: ['skip-comments-change', 'wrap-lines-change', 'show-help'],
-  data() {
-    return { darkMode: isDark() }
-  },
-  methods: {
-    toggleDark() {
-      toggleDark()
-      this.darkMode = isDark()
-    },
-  },
   computed: {
     coveragePct() {
       if (!this.coverage) return 0
@@ -88,16 +79,6 @@ export default {
 .session-coverage {
   margin-left: auto;
   color: var(--text-dim);
-}
-
-.dark-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 16px;
-  padding: 0 2px;
-  line-height: 1;
-  flex-shrink: 0;
 }
 
 .help-btn {
