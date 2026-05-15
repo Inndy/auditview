@@ -11,6 +11,7 @@ from auditview.api.sessions import bp as sessions_bp
 from auditview.api.files import bp as files_bp
 from auditview.api.lines import bp as lines_bp
 from auditview.api.notes import bp as notes_bp
+from auditview.api.issues import bp as issues_bp
 from auditview.api.checkpoints import bp as checkpoints_bp
 from auditview.api.events import bp as events_bp
 from auditview.api.coverage import bp as coverage_bp
@@ -53,6 +54,7 @@ def create_app(db_path, root_path):
     app.register_blueprint(files_bp, url_prefix="/api")
     app.register_blueprint(lines_bp, url_prefix="/api")
     app.register_blueprint(notes_bp, url_prefix="/api")
+    app.register_blueprint(issues_bp, url_prefix="/api")
     app.register_blueprint(checkpoints_bp, url_prefix="/api")
     app.register_blueprint(events_bp, url_prefix="/api")
     app.register_blueprint(coverage_bp, url_prefix="/api")
