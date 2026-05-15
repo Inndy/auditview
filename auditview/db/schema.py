@@ -45,23 +45,12 @@ CREATE TABLE IF NOT EXISTS notes (
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
 
-CREATE TABLE IF NOT EXISTS checkpoints (
-    id INTEGER PRIMARY KEY,
-    session_id INTEGER NOT NULL,
-    label TEXT NOT NULL,
-    changeset_blob BLOB NOT NULL,
-    checkpoint_type TEXT NOT NULL DEFAULT 'changeset',
-    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
-);
-
 CREATE INDEX IF NOT EXISTS idx_files_session
     ON files(session_id);
 CREATE INDEX IF NOT EXISTS idx_reviewed_lines_session_file
     ON reviewed_lines(session_id, file_path);
 CREATE INDEX IF NOT EXISTS idx_notes_session_file
     ON notes(session_id, file_path);
-CREATE INDEX IF NOT EXISTS idx_checkpoints_session
-    ON checkpoints(session_id);
 
 CREATE TABLE IF NOT EXISTS app_config (
     key TEXT PRIMARY KEY,
@@ -84,22 +73,19 @@ _MIGRATIONS = [
     "CREATE INDEX IF NOT EXISTS idx_files_session ON files(session_id)",
     "CREATE INDEX IF NOT EXISTS idx_reviewed_lines_session_file ON reviewed_lines(session_id, file_path)",
     "CREATE INDEX IF NOT EXISTS idx_notes_session_file ON notes(session_id, file_path)",
-    "CREATE INDEX IF NOT EXISTS idx_checkpoints_session ON checkpoints(session_id)",
-    "ALTER TABLE checkpoints ADD COLUMN checkpoint_type TEXT NOT NULL DEFAULT 'changeset'",
     "CREATE TABLE IF NOT EXISTS app_config (key TEXT PRIMARY KEY, value TEXT)",
     "CREATE TABLE IF NOT EXISTS issues (id INTEGER PRIMARY KEY, session_id INTEGER NOT NULL REFERENCES sessions(id), title TEXT NOT NULL, severity TEXT NOT NULL DEFAULT 'P2', status TEXT NOT NULL DEFAULT 'open', created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')))",
     "ALTER TABLE notes ADD COLUMN issue_id INTEGER REFERENCES issues(id)",
 ]
 
 
-def run_migrations(conn):
-    cur = conn.cursor()
+async def run_migrations(conn):
     for statement in _DDL.split(';'):
         statement = statement.strip()
         if statement:
-            cur.execute(statement)
+            await conn.execute(statement)
     for sql in _MIGRATIONS:
         try:
-            cur.execute(sql)
+            await conn.execute(sql)
         except Exception:
             pass

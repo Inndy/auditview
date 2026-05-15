@@ -9,11 +9,12 @@ description = "Code review/audit tool"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-  "flask>=3.1",
-  "waitress>=3.0",
+  "quart>=0.19",
+  "uvicorn>=0.29",
+  "aiosqlite>=0.20",
   "watchdog>=6.0",
   "pathspec>=0.12",
-  "apsw>=3.49",
+  "mcp>=1.27.1",
 ]
 
 [project.scripts]

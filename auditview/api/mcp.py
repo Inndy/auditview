@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, current_app
+from quart import Blueprint, request, jsonify, current_app
 
 bp = Blueprint("mcp", __name__)
 
@@ -92,24 +92,24 @@ def _tool_ok(text):
     return {"content": [{"type": "text", "text": str(text)}]}
 
 
-def _api(method, path, data=None):
-    client = current_app.test_client()
-    fn = getattr(client, method)
-    return fn(path, json=data) if data is not None else fn(path)
+async def _api(method, path, data=None):
+    async with current_app.test_client() as client:
+        fn = getattr(client, method)
+        return await (fn(path, json=data) if data is not None else fn(path))
 
 
-def _get_mcp_session():
-    resp = _api("get", "/config")
+async def _get_mcp_session():
+    resp = await _api("get", "/api/config")
     if resp.status_code != 200:
         return None
-    return resp.get_json().get("mcp_session")
+    return (await resp.get_json()).get("mcp_session")
 
 
-def _tool_list_notes(args, session):
-    resp = _api("get", f"/sessions/{session['id']}/notes")
+async def _tool_list_notes(args, session):
+    resp = await _api("get", f"/api/sessions/{session['id']}/notes")
     if resp.status_code != 200:
-        return _tool_error(resp.get_json().get("error", "failed to list notes"))
-    notes = resp.get_json()
+        return _tool_error((await resp.get_json()).get("error", "failed to list notes"))
+    notes = await resp.get_json()
 
     file_path = (args.get("file_path") or "").strip()
     if file_path:
@@ -132,23 +132,23 @@ def _tool_list_notes(args, session):
     return _tool_ok("\n".join(output))
 
 
-def _tool_create_note(args, session):
-    resp = _api("post", f"/sessions/{session['id']}/notes", args)
-    data = resp.get_json()
+async def _tool_create_note(args, session):
+    resp = await _api("post", f"/api/sessions/{session['id']}/notes", args)
+    data = await resp.get_json()
     if resp.status_code not in (200, 201):
         return _tool_error(data.get("error", "failed to create note"))
     kind = "todo" if data["is_todo"] else "note"
     return _tool_ok(f"Created {kind} #{data['id']} on {data['file_path']}:{data['start_line']}-{data['end_line']}")
 
 
-def _tool_list_issues(args, session):
-    url = f"/sessions/{session['id']}/issues"
+async def _tool_list_issues(args, session):
+    url = f"/api/sessions/{session['id']}/issues"
     if args.get("status"):
         url += f"?status={args['status']}"
-    resp = _api("get", url)
+    resp = await _api("get", url)
     if resp.status_code != 200:
-        return _tool_error(resp.get_json().get("error", "failed to list issues"))
-    issues = resp.get_json()
+        return _tool_error((await resp.get_json()).get("error", "failed to list issues"))
+    issues = await resp.get_json()
 
     if not issues:
         return _tool_ok("No issues found.")
@@ -157,21 +157,21 @@ def _tool_list_issues(args, session):
     return _tool_ok("\n".join(output))
 
 
-def _tool_create_issue(args, session):
-    resp = _api("post", f"/sessions/{session['id']}/issues", args)
-    data = resp.get_json()
+async def _tool_create_issue(args, session):
+    resp = await _api("post", f"/api/sessions/{session['id']}/issues", args)
+    data = await resp.get_json()
     if resp.status_code not in (200, 201):
         return _tool_error(data.get("error", "failed to create issue"))
     return _tool_ok(f"Created issue #{data['id']}: [{data['severity']}] {data['title']}")
 
 
-def _tool_update_issue(args, session):
+async def _tool_update_issue(args, session):
     issue_id = args.get("issue_id")
     if not isinstance(issue_id, int):
         return _tool_error("issue_id must be an integer")
     payload = {k: v for k, v in args.items() if k != "issue_id"}
-    resp = _api("patch", f"/sessions/{session['id']}/issues/{issue_id}", payload)
-    data = resp.get_json()
+    resp = await _api("patch", f"/api/sessions/{session['id']}/issues/{issue_id}", payload)
+    data = await resp.get_json()
     if resp.status_code != 200:
         return _tool_error(data.get("error", "failed to update issue"))
     changes = ", ".join(f"{k}={v}" for k, v in payload.items())
@@ -188,8 +188,8 @@ _TOOL_HANDLERS = {
 
 
 @bp.route("/mcp", methods=["POST"])
-def mcp_endpoint():
-    body = request.get_json(force=True, silent=True)
+async def mcp_endpoint():
+    body = await request.get_json(force=True, silent=True)
     if not body:
         return _err(None, -32700, "Parse error"), 400
 
@@ -224,14 +224,14 @@ def mcp_endpoint():
         if handler is None:
             return _ok(req_id, _tool_error(f"Unknown tool: {name}"))
 
-        session = _get_mcp_session()
+        session = await _get_mcp_session()
         if session is None:
             return _ok(req_id, _tool_error(
                 "No MCP session is active. A human must activate a session in the web UI first."
             ))
 
         try:
-            result = handler(args, session)
+            result = await handler(args, session)
             return _ok(req_id, result)
         except Exception as e:
             return _ok(req_id, _tool_error(f"Internal error: {e}"))

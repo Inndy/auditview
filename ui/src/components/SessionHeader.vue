@@ -8,7 +8,6 @@
       <span v-if="coverage">
         {{ coveragePct }}% ({{ coverage.total_reviewed_lines }}/{{ coverage.total_countable_lines }} lines)
       </span>
-      <span v-if="coverage && !coverage.supports_checkpoints" class="warn-badge">No checkpoints</span>
     </div>
     <SkipCommentsToggle :modelValue="skipComments" @change="$emit('skip-comments-change', $event)" />
     <label class="wrap-lines-toggle">
@@ -100,12 +99,4 @@ export default {
   background: var(--border-mid);
 }
 
-.warn-badge {
-  background: var(--badge-todo-bg);
-  color: var(--badge-todo-text);
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: 11px;
-  margin-left: 8px;
-}
 </style>

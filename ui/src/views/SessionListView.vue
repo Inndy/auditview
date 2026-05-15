@@ -31,7 +31,7 @@
       </div>
       <p class="mcp-guide-desc">Add this to your <code>.claude/settings.json</code> to connect an AI agent:</p>
       <pre class="mcp-snippet">{{ mcpSettingsSnippet }}</pre>
-      <p class="mcp-guide-note">Available tools: list_files, read_file, list_notes, create_note, list_issues, create_issue, update_issue<br>
+      <p class="mcp-guide-note">Available tools: list_notes, create_note, list_issues, create_issue, update_issue<br>
       <strong>Note:</strong> AI agents cannot mark lines as reviewed &mdash; that action is reserved for humans.</p>
     </div>
 

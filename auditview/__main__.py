@@ -2,7 +2,7 @@ import argparse
 import logging
 import os
 
-from waitress import serve
+import uvicorn
 from auditview.app import create_app
 
 
@@ -28,7 +28,7 @@ def main():
     print(f"auditview  root={root}")
     print(f"           db={db_path}")
     print(f"           http://{args.host}:{args.port}")
-    serve(app, host=args.host, port=args.port)
+    uvicorn.run(app, host=args.host, port=args.port)
 
 
 if __name__ == "__main__":
