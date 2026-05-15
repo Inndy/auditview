@@ -209,6 +209,14 @@ export default {
       }
     },
 
+    jumpToRange(start, end) {
+      this.selectedRange = { start, end }
+      this.$nextTick(() => {
+        const el = this.$refs.container?.querySelector(`[data-line-no="${start}"]`)
+        el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      })
+    },
+
     isInRange(lineNo) {
       if (this.rangeMin === null) return false
       return lineNo >= this.rangeMin && lineNo <= this.rangeMax

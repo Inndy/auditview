@@ -1,6 +1,6 @@
 <template>
   <div class="note-card">
-    <div class="note-meta">
+    <div class="note-meta" @click="$emit('jump', note)" title="Jump to lines">
       Lines {{ note.start_line }}–{{ note.end_line }}
       <span v-if="note.is_todo" class="badge badge-todo">TODO</span>
       <span v-if="note.is_orphaned" class="badge badge-orphan">orphan</span>
@@ -41,7 +41,7 @@ export default {
     note: { type: Object, required: true },
     sessionId: { type: [String, Number], required: true },
   },
-  emits: ['updated', 'deleted'],
+  emits: ['updated', 'deleted', 'jump'],
   data() {
     return {
       editing: false,
@@ -80,6 +80,14 @@ export default {
 </script>
 
 <style scoped>
+.note-meta {
+  cursor: pointer;
+}
+
+.note-meta:hover {
+  color: var(--primary);
+}
+
 .note-time {
   float: right;
   font-size: 10px;

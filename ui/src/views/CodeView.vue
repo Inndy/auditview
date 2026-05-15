@@ -23,6 +23,7 @@
           :sessionId="id"
           @note-updated="onNoteUpdated"
           @note-deleted="onNoteDeleted"
+          @jump="onNoteJump"
         />
         <OrphanPanel
           :notes="currentNotes"
@@ -108,6 +109,9 @@ export default {
     },
     onNoteDeleted(id) {
       this.currentNotes = this.currentNotes.filter((n) => n.id !== id)
+    },
+    onNoteJump(note) {
+      this.$refs.codeViewer?.jumpToRange(note.start_line, note.end_line)
     },
   },
 }

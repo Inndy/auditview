@@ -1,5 +1,6 @@
 <template>
   <tr
+    :data-line-no="line.line_no"
     :class="{
       reviewed: line.is_reviewed,
       selected: isSelected,
