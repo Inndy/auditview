@@ -345,7 +345,6 @@ export default {
             line_no: l.line_no,
           })),
           reviewed,
-          skip_comments: this.skipComments,
         })
         const acceptedKeys = new Set(
           (resp.accepted || []).map((a) => `${a.line_hash}|${a.context_hash}`),

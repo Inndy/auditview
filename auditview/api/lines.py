@@ -2,7 +2,6 @@ import os
 from quart import Blueprint, request, jsonify, current_app
 from auditview.db.connection import open_db
 from auditview.core.hashing import line_hash, context_hash
-from auditview.core.coverage import is_countable_line
 from auditview.core.io_utils import read_file_lines
 from auditview.core.reconciler import ensure_snapshot
 from auditview.api.util import safe_path
@@ -25,7 +24,6 @@ async def mark_lines(session_id):
         file_path = data.get("file_path")
         lines = data.get("lines")
         reviewed = data.get("reviewed")
-        skip_comments = bool(data.get("skip_comments", True))
 
         if not file_path or lines is None or reviewed is None:
             return jsonify({"error": "file_path, lines, and reviewed are required"}), 400
@@ -37,18 +35,16 @@ async def mark_lines(session_id):
         if not os.path.isfile(full_path):
             return jsonify({"error": "File not found"}), 404
 
-        ext = os.path.splitext(file_path)[1].lower()
         try:
             file_lines = await read_file_lines(full_path)
         except OSError:
             return jsonify({"error": "Could not read file"}), 500
 
-        countable_keys = set()
+        valid_keys = set()
         for i, content in enumerate(file_lines):
-            if is_countable_line(content, ext, skip_comments):
-                prev_c = file_lines[i - 1] if i > 0 else ""
-                next_c = file_lines[i + 1] if i < len(file_lines) - 1 else ""
-                countable_keys.add((i + 1, line_hash(content), context_hash(prev_c, content, next_c)))
+            prev_c = file_lines[i - 1] if i > 0 else ""
+            next_c = file_lines[i + 1] if i < len(file_lines) - 1 else ""
+            valid_keys.add((i + 1, line_hash(content), context_hash(prev_c, content, next_c)))
 
         accepted = []
         rejected = []
@@ -67,12 +63,12 @@ async def mark_lines(session_id):
                     })
                     continue
                 if reviewed:
-                    if (ln, lh, ch) not in countable_keys:
+                    if (ln, lh, ch) not in valid_keys:
                         rejected.append({
                             "line_hash": lh,
                             "context_hash": ch,
                             "line_no": ln,
-                            "reason": "line is not countable on server (skip_comments mismatch or stale content)",
+                            "reason": "stale content: line not found in current file",
                         })
                         continue
                     await conn.execute(
