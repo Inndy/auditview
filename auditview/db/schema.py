@@ -1,3 +1,5 @@
+import aiosqlite
+
 _DDL = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
 
@@ -78,14 +80,36 @@ _MIGRATIONS = [
     "ALTER TABLE notes ADD COLUMN issue_id INTEGER REFERENCES issues(id)",
 ]
 
+_IDEMPOTENT_ERROR_FRAGMENTS = ("duplicate column name", "already exists")
+
+
+def _is_idempotent_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return any(frag in msg for frag in _IDEMPOTENT_ERROR_FRAGMENTS)
+
 
 async def run_migrations(conn):
     for statement in _DDL.split(';'):
         statement = statement.strip()
         if statement:
             await conn.execute(statement)
-    for sql in _MIGRATIONS:
+
+    cur = await conn.execute("SELECT MAX(version) AS v FROM schema_version")
+    row = await cur.fetchone()
+    current = row["v"] if row and row["v"] is not None else 0
+
+    for i in range(current, len(_MIGRATIONS)):
+        await conn.execute("BEGIN")
         try:
-            await conn.execute(sql)
+            try:
+                await conn.execute(_MIGRATIONS[i])
+            except aiosqlite.OperationalError as exc:
+                if not _is_idempotent_error(exc):
+                    raise
+            await conn.execute(
+                "INSERT INTO schema_version (version) VALUES (?)", (i + 1,)
+            )
+            await conn.execute("COMMIT")
         except Exception:
-            pass
+            await conn.execute("ROLLBACK")
+            raise
