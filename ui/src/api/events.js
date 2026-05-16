@@ -33,7 +33,7 @@ export class SSEClient {
     for (const eventName of ['file_changed', 'heartbeat']) {
       this.es.addEventListener(eventName, (e) => {
         let data = {};
-        try { data = JSON.parse(e.data); } catch { }
+        try { data = JSON.parse(e.data); } catch { /* non-JSON heartbeat */ }
         this._dispatch(eventName, data);
       });
     }
