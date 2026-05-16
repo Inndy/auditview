@@ -18,9 +18,19 @@ async def get_coverage(session_id):
         )
         file_agg = await cur.fetchone()
 
+        # Per-file: clamp reviewed to countable so a stale reviewed_lines row
+        # (e.g. a line that has become non-countable since it was marked, or
+        # that belongs to a file no longer tracked) can't push the total over
+        # 100%.
         cur = await conn.execute(
-            "SELECT COUNT(*) AS total_reviewed FROM reviewed_lines WHERE session_id = ?",
-            (session_id,),
+            "SELECT COALESCE(SUM(MIN(rl_cnt, f.countable_lines)), 0) AS total_reviewed "
+            "FROM files f "
+            "JOIN ("
+            "  SELECT file_path, COUNT(*) AS rl_cnt FROM reviewed_lines "
+            "  WHERE session_id = ? GROUP BY file_path"
+            ") rl ON rl.file_path = f.rel_path "
+            "WHERE f.session_id = ? AND f.countable_lines IS NOT NULL",
+            (session_id, session_id),
         )
         rl_agg = await cur.fetchone()
 
