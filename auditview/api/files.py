@@ -10,100 +10,94 @@ from auditview.api.util import safe_path
 bp = Blueprint("files", __name__)
 
 
-@bp.route("/sessions/<int:session_id>/files", methods=["GET"])
-async def list_files(session_id):
-    async with open_db(current_app.config["DB_PATH"]) as conn:
-        cur = await conn.execute(
-            "SELECT id, root_path, exclusion_patterns FROM sessions WHERE id = ?",
-            (session_id,),
+async def _reconcile_file_table(conn, session_id, root_path, exclusion_patterns):
+    """Sync the files table with the scanner: insert new, delete stale, orphan their notes."""
+    rel_paths = await current_app.watcher.get_scan(session_id, root_path, exclusion_patterns)
+    rel_path_set = set(rel_paths)
+
+    for rel_path in rel_paths:
+        await conn.execute(
+            "INSERT INTO files (session_id, rel_path) VALUES (?, ?) ON CONFLICT DO NOTHING",
+            (session_id, rel_path),
         )
-        session = await cur.fetchone()
-        if session is None:
-            return jsonify({"error": "Session not found"}), 404
 
-        root_path = session["root_path"]
-        exclusion_patterns = session["exclusion_patterns"]
+    cur = await conn.execute(
+        "SELECT rel_path FROM files WHERE session_id = ?", (session_id,)
+    )
+    stale_paths = {r["rel_path"] for r in await cur.fetchall()} - rel_path_set
+    if stale_paths:
+        await conn.execute("BEGIN")
+        try:
+            for stale in stale_paths:
+                await conn.execute(
+                    "UPDATE notes SET is_orphaned = 1 WHERE session_id = ? AND file_path = ? AND is_orphaned = 0",
+                    (session_id, stale),
+                )
+                await conn.execute(
+                    "DELETE FROM reviewed_lines WHERE session_id = ? AND file_path = ?",
+                    (session_id, stale),
+                )
+                await conn.execute(
+                    "DELETE FROM files WHERE session_id = ? AND rel_path = ?",
+                    (session_id, stale),
+                )
+            await conn.execute("COMMIT")
+        except Exception:
+            await conn.execute("ROLLBACK")
+            raise
 
-        rel_paths = await current_app.watcher.get_scan(session_id, root_path, exclusion_patterns)
-        rel_path_set = set(rel_paths)
+    return rel_paths
 
-        for rel_path in rel_paths:
-            await conn.execute(
-                "INSERT INTO files (session_id, rel_path) VALUES (?, ?) ON CONFLICT DO NOTHING",
-                (session_id, rel_path),
-            )
 
-        cur = await conn.execute(
-            "SELECT rel_path FROM files WHERE session_id = ?", (session_id,)
-        )
-        stale_paths = {r["rel_path"] for r in await cur.fetchall()} - rel_path_set
-        if stale_paths:
-            await conn.execute("BEGIN")
+async def _backfill_countable(conn, session_id, root_path, rel_paths):
+    rel_path_set = set(rel_paths)
+    cur = await conn.execute(
+        "SELECT rel_path FROM files WHERE session_id = ? AND countable_lines IS NULL",
+        (session_id,),
+    )
+    uncached = [r["rel_path"] for r in await cur.fetchall() if r["rel_path"] in rel_path_set]
+    for rp in uncached:
+        ext = os.path.splitext(rp)[1].lower()
+        full_path = os.path.join(root_path, rp)
+        countable = 0
+        if os.path.isfile(full_path):
             try:
-                for stale in stale_paths:
-                    await conn.execute(
-                        "UPDATE notes SET is_orphaned = 1 WHERE session_id = ? AND file_path = ? AND is_orphaned = 0",
-                        (session_id, stale),
-                    )
-                    await conn.execute(
-                        "DELETE FROM reviewed_lines WHERE session_id = ? AND file_path = ?",
-                        (session_id, stale),
-                    )
-                    await conn.execute(
-                        "DELETE FROM files WHERE session_id = ? AND rel_path = ?",
-                        (session_id, stale),
-                    )
-                await conn.execute("COMMIT")
-            except Exception:
-                await conn.execute("ROLLBACK")
-                raise
-
-        cur = await conn.execute(
-            "SELECT rel_path, countable_lines FROM files WHERE session_id = ?",
-            (session_id,),
+                lines = await read_file_lines(full_path)
+                countable = sum(1 for l in lines if is_countable_line(l, ext))
+            except OSError:
+                pass
+        await conn.execute(
+            "UPDATE files SET countable_lines = ? WHERE session_id = ? AND rel_path = ?",
+            (countable, session_id, rp),
         )
-        file_rows = await cur.fetchall()
-        countable_map = {}
-        uncached = []
-        for r in file_rows:
-            countable_map[r["rel_path"]] = r["countable_lines"]
-            if r["countable_lines"] is None and r["rel_path"] in rel_path_set:
-                uncached.append(r["rel_path"])
 
-        for rp in uncached:
-            ext = os.path.splitext(rp)[1].lower()
-            full_path = os.path.join(root_path, rp)
-            countable = 0
-            if os.path.isfile(full_path):
-                try:
-                    lines = await read_file_lines(full_path)
-                    countable = sum(1 for l in lines if is_countable_line(l, ext))
-                except OSError:
-                    pass
-            await conn.execute(
-                "UPDATE files SET countable_lines = ? WHERE session_id = ? AND rel_path = ?",
-                (countable, session_id, rp),
-            )
-            countable_map[rp] = countable
 
-        cur = await conn.execute(
-            "SELECT file_path, COUNT(*) AS cnt FROM reviewed_lines WHERE session_id = ? GROUP BY file_path",
-            (session_id,),
-        )
-        reviewed_map = {r["file_path"]: r["cnt"] for r in await cur.fetchall()}
+async def _build_file_list_response(conn, session_id):
+    cur = await conn.execute(
+        "SELECT rel_path, countable_lines FROM files WHERE session_id = ? ORDER BY rel_path",
+        (session_id,),
+    )
+    file_rows = await cur.fetchall()
+    countable_map = {r["rel_path"]: r["countable_lines"] for r in file_rows}
 
-        cur = await conn.execute(
-            "SELECT file_path, "
-            "SUM(CASE WHEN is_todo=0 THEN 1 ELSE 0 END) AS notes_cnt, "
-            "SUM(CASE WHEN is_todo=1 THEN 1 ELSE 0 END) AS todos_cnt "
-            "FROM notes WHERE session_id = ? AND is_orphaned=0 GROUP BY file_path",
-            (session_id,),
-        )
-        notes_map = {r["file_path"]: (r["notes_cnt"] or 0, r["todos_cnt"] or 0) for r in await cur.fetchall()}
+    cur = await conn.execute(
+        "SELECT file_path, COUNT(*) AS cnt FROM reviewed_lines WHERE session_id = ? GROUP BY file_path",
+        (session_id,),
+    )
+    reviewed_map = {r["file_path"]: r["cnt"] for r in await cur.fetchall()}
+
+    cur = await conn.execute(
+        "SELECT file_path, "
+        "SUM(CASE WHEN is_todo=0 THEN 1 ELSE 0 END) AS notes_cnt, "
+        "SUM(CASE WHEN is_todo=1 THEN 1 ELSE 0 END) AS todos_cnt "
+        "FROM notes WHERE session_id = ? AND is_orphaned=0 GROUP BY file_path",
+        (session_id,),
+    )
+    notes_map = {r["file_path"]: (r["notes_cnt"] or 0, r["todos_cnt"] or 0) for r in await cur.fetchall()}
 
     result = []
-    for rel_path in rel_paths:
-        countable = countable_map.get(rel_path) or 0
+    for rel_path, countable_raw in countable_map.items():
+        countable = countable_raw or 0
         reviewed = min(reviewed_map.get(rel_path, 0), countable)
         coverage = reviewed / countable if countable > 0 else 0.0
         notes_c, todos_c = notes_map.get(rel_path, (0, 0))
@@ -126,7 +120,38 @@ async def list_files(session_id):
             "notes_count": notes_c,
             "todos_count": todos_c,
         })
+    return result
 
+
+@bp.route("/sessions/<int:session_id>/files", methods=["GET"])
+async def list_files(session_id):
+    async with open_db(current_app.config["DB_PATH"]) as conn:
+        cur = await conn.execute(
+            "SELECT id FROM sessions WHERE id = ?", (session_id,)
+        )
+        if await cur.fetchone() is None:
+            return jsonify({"error": "Session not found"}), 404
+        result = await _build_file_list_response(conn, session_id)
+    return jsonify(result)
+
+
+@bp.route("/sessions/<int:session_id>/rescan", methods=["POST"])
+async def rescan_session(session_id):
+    async with open_db(current_app.config["DB_PATH"]) as conn:
+        cur = await conn.execute(
+            "SELECT id, root_path, exclusion_patterns FROM sessions WHERE id = ?",
+            (session_id,),
+        )
+        session = await cur.fetchone()
+        if session is None:
+            return jsonify({"error": "Session not found"}), 404
+
+        root_path = session["root_path"]
+        exclusion_patterns = session["exclusion_patterns"]
+
+        rel_paths = await _reconcile_file_table(conn, session_id, root_path, exclusion_patterns)
+        await _backfill_countable(conn, session_id, root_path, rel_paths)
+        result = await _build_file_list_response(conn, session_id)
     return jsonify(result)
 
 

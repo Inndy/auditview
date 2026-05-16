@@ -22,7 +22,7 @@
 </template>
 
 <script>
-import { listFiles } from '../api/files.js'
+import { rescanSession } from '../api/files.js'
 import TreeNode from './TreeNode.vue'
 import { getBoolPref, setBoolPref } from '../prefs.js'
 
@@ -89,7 +89,7 @@ export default {
       this.loading = true
       this.error = null
       try {
-        this.files = await listFiles(this.sessionId)
+        this.files = await rescanSession(this.sessionId)
       } catch (e) {
         this.error = e.message
       } finally {
