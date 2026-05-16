@@ -23,6 +23,7 @@ async def mark_lines(session_id):
         file_path = data.get("file_path")
         lines = data.get("lines")
         reviewed = data.get("reviewed")
+        skip_comments = bool(data.get("skip_comments", True))
 
         if not file_path or lines is None or reviewed is None:
             return jsonify({"error": "file_path, lines, and reviewed are required"}), 400
@@ -43,7 +44,7 @@ async def mark_lines(session_id):
 
         countable_keys = set()
         for i, content in enumerate(file_lines):
-            if is_countable_line(content, ext):
+            if is_countable_line(content, ext, skip_comments):
                 prev_c = file_lines[i - 1] if i > 0 else ""
                 next_c = file_lines[i + 1] if i < len(file_lines) - 1 else ""
                 countable_keys.add((i + 1, line_hash(content), context_hash(prev_c, content, next_c)))

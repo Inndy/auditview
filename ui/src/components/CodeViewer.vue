@@ -339,6 +339,7 @@ export default {
             line_no: l.line_no,
           })),
           reviewed,
+          skip_comments: this.skipComments,
         })
         for (const l of rangeLines) {
           l.is_reviewed = reviewed
