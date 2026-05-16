@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import threading
 
@@ -8,6 +9,8 @@ from watchdog.events import FileSystemEventHandler
 from auditview.db.connection import open_db
 from auditview.core.reconciler import reconcile_file
 from auditview.core.scanner import scan_folder
+
+logger = logging.getLogger("auditview")
 
 _CLIENT_QUEUE_SIZE = 128
 _DEBOUNCE_DELAY = 0.3
@@ -63,7 +66,7 @@ class WatcherService:
             try:
                 await self._do_process_change(abs_path)
             except Exception:
-                pass
+                logger.exception("watcher: failed to process change for %s", abs_path)
 
     def register_client(self, session_id):
         q = asyncio.Queue(maxsize=_CLIENT_QUEUE_SIZE)
@@ -152,11 +155,18 @@ class WatcherService:
                         await conn.execute("COMMIT")
                     except Exception:
                         await conn.execute("ROLLBACK")
+                        logger.exception(
+                            "watcher: failed to clean up deleted file %s (session %s)",
+                            rel_path, sid,
+                        )
                 else:
                     try:
                         await reconcile_file(conn, sid, rel_path, sess_root)
                     except Exception:
-                        pass
+                        logger.exception(
+                            "watcher: reconcile_file failed for %s (session %s)",
+                            rel_path, sid,
+                        )
 
                 event = {"type": "file_changed", "rel_path": rel_path}
                 with self._lock:
