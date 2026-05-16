@@ -10,7 +10,6 @@
         ref="codeViewer"
         :sessionId="id"
         :filePath="currentFile"
-        :skipComments="skipComments"
         :wrapLines="wrapLines"
         @notes-updated="onNotesUpdated"
         @lines-marked="onLinesMarked"
@@ -58,10 +57,9 @@ export default {
   props: {
     session: Object,
     coverage: Object,
-    skipComments: Boolean,
     wrapLines: Boolean,
   },
-  emits: ['skip-comments-change', 'wrap-lines-change', 'show-help', 'coverage-refreshed'],
+  emits: ['wrap-lines-change', 'show-help', 'coverage-refreshed'],
   data() {
     return {
       id: this.$route.params.id,

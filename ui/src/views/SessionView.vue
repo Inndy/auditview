@@ -6,9 +6,7 @@
       <SessionHeader
         :session="session"
         :coverage="coverage"
-        :skipComments="skipComments"
         :wrapLines="wrapLines"
-        @skip-comments-change="skipComments = $event"
         @wrap-lines-change="setWrapLines($event)"
         @show-help="showHelp = true"
       />
@@ -19,9 +17,7 @@
       <router-view
         :session="session"
         :coverage="coverage"
-        :skipComments="skipComments"
         :wrapLines="wrapLines"
-        @skip-comments-change="skipComments = $event"
         @wrap-lines-change="setWrapLines($event)"
         @show-help="showHelp = true"
         @coverage-refreshed="coverage = $event"
@@ -51,7 +47,6 @@ export default {
       coverage: null,
       loadingSession: true,
       sessionError: null,
-      skipComments: false,
       wrapLines: getBoolPref('wrapLines'),
       showHelp: false,
     }

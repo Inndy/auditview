@@ -10,7 +10,6 @@
         {{ coveragePct }}% ({{ coverage.total_reviewed_lines }}/{{ coverage.total_countable_lines }} lines)
       </span>
     </div>
-    <SkipCommentsToggle :modelValue="skipComments" @change="$emit('skip-comments-change', $event)" />
     <label class="wrap-lines-toggle">
       <input type="checkbox" :checked="wrapLines" @change="$emit('wrap-lines-change', $event.target.checked)" />
       Wrap lines
@@ -21,19 +20,17 @@
 </template>
 
 <script>
-import SkipCommentsToggle from './SkipCommentsToggle.vue'
 import DarkModeToggle from './DarkModeToggle.vue'
 
 export default {
   name: 'SessionHeader',
-  components: { SkipCommentsToggle, DarkModeToggle },
+  components: { DarkModeToggle },
   props: {
     session: { type: Object, required: true },
     coverage: { type: Object, default: null },
-    skipComments: { type: Boolean, default: false },
     wrapLines: { type: Boolean, default: false },
   },
-  emits: ['skip-comments-change', 'wrap-lines-change', 'show-help'],
+  emits: ['wrap-lines-change', 'show-help'],
   computed: {
     coveragePct() {
       if (!this.coverage) return 0

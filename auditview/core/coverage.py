@@ -15,12 +15,11 @@ _COMMENT_PREFIXES = {
 }
 
 
-def is_countable_line(line, ext, skip_comments=True):
+def is_countable_line(line, ext):
     if not line.strip():
         return False
-    if skip_comments:
-        prefixes = _COMMENT_PREFIXES.get(ext, ())
-        for pattern in prefixes:
-            if re.match(pattern, line):
-                return False
+    prefixes = _COMMENT_PREFIXES.get(ext, ())
+    for pattern in prefixes:
+        if re.match(pattern, line):
+            return False
     return True

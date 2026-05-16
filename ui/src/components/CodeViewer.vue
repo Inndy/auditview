@@ -102,7 +102,6 @@ export default {
   props: {
     sessionId: [String, Number],
     filePath: { type: String, default: null },
-    skipComments: { type: Boolean, default: false },
     wrapLines: { type: Boolean, default: false },
   },
   emits: ['notes-updated', 'lines-marked', 'file-reloaded', 'show-help'],
@@ -152,9 +151,6 @@ export default {
         this.loadFile(newPath)
       }
     },
-    skipComments() {
-      if (this.filePath) this.loadFile(this.filePath)
-    },
   },
   created() {
     this._loadToken = 0
@@ -195,7 +191,7 @@ export default {
       this.loading = true
       this.error = null
       try {
-        const data = await getFile(this.sessionId, path, this.skipComments)
+        const data = await getFile(this.sessionId, path)
         if (token !== this._loadToken) return
         const hljs = this.$hljs
         const highlightedLines = hljs

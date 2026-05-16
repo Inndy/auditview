@@ -211,7 +211,6 @@ async def get_file(session_id, fpath):
         if stored_mtime is None or abs(stored_mtime - current_mtime) > 1e-6:
             await reconcile_file(conn, session_id, fpath, root_path)
 
-        skip_comments = request.args.get("skip_comments", "1") != "0"
         ext = os.path.splitext(fpath)[1].lower()
 
         lines = await read_file_lines(full_path)
@@ -234,7 +233,7 @@ async def get_file(session_id, fpath):
                 "line_hash": lh,
                 "context_hash": ch,
                 "is_reviewed": (lh, ch) in reviewed_set,
-                "is_countable": is_countable_line(line_content, ext, skip_comments),
+                "is_countable": is_countable_line(line_content, ext),
             })
 
         cur = await conn.execute(
