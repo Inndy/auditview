@@ -34,7 +34,7 @@ function M.refresh()
     status_map = new_map
     local ok, nt_api = pcall(require, "nvim-tree.api")
     if ok then pcall(nt_api.tree.reload) end
-  end)
+  end, { interactive = false })
 end
 
 function M.maybe_refresh()

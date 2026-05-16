@@ -12,13 +12,28 @@ stays the single source of truth; the web UI sees nvim's marks live via SSE.
 
 ## Install
 
-Symlink or point your plugin manager at this directory.
+**lazy.nvim** (local path, lazy-loaded — only activates when you touch a buffer or run an auditview command):
 
-**lazy.nvim** (local path):
 ```lua
-{ dir = "/path/to/auditview-nvim/nvim", name = "auditview.nvim",
-  config = function() require("auditview").setup() end }
+{
+  dir = "/path/to/auditview-nvim/nvim",
+  name = "auditview.nvim",
+  event = "BufReadPre",
+  cmd = {
+    "AuditviewMark", "AuditviewUnmark", "AuditviewProgress",
+    "AuditviewRefresh", "AuditviewSessionReset",
+  },
+  keys = {
+    { "<leader>am", mode = { "n", "x" }, desc = "auditview: mark reviewed" },
+    { "<leader>au", mode = { "n", "x" }, desc = "auditview: unmark" },
+  },
+  opts = { base_url = "http://127.0.0.1:5000" },
+},
 ```
+
+If you also use nvim-tree, see the [nvim-tree integration](#nvim-tree-integration-optional)
+section — declare `dependencies = { "auditview.nvim" }` on the nvim-tree
+spec so the integration loads in time.
 
 **Manual**:
 ```bash
@@ -27,13 +42,19 @@ ln -s /path/to/auditview-nvim/nvim ~/.config/nvim/pack/auditview/start/auditview
 
 ## Usage
 
-1. Start the server: `uv run auditview /path/to/project`
+1. Start the server: `uv run auditview /path/to/project` (writes
+   `.auditview.db` at the project root).
 2. Create a session in the web UI at `http://127.0.0.1:5000`
    (sessions can't be created from nvim yet).
-3. `cd /path/to/project` and open nvim. The plugin auto-picks the session
-   whose `root_path` matches your cwd; if multiple match (or none), it
-   prompts via `vim.ui.select`.
+3. Open nvim anywhere inside that project. The plugin walks up from
+   cwd looking for `.auditview.db`; if found, it matches the containing
+   directory against `session.root_path` from the API. A single match
+   is auto-selected silently. Multiple matches prompt via `vim.ui.select`.
 4. Open a file. Reviewed lines show with a sign in the sign column.
+
+If no `.auditview.db` is found above cwd, the plugin stays dormant on
+buffer-open (no prompts). Running `:AuditviewMark` or `:AuditviewProgress`
+explicitly will still prompt you to pick from all sessions on the server.
 
 ### Keymaps (defaults)
 

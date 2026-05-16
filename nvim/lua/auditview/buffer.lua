@@ -77,7 +77,7 @@ function M.invalidate(bufnr)
   end
 end
 
-function M.ensure(bufnr, cb)
+function M.ensure(bufnr, cb, opts)
   if cache[bufnr] then
     cb(cache[bufnr])
     return
@@ -88,7 +88,7 @@ function M.ensure(bufnr, cb)
       return
     end
     M.fetch(bufnr, cb)
-  end)
+  end, opts)
 end
 
 return M

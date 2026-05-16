@@ -28,7 +28,7 @@ function M.on_buf_read(bufnr)
         end
       end)
     end
-  end)
+  end, { interactive = false })
 end
 
 function M.on_buf_unload(bufnr)
