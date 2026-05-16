@@ -100,10 +100,20 @@ async def update_issue(session_id, issue_id):
 @bp.route("/sessions/<int:session_id>/issues/<int:issue_id>", methods=["DELETE"])
 async def delete_issue(session_id, issue_id):
     async with open_db(current_app.config["DB_PATH"]) as conn:
-        await conn.execute(
-            "DELETE FROM issues WHERE id = ? AND session_id = ?",
-            (issue_id, session_id),
-        )
+        await conn.execute("BEGIN")
+        try:
+            await conn.execute(
+                "UPDATE notes SET issue_id = NULL WHERE issue_id = ? AND session_id = ?",
+                (issue_id, session_id),
+            )
+            await conn.execute(
+                "DELETE FROM issues WHERE id = ? AND session_id = ?",
+                (issue_id, session_id),
+            )
+            await conn.execute("COMMIT")
+        except Exception:
+            await conn.execute("ROLLBACK")
+            raise
     return jsonify({"deleted": True})
 
 
