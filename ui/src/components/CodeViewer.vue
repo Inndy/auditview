@@ -331,7 +331,7 @@ export default {
 
     async doMark(rangeLines, reviewed) {
       try {
-        await markLines(this.sessionId, {
+        const resp = await markLines(this.sessionId, {
           file_path: this.filePath,
           lines: rangeLines.map((l) => ({
             line_hash: l.line_hash,
@@ -341,8 +341,17 @@ export default {
           reviewed,
           skip_comments: this.skipComments,
         })
+        const acceptedKeys = new Set(
+          (resp.accepted || []).map((a) => `${a.line_hash}|${a.context_hash}`),
+        )
+        const useResp = resp.accepted !== undefined
         for (const l of rangeLines) {
-          l.is_reviewed = reviewed
+          if (!useResp || acceptedKeys.has(`${l.line_hash}|${l.context_hash}`)) {
+            l.is_reviewed = reviewed
+          }
+        }
+        if (resp.rejected && resp.rejected.length > 0) {
+          console.warn('markLines: server rejected', resp.rejected)
         }
         const countable = this.lines.filter((l) => l.is_countable).length
         const reviewedCount = this.lines.filter((l) => l.is_countable && l.is_reviewed).length

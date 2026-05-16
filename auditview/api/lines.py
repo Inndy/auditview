@@ -49,7 +49,8 @@ async def mark_lines(session_id):
                 next_c = file_lines[i + 1] if i < len(file_lines) - 1 else ""
                 countable_keys.add((i + 1, line_hash(content), context_hash(prev_c, content, next_c)))
 
-        count = 0
+        accepted = []
+        rejected = []
         await conn.execute("BEGIN")
         try:
             for line in lines:
@@ -57,9 +58,21 @@ async def mark_lines(session_id):
                 ch = line.get("context_hash")
                 ln = line.get("line_no")
                 if not lh or not ch or ln is None:
+                    rejected.append({
+                        "line_hash": lh,
+                        "context_hash": ch,
+                        "line_no": ln,
+                        "reason": "missing line_hash, context_hash, or line_no",
+                    })
                     continue
                 if reviewed:
                     if (ln, lh, ch) not in countable_keys:
+                        rejected.append({
+                            "line_hash": lh,
+                            "context_hash": ch,
+                            "line_no": ln,
+                            "reason": "line is not countable on server (skip_comments mismatch or stale content)",
+                        })
                         continue
                     await conn.execute(
                         "INSERT OR REPLACE INTO reviewed_lines "
@@ -73,10 +86,14 @@ async def mark_lines(session_id):
                         "WHERE session_id = ? AND file_path = ? AND line_hash = ? AND context_hash = ?",
                         (session_id, file_path, lh, ch),
                     )
-                count += 1
+                accepted.append({"line_hash": lh, "context_hash": ch, "line_no": ln})
             await conn.execute("COMMIT")
         except Exception:
             await conn.execute("ROLLBACK")
             raise
 
-    return jsonify({"updated": count})
+    return jsonify({
+        "updated": len(accepted),
+        "accepted": accepted,
+        "rejected": rejected,
+    })
