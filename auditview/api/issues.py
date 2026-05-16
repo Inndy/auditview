@@ -60,9 +60,13 @@ async def update_issue(session_id, issue_id):
     severity = data.get("severity")
     status = data.get("status")
 
-    if severity and severity not in ("P0", "P1", "P2"):
+    if title is not None:
+        title = title.strip()
+        if not title:
+            return jsonify({"error": "title cannot be empty"}), 400
+    if severity is not None and severity not in ("P0", "P1", "P2"):
         return jsonify({"error": "severity must be P0, P1, or P2"}), 400
-    if status and status not in ("open", "resolved", "dismissed"):
+    if status is not None and status not in ("open", "resolved", "dismissed"):
         return jsonify({"error": "status must be open, resolved, or dismissed"}), 400
 
     async with open_db(current_app.config["DB_PATH"]) as conn:

@@ -241,9 +241,15 @@ export default {
     },
     async updateField(field) {
       if (!this.selectedIssue) return
+      const value = this.selectedIssue[field]
+      if (field === 'title' && (typeof value !== 'string' || value.trim() === '')) {
+        const original = this.issues.find((i) => i.id === this.selectedIssueId)
+        if (original) this.selectedIssue.title = original.title
+        return
+      }
       try {
         const updates = {}
-        updates[field] = this.selectedIssue[field]
+        updates[field] = value
         const updated = await apiUpdateIssue(this.session.id, this.selectedIssueId, updates)
         const idx = this.issues.findIndex((i) => i.id === this.selectedIssueId)
         if (idx !== -1) this.issues.splice(idx, 1, updated)
