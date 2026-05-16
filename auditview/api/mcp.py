@@ -20,8 +20,10 @@ active, stop and tell the user to open the auditview web UI and activate a sessi
    pass include_context=true to include the current code snippet (or original
    snapshot for orphaned notes)
 4. `create_note` — attach a note or TODO to a line range in a file
-5. `create_issue` — open a new issue (severity: P0=critical, P1=high, P2=medium)
-6. `update_issue` — change title, severity, or status. Mark an issue
+5. `get_issue` — fetch a single issue with all of its attached notes;
+   pass include_context=true for the code snippet at each note's range
+6. `create_issue` — open a new issue (severity: P0=critical, P1=high, P2=medium)
+7. `update_issue` — change title, severity, or status. Mark an issue
    `resolved` once its fix lands, or `dismissed` if it turns out to be a
    non-issue, so future `list_issues(status="open")` calls stay focused.
 
@@ -230,6 +232,63 @@ async def list_issues(status: Optional[str] = None) -> str:
     header = f"Showing issues with status={status}" if status else "Showing all issues (any status)"
     body = "\n".join(f"[#{i['id']}] [{i['severity']}] [{i['status']}] {i['title']}" for i in issues)
     return f"{header}\n{body}"
+
+
+@mcp.tool()
+async def get_issue(issue_id: int, include_context: bool = False) -> str:
+    """Get full detail for a single issue, including all notes attached to it.
+
+    Use this when you need the complete picture for one issue — its metadata
+    plus every note/TODO that references it — rather than scanning the full
+    list. Useful for triaging a specific report before deciding to fix or
+    dismiss it.
+
+    Args:
+        issue_id: The issue ID to fetch
+        include_context: Include the current code snippet for each attached note.
+            For orphaned notes, shows the original snapshot instead.
+    """
+    api = await _session_api()
+    issue = await api.get(f"/issues/{issue_id}")
+    notes = await api.get(f"/issues/{issue_id}/notes")
+
+    lines = [
+        f"[#{issue['id']}] [{issue['severity']}] [{issue['status']}] {issue['title']}",
+        f"  created_at: {issue['created_at']}",
+    ]
+
+    if not notes:
+        lines.append("")
+        lines.append("No notes attached.")
+        return "\n".join(lines)
+
+    file_cache: dict[str, dict[int, str]] = {}
+    if include_context:
+        unique_files = {n["file_path"] for n in notes if not n["is_orphaned"]}
+        for fp in unique_files:
+            file_cache[fp] = await _fetch_file_lines(api, fp)
+
+    lines.append("")
+    lines.append(f"Attached notes ({len(notes)}):")
+    for n in notes:
+        kind = "TODO" if n["is_todo"] else "NOTE"
+        tag = " [ORPHANED]" if n["is_orphaned"] else ""
+        lines.append(f"  [#{n['id']}] {kind}{tag}  {n['file_path']}:{n['start_line']}-{n['end_line']}")
+        lines.append(f"    {n['content']}")
+
+        if include_context:
+            if n["is_orphaned"]:
+                snapshot = (n.get("snapshot_text") or "").strip()
+                if snapshot:
+                    lines.append("    [original snapshot]")
+                    lines.extend(_code_block(snapshot.splitlines(), indent="    "))
+            else:
+                file_lines = file_cache.get(n["file_path"], {})
+                snippet = [file_lines[ln] for ln in range(n["start_line"], n["end_line"] + 1) if ln in file_lines]
+                if snippet:
+                    lines.extend(_code_block(snippet, indent="    "))
+
+    return "\n".join(lines)
 
 
 @mcp.tool()

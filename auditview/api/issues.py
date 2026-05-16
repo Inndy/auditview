@@ -24,6 +24,20 @@ async def list_issues(session_id):
     return jsonify([dict(r) for r in rows])
 
 
+@bp.route("/sessions/<int:session_id>/issues/<int:issue_id>", methods=["GET"])
+async def get_issue(session_id, issue_id):
+    async with open_db(current_app.config["DB_PATH"]) as conn:
+        cur = await conn.execute(
+            "SELECT id, session_id, title, severity, status, created_at "
+            "FROM issues WHERE id = ? AND session_id = ?",
+            (issue_id, session_id),
+        )
+        row = await cur.fetchone()
+    if not row:
+        return jsonify({"error": "issue not found"}), 404
+    return jsonify(dict(row))
+
+
 @bp.route("/sessions/<int:session_id>/issues", methods=["POST"])
 async def create_issue(session_id):
     data = await request.get_json(force=True, silent=True) or {}
