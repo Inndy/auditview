@@ -55,10 +55,24 @@ async def _reconcile_reviewed(conn, rows, new_lines, new_line_hashes, line_map):
             elif new_ln != row["line_no"]:
                 updates.append((new_ln, row["line_hash"], row["context_hash"], row["id"]))
 
-    if updates:
+    # An edit can collapse two previously distinct reviewed lines into the
+    # same (line_hash, context_hash). UNIQUE(session_id, file_path, line_hash,
+    # context_hash) would then reject the second UPDATE and roll back the
+    # whole reconcile. Keep the first survivor per key, drop the rest.
+    deduped_updates = []
+    seen_keys = set()
+    for new_ln, lh, ch, row_id in updates:
+        key = (lh, ch)
+        if key in seen_keys:
+            delete_ids.append(row_id)
+        else:
+            seen_keys.add(key)
+            deduped_updates.append((new_ln, lh, ch, row_id))
+
+    if deduped_updates:
         await conn.executemany(
             "UPDATE reviewed_lines SET line_no = ?, line_hash = ?, context_hash = ? WHERE id = ?",
-            updates,
+            deduped_updates,
         )
     if delete_ids:
         placeholders = ",".join("?" * len(delete_ids))
