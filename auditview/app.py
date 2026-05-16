@@ -1,5 +1,6 @@
 import asyncio
 import os
+import signal
 import time
 import logging
 from quart import Quart, send_from_directory, abort, g, request
@@ -47,11 +48,21 @@ def create_app(db_path, root_path):
         async with open_db(db_path) as conn:
             await run_migrations(conn)
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         watcher = WatcherService(db_path, root_path)
         watcher.start(loop)
         app.watcher = watcher
         app.worker_task = asyncio.create_task(watcher.run_worker())
+
+        # Catch shutdown before uvicorn's drain: by the time after_serving
+        # runs, SSE connections are already gone and clients miss the goodbye.
+        def on_shutdown(sig, uv):
+            watcher.broadcast({"type": "shutdown"})
+            if callable(uv):
+                uv(sig, None)
+
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, on_shutdown, sig, signal.getsignal(sig))
 
     @app.after_serving
     async def shutdown():

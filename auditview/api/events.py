@@ -24,9 +24,12 @@ async def event_stream(session_id):
             while True:
                 try:
                     event = await asyncio.wait_for(q.get(), timeout=15)
-                    yield f"event: {event['type']}\ndata: {json.dumps({k: v for k, v in event.items() if k != 'type'})}\n\n"
                 except asyncio.TimeoutError:
                     yield "event: heartbeat\ndata: {}\n\n"
+                    continue
+                yield f"event: {event['type']}\ndata: {json.dumps({k: v for k, v in event.items() if k != 'type'})}\n\n"
+                if event["type"] == "shutdown":
+                    return
         finally:
             watcher.unregister_client(session_id, q)
 

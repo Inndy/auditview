@@ -38,10 +38,27 @@ export class SSEClient {
       });
     }
 
+    this.es.addEventListener('shutdown', () => {
+      this._dispatch('shutdown', {});
+      if (this.es) {
+        this.es.close();
+        this.es = null;
+      }
+      this._setStatus('shutdown');
+      if (!this._stopped) {
+        setTimeout(() => {
+          if (!this._stopped) {
+            this._setStatus('connecting');
+            this._open();
+          }
+        }, 5000);
+      }
+    });
+
     this.es.onerror = () => {
       this.es.close();
       this.es = null;
-      if (!this._stopped) {
+      if (!this._stopped && this.status !== 'shutdown') {
         this._setStatus('disconnected');
         setTimeout(() => {
           this._setStatus('connecting');

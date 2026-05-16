@@ -90,6 +90,15 @@ class WatcherService:
                 except ValueError:
                     pass
 
+    def broadcast(self, event):
+        with self._lock:
+            for clients in self._clients.values():
+                for q in list(clients):
+                    try:
+                        q.put_nowait(event)
+                    except asyncio.QueueFull:
+                        pass
+
     async def get_scan(self, session_id, root_path, exclusion_patterns):
         with self._lock:
             cached = self._scan_cache.get(session_id)

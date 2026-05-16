@@ -436,6 +436,7 @@ export default {
 .sse-connected    { color: var(--status-success); }
 .sse-connecting   { color: var(--status-warning); }
 .sse-disconnected { color: var(--status-error); }
+.sse-shutdown     { color: var(--text-faint); }
 
 .no-file {
   padding: 40px;
