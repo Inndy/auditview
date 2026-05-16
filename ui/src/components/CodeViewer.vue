@@ -156,6 +156,9 @@ export default {
       if (this.filePath) this.loadFile(this.filePath)
     },
   },
+  created() {
+    this._loadToken = 0
+  },
   mounted() {
     this._keyHandler = this.onKeyDown.bind(this)
     document.addEventListener('keydown', this._keyHandler)
@@ -188,10 +191,12 @@ export default {
   },
   methods: {
     async loadFile(path) {
+      const token = ++this._loadToken
       this.loading = true
       this.error = null
       try {
         const data = await getFile(this.sessionId, path, this.skipComments)
+        if (token !== this._loadToken) return
         const hljs = this.$hljs
         const highlightedLines = hljs
           ? splitHighlightedLines(highlightFile(hljs, path, data.lines))
@@ -203,9 +208,10 @@ export default {
         this.notes = data.notes || []
         this.$emit('notes-updated', this.notes)
       } catch (e) {
+        if (token !== this._loadToken) return
         this.error = e.message
       } finally {
-        this.loading = false
+        if (token === this._loadToken) this.loading = false
       }
     },
 
