@@ -12,6 +12,8 @@
             :key="line.line_no"
             :line="line"
             :isSelected="isInRange(line.line_no)"
+            :isCursor="line.line_no === cursorLine"
+            :isAnchor="line.line_no === anchorLine"
             :severity="lineSeverityMap[line.line_no] || null"
             @drag-start="onDragStart"
             @drag-move="onDragMove"
@@ -24,8 +26,8 @@
     <CreateNoteModal
       :visible="showModal"
       :isTodo="modalIsTodo"
-      :startLine="selectedRange.start"
-      :endLine="selectedRange.end"
+      :startLine="rangeMin"
+      :endLine="rangeMax"
       @submit="onNoteSubmit"
       @pick-issue="onPickIssue"
       @cancel="showModal = false"
@@ -109,7 +111,8 @@ export default {
     return {
       lines: [],
       notes: [],
-      selectedRange: { start: null, end: null },
+      cursorLine: null,
+      anchorLine: null,
       dragStart: null,
       showModal: false,
       modalIsTodo: false,
@@ -122,12 +125,14 @@ export default {
   },
   computed: {
     rangeMin() {
-      if (this.selectedRange.start === null) return null
-      return Math.min(this.selectedRange.start, this.selectedRange.end ?? this.selectedRange.start)
+      if (this.cursorLine === null) return null
+      const a = this.anchorLine ?? this.cursorLine
+      return Math.min(a, this.cursorLine)
     },
     rangeMax() {
-      if (this.selectedRange.start === null) return null
-      return Math.max(this.selectedRange.start, this.selectedRange.end ?? this.selectedRange.start)
+      if (this.cursorLine === null) return null
+      const a = this.anchorLine ?? this.cursorLine
+      return Math.max(a, this.cursorLine)
     },
     lineSeverityMap() {
       const RANK = { P0: 3, P1: 2, P2: 1, NONE: 0 }
@@ -147,7 +152,9 @@ export default {
   watch: {
     filePath(newPath) {
       if (newPath) {
-        this.selectedRange = { start: null, end: null }
+        this.cursorLine = null
+        this.anchorLine = null
+        this.dragStart = null
         this.loadFile(newPath)
       }
     },
@@ -212,7 +219,8 @@ export default {
     },
 
     jumpToRange(start, end) {
-      this.selectedRange = { start, end }
+      this.cursorLine = end
+      this.anchorLine = start !== end ? start : null
       this.$nextTick(() => {
         const el = this.$refs.container?.querySelector(`[data-line-no="${start}"]`)
         el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
@@ -226,20 +234,84 @@ export default {
 
     onDragStart(lineNo) {
       this.dragStart = lineNo
-      this.selectedRange = { start: lineNo, end: lineNo }
+      this.cursorLine = lineNo
+      this.anchorLine = null
     },
 
     onDragMove(lineNo) {
-      if (this.dragStart !== null) {
-        this.selectedRange = { start: this.dragStart, end: lineNo }
-      }
+      if (this.dragStart === null) return
+      this.cursorLine = lineNo
+      this.anchorLine = lineNo === this.dragStart ? null : this.dragStart
     },
 
     onDragEnd(lineNo) {
-      if (this.dragStart !== null) {
-        this.selectedRange = { start: this.dragStart, end: lineNo }
-        this.dragStart = null
+      if (this.dragStart === null) return
+      this.cursorLine = lineNo
+      this.anchorLine = lineNo === this.dragStart ? null : this.dragStart
+      this.dragStart = null
+    },
+
+    moveCursor(delta) {
+      if (this.lines.length === 0) return
+      const first = this.lines[0].line_no
+      const last = this.lines[this.lines.length - 1].line_no
+      let n
+      if (this.cursorLine === null) {
+        n = first
+      } else {
+        n = Math.max(first, Math.min(last, this.cursorLine + delta))
       }
+      this.cursorLine = n
+      this.scrollCursorIntoView()
+    },
+
+    jumpEmpty(direction) {
+      if (this.lines.length === 0) return
+      const idxByLineNo = new Map()
+      this.lines.forEach((l, i) => idxByLineNo.set(l.line_no, i))
+      let idx
+      if (this.cursorLine === null) {
+        idx = direction > 0 ? -1 : this.lines.length
+      } else {
+        idx = idxByLineNo.get(this.cursorLine) ?? 0
+      }
+      const isEmpty = (i) => this.lines[i].content.trim() === ''
+      let i = idx + direction
+      while (i >= 0 && i < this.lines.length && isEmpty(i)) i += direction
+      while (i >= 0 && i < this.lines.length) {
+        if (isEmpty(i)) {
+          this.cursorLine = this.lines[i].line_no
+          this.scrollCursorIntoView()
+          return
+        }
+        i += direction
+      }
+      const fallback = direction > 0
+        ? this.lines[this.lines.length - 1].line_no
+        : this.lines[0].line_no
+      this.cursorLine = fallback
+      this.scrollCursorIntoView()
+    },
+
+    toggleAnchor() {
+      if (this.cursorLine === null) {
+        if (this.lines.length === 0) return
+        this.cursorLine = this.lines[0].line_no
+        this.scrollCursorIntoView()
+      }
+      if (this.anchorLine === this.cursorLine) {
+        this.anchorLine = null
+      } else {
+        this.anchorLine = this.cursorLine
+      }
+    },
+
+    scrollCursorIntoView() {
+      if (this.cursorLine === null) return
+      this.$nextTick(() => {
+        const el = this.$refs.container?.querySelector(`[data-line-no="${this.cursorLine}"]`)
+        el?.scrollIntoView({ block: 'nearest' })
+      })
     },
 
     onDocMouseUp() {
@@ -258,6 +330,7 @@ export default {
 
     onKeyDown(e) {
       if (this.showModal) return
+      if (document.querySelector('.modal-overlay')) return
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return
 
       const key = e.key
@@ -269,7 +342,38 @@ export default {
       }
 
       if (key === 'Escape') {
-        this.selectedRange = { start: null, end: null }
+        this.cursorLine = null
+        this.anchorLine = null
+        return
+      }
+
+      if (key === 'j') {
+        e.preventDefault()
+        this.moveCursor(1)
+        return
+      }
+
+      if (key === 'k') {
+        e.preventDefault()
+        this.moveCursor(-1)
+        return
+      }
+
+      if (key === '{') {
+        e.preventDefault()
+        this.jumpEmpty(-1)
+        return
+      }
+
+      if (key === '}') {
+        e.preventDefault()
+        this.jumpEmpty(1)
+        return
+      }
+
+      if (key === 'v' || key === ' ') {
+        e.preventDefault()
+        this.toggleAnchor()
         return
       }
 
@@ -323,12 +427,14 @@ export default {
       const allReviewed = countable.length > 0 && countable.every((l) => l.is_reviewed)
       const reviewed = !allReviewed
       await this.doMark(rangeLines, reviewed)
+      this.anchorLine = null
     },
 
     async unmarkSelected() {
       const rangeLines = this.selectedRangeLines()
       if (rangeLines.length === 0) return
       await this.doMark(rangeLines, false)
+      this.anchorLine = null
     },
 
     async doMark(rangeLines, reviewed) {
@@ -378,6 +484,7 @@ export default {
         })
         this.notes.push(note)
         this.$emit('notes-updated', this.notes)
+        this.anchorLine = null
       } catch (e) {
         console.error('createNote error:', e.message)
       }
@@ -404,6 +511,7 @@ export default {
         })
         this.notes.push(note)
         this.$emit('notes-updated', this.notes)
+        this.anchorLine = null
       } catch (e) {
         console.error('createNote error:', e.message)
       }

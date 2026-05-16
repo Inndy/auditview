@@ -4,6 +4,7 @@
       <FileTree
         ref="fileTree"
         :sessionId="id"
+        :currentFile="currentFile"
         @file-selected="openFile"
       />
       <CodeViewer
@@ -73,6 +74,11 @@ export default {
     const { file, line, endLine } = this.$route.query
     if (file) this.currentFile = file
     if (line) this.pendingJump = { start: parseInt(line), end: parseInt(endLine || line) }
+    this._keyHandler = this.onKeyDown.bind(this)
+    document.addEventListener('keydown', this._keyHandler)
+  },
+  beforeUnmount() {
+    document.removeEventListener('keydown', this._keyHandler)
   },
   watch: {
     '$route.query'({ file, line, endLine }) {
@@ -115,6 +121,17 @@ export default {
     },
     onNoteJump(note) {
       this.$refs.codeViewer?.jumpToRange(note.start_line, note.end_line)
+    },
+    onKeyDown(e) {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return
+      if (document.querySelector('.modal-overlay')) return
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        this.$refs.fileTree?.selectNext()
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        this.$refs.fileTree?.selectPrev()
+      }
     },
   },
 }

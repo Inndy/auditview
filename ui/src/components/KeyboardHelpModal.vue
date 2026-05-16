@@ -7,16 +7,20 @@
       </div>
       <table class="help-table">
         <tbody>
+          <tr><td class="key">↑ / ↓</td><td>Previous / next file</td></tr>
+          <tr><td class="key">j / k</td><td>Move line cursor down / up</td></tr>
+          <tr><td class="key">{ / }</td><td>Jump to previous / next empty line (head/tail if none)</td></tr>
+          <tr><td class="key">v / Space</td><td>Set / clear anchor at cursor (extends selection with j/k)</td></tr>
           <tr><td class="key">m</td><td>Mark / unmark selected lines</td></tr>
           <tr><td class="key">M</td><td>Mark / unmark entire file</td></tr>
           <tr><td class="key">u</td><td>Unmark selected lines</td></tr>
           <tr><td class="key">n</td><td>Add note on selection</td></tr>
           <tr><td class="key">t</td><td>Add TODO on selection</td></tr>
-          <tr><td class="key">Esc</td><td>Clear selection</td></tr>
+          <tr><td class="key">Esc</td><td>Clear cursor &amp; selection</td></tr>
           <tr><td class="key">?</td><td>Show this help</td></tr>
         </tbody>
       </table>
-      <p class="help-hint">Drag the line-number gutter to select a range.</p>
+      <p class="help-hint">With no anchor, j/k moves a single-line cursor. Press Space to drop an anchor, then j/k extends the selection from anchor to cursor. Drag the line-number gutter for a mouse range.</p>
     </div>
   </div>
 </template>

@@ -202,6 +202,18 @@ table.code-table tr.reviewed.selected {
   background: var(--bg-reviewed-selected);
 }
 
+table.code-table tr.cursor td:first-child {
+  box-shadow: inset 3px 0 0 var(--text);
+}
+
+table.code-table tr.anchor td:first-child {
+  box-shadow: inset 3px 0 0 var(--status-warning);
+}
+
+table.code-table tr.cursor.anchor td:first-child {
+  box-shadow: inset 3px 0 0 var(--text);
+}
+
 .gutter-cell {
   width: 52px;
   min-width: 52px;

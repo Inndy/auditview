@@ -56,6 +56,7 @@ export default {
   components: { TreeNode },
   props: {
     sessionId: [String, Number],
+    currentFile: { type: String, default: null },
   },
   emits: ['file-selected'],
   data() {
@@ -63,13 +64,18 @@ export default {
       files: [],
       loading: true,
       error: null,
-      currentFile: null,
       hideReviewed: getBoolPref('hideReviewed'),
     }
   },
   watch: {
     hideReviewed(val) {
       setBoolPref('hideReviewed', val)
+    },
+    currentFile() {
+      this.$nextTick(() => {
+        const el = this.$el.querySelector('.tree-active')
+        el?.scrollIntoView({ block: 'nearest' })
+      })
     },
   },
   computed: {
@@ -79,6 +85,17 @@ export default {
     },
     tree() {
       return buildTree(this.filteredFiles)
+    },
+    orderedPaths() {
+      const out = []
+      const walk = (nodes) => {
+        for (const n of nodes) {
+          if (n.isFile) out.push(n.path)
+          else if (n.children) walk(n.children)
+        }
+      }
+      walk(this.tree)
+      return out
     },
   },
   mounted() {
@@ -97,8 +114,21 @@ export default {
       }
     },
     onFileSelected(path) {
-      this.currentFile = path
       this.$emit('file-selected', path)
+    },
+    selectNext() {
+      const list = this.orderedPaths
+      if (list.length === 0) return
+      const idx = list.indexOf(this.currentFile)
+      const next = idx === -1 ? 0 : Math.min(list.length - 1, idx + 1)
+      if (list[next] !== this.currentFile) this.$emit('file-selected', list[next])
+    },
+    selectPrev() {
+      const list = this.orderedPaths
+      if (list.length === 0) return
+      const idx = list.indexOf(this.currentFile)
+      const prev = idx === -1 ? list.length - 1 : Math.max(0, idx - 1)
+      if (list[prev] !== this.currentFile) this.$emit('file-selected', list[prev])
     },
     refresh() {
       return this.load()

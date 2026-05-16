@@ -4,6 +4,8 @@
     :class="{
       reviewed: line.is_reviewed,
       selected: isSelected,
+      cursor: isCursor,
+      anchor: isAnchor,
     }"
     @mousedown.prevent="onMouseDown"
     @mousemove="onMouseMove"
@@ -39,6 +41,8 @@ export default {
   props: {
     line: { type: Object, required: true },
     isSelected: { type: Boolean, default: false },
+    isCursor: { type: Boolean, default: false },
+    isAnchor: { type: Boolean, default: false },
     severity: { type: String, default: null },
   },
   emits: ['drag-start', 'drag-move', 'drag-end'],
