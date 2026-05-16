@@ -8,12 +8,13 @@ from watchdog.events import FileSystemEventHandler
 
 from auditview.db.connection import open_db
 from auditview.core.reconciler import reconcile_file
-from auditview.core.scanner import scan_folder
+from auditview.core.scanner import scan_folder, _base_spec
 
 logger = logging.getLogger("auditview")
 
 _CLIENT_QUEUE_SIZE = 128
 _DEBOUNCE_DELAY = 0.3
+_DEFAULT_FILTER_SPEC = _base_spec("")
 
 
 class _Handler(FileSystemEventHandler):
@@ -42,7 +43,8 @@ class WatcherService:
         self._lock = threading.Lock()
         self._clients = {}
         self._scan_cache = {}
-        self._debounce_timers = {}
+        self._pending_paths = set()
+        self._debounce_handle = None
         self._loop = None
         self._work_queue = None
 
@@ -55,10 +57,14 @@ class WatcherService:
     def stop(self):
         self._observer.stop()
         self._observer.join()
-        with self._lock:
-            for t in self._debounce_timers.values():
-                t.cancel()
-            self._debounce_timers.clear()
+        if self._loop is not None:
+            self._loop.call_soon_threadsafe(self._cancel_debounce)
+
+    def _cancel_debounce(self):
+        if self._debounce_handle is not None:
+            self._debounce_handle.cancel()
+            self._debounce_handle = None
+        self._pending_paths.clear()
 
     async def run_worker(self):
         while True:
@@ -97,18 +103,36 @@ class WatcherService:
         return result
 
     def _handle_change(self, abs_path):
-        with self._lock:
-            existing = self._debounce_timers.pop(abs_path, None)
-            if existing:
-                existing.cancel()
-            t = threading.Timer(_DEBOUNCE_DELAY, self._process_change, args=(abs_path,))
-            self._debounce_timers[abs_path] = t
-        t.start()
+        # Runs on a watchdog observer thread. Filter against default excludes
+        # here so bursts of writes to .git/, node_modules/, __pycache__/, etc.
+        # never reach the asyncio loop or the DB.
+        if not abs_path.startswith(self._root_path + os.sep) and abs_path != self._root_path:
+            return
+        rel_path = os.path.relpath(abs_path, self._root_path).replace(os.sep, "/")
+        if _DEFAULT_FILTER_SPEC.match_file(rel_path):
+            return
 
-    def _process_change(self, abs_path):
-        with self._lock:
-            self._debounce_timers.pop(abs_path, None)
-        self._loop.call_soon_threadsafe(self._work_queue.put_nowait, abs_path)
+        loop = self._loop
+        if loop is None:
+            return
+        loop.call_soon_threadsafe(self._enqueue_path, abs_path)
+
+    def _enqueue_path(self, abs_path):
+        # Runs on the asyncio loop. Coalesce repeated events for the same path
+        # into a single set, and run one shared debounce timer instead of one
+        # threading.Timer per path.
+        self._pending_paths.add(abs_path)
+        if self._debounce_handle is None:
+            self._debounce_handle = self._loop.call_later(
+                _DEBOUNCE_DELAY, self._flush_pending
+            )
+
+    def _flush_pending(self):
+        self._debounce_handle = None
+        paths = self._pending_paths
+        self._pending_paths = set()
+        for p in paths:
+            self._work_queue.put_nowait(p)
 
     async def _do_process_change(self, abs_path):
         if not abs_path.startswith(self._root_path + os.sep):
