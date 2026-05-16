@@ -23,7 +23,7 @@ pnpm run dev
 
 ### Overview
 
-Auditview is a line-level code review/audit tool: a Quart (async) JSON API backend with a Vue 3 SPA frontend, served as static files from the same process. The frontend is built into `auditview/static/` and committed; the Python package includes it.
+Auditview is a line-level code review/audit tool: a Quart (async) JSON API backend with a Vue 3 SPA frontend, served as static files from the same process. `auditview/static/` is gitignored — it is populated from `ui/dist/` before publishing. Agents do not need to copy build output there.
 
 - auditview/core/ - business logic - no Quart imports here
 - auditview/api/ - one Quart blueprint per resource (sessions, files, lines, …)
