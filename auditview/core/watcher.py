@@ -43,6 +43,7 @@ class WatcherService:
         self._lock = threading.Lock()
         self._clients = {}
         self._scan_cache = {}
+        self._session_specs = {}
         self._pending_paths = set()
         self._debounce_handle = None
         self._loop = None
@@ -100,7 +101,10 @@ class WatcherService:
                         pass
 
     async def get_scan(self, session_id, root_path, exclusion_patterns):
+        patterns_str = exclusion_patterns or ""
+        spec = _base_spec(patterns_str)
         with self._lock:
+            self._session_specs[session_id] = (root_path, spec)
             cached = self._scan_cache.get(session_id)
         if cached is not None:
             return cached
@@ -120,6 +124,25 @@ class WatcherService:
         rel_path = os.path.relpath(abs_path, self._root_path).replace(os.sep, "/")
         if _DEFAULT_FILTER_SPEC.match_file(rel_path):
             return
+
+        # Drop paths excluded by every session that would otherwise cover them.
+        # Sessions appear here only after get_scan has cached their spec; if none
+        # are known yet we conservatively let the event through.
+        with self._lock:
+            specs = list(self._session_specs.values())
+        if specs:
+            covered = False
+            kept = False
+            for sess_root, spec in specs:
+                if abs_path != sess_root and not abs_path.startswith(sess_root + os.sep):
+                    continue
+                covered = True
+                sess_rel = os.path.relpath(abs_path, sess_root).replace(os.sep, "/")
+                if not spec.match_file(sess_rel):
+                    kept = True
+                    break
+            if covered and not kept:
+                return
 
         loop = self._loop
         if loop is None:
@@ -162,8 +185,16 @@ class WatcherService:
                 session_rows = await cur2.fetchall()
                 with self._lock:
                     for r in session_rows:
-                        if abs_path.startswith(r["root_path"] + os.sep) or abs_path.startswith(r["root_path"] + "/"):
-                            self._scan_cache[r["id"]] = None
+                        sess_root = r["root_path"]
+                        if not (abs_path.startswith(sess_root + os.sep) or abs_path.startswith(sess_root + "/")):
+                            continue
+                        entry = self._session_specs.get(r["id"])
+                        if entry is not None:
+                            spec_root, spec = entry
+                            sess_rel = os.path.relpath(abs_path, spec_root).replace(os.sep, "/")
+                            if spec.match_file(sess_rel):
+                                continue
+                        self._scan_cache[r["id"]] = None
                 return
 
             file_deleted = not os.path.isfile(abs_path)
