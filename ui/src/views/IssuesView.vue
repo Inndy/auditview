@@ -302,7 +302,7 @@ export default {
 
 .issues-content {
   display: grid;
-  grid-template-columns: 300px 1fr 300px;
+  grid-template-columns: minmax(200px, 300px) 1fr minmax(200px, 300px);
   gap: 1px;
   flex: 1;
   overflow: hidden;
