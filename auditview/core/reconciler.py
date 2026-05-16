@@ -115,7 +115,7 @@ async def reconcile_file(conn, session_id, file_path, root_path):
     try:
         with open(full_path, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
-    except OSError:
+    except FileNotFoundError:
         await conn.execute("BEGIN")
         try:
             await conn.execute(
