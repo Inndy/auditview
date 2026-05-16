@@ -80,6 +80,40 @@ require("auditview").setup({
 - Marking is blocked while a buffer is `modified` — save first so the
   server hashes match what you see.
 
+## nvim-tree integration (optional)
+
+Color file names in the nvim-tree sidebar by review status:
+
+```lua
+require("auditview").setup({ base_url = "http://127.0.0.1:5000" })
+
+local AuditviewDecorator = require("auditview.integrations.nvim_tree").setup()
+
+require("nvim-tree").setup({
+  renderer = {
+    decorators = {
+      "Git", "Open", "Hidden", "Modified",
+      "Bookmark", "Diagnostics", "Copied",
+      AuditviewDecorator,
+      "Cut",
+    },
+  },
+})
+```
+
+Highlight groups (linked to sensible defaults — override with `:hi`):
+
+| Group                     | Default link | Meaning                |
+| ------------------------- | ------------ | ---------------------- |
+| `AuditviewTreeReviewed`   | `DiffAdd`    | fully reviewed         |
+| `AuditviewTreePartial`    | `DiffChange` | partially reviewed     |
+| `AuditviewTreeNotViewed`  | `Comment`    | tracked, no marks yet  |
+
+Refresh is automatic on nvim-tree open and after every mark/unmark from
+this plugin. Marks made elsewhere (web UI) won't show until the tree
+reopens; run `:lua require("auditview.integrations.nvim_tree").refresh()`
+to force a sync.
+
 ## Out of scope for v0
 
 - Notes / TODOs / issues

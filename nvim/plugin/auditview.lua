@@ -5,6 +5,9 @@ local auditview = require("auditview")
 local config = require("auditview.config")
 
 vim.api.nvim_set_hl(0, "AuditviewReviewed", { link = "DiffAdd", default = true })
+vim.api.nvim_set_hl(0, "AuditviewTreeReviewed", { link = "DiffAdd", default = true })
+vim.api.nvim_set_hl(0, "AuditviewTreePartial", { link = "DiffChange", default = true })
+vim.api.nvim_set_hl(0, "AuditviewTreeNotViewed", { link = "Comment", default = true })
 
 vim.api.nvim_create_user_command("AuditviewMark", function(opts)
   if opts.range == 2 then

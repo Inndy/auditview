@@ -65,6 +65,9 @@ local function send(bufnr, start_line, end_line, reviewed)
       ), vim.log.levels.WARN)
     end
     buffer.refresh(bufnr)
+    pcall(function()
+      require("auditview.integrations.nvim_tree").maybe_refresh()
+    end)
   end)
 end
 
