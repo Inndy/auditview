@@ -5,41 +5,32 @@ export class SSEClient {
     this.sid = null;
     this.listeners = {};
     this.es = null;
-    this.retryDelay = 1000;
-    this._stopped = true;
-    this._retryTimer = null;
     this.status = ref('disconnected');
+    this._retryDelay = 1000;
+    this._retryTimer = null;
   }
 
   on(event, cb) {
-    if (!this.listeners[event]) {
-      this.listeners[event] = [];
-    }
-    this.listeners[event].push(cb);
+    const arr = (this.listeners[event] ||= []);
+    arr.push(cb);
     return () => {
-      const arr = this.listeners[event];
-      if (!arr) return;
       const i = arr.indexOf(cb);
       if (i !== -1) arr.splice(i, 1);
     };
   }
 
-  connect(sessionId) {
-    if (this.es && this.sid === sessionId && !this._stopped) return;
-    this._teardown();
-    this.sid = sessionId;
-    this._stopped = false;
-    this._setStatus('connecting');
-    this._open();
+  setSessionId(sid) {
+    this._close();
+    this.sid = sid;
+    if (sid) {
+      this._setStatus('connecting');
+      this._open();
+    } else {
+      this._setStatus('disconnected');
+    }
   }
 
-  disconnect() {
-    this._stopped = true;
-    this._teardown();
-    this._setStatus('disconnected');
-  }
-
-  _teardown() {
+  _close() {
     if (this._retryTimer !== null) {
       clearTimeout(this._retryTimer);
       this._retryTimer = null;
@@ -51,65 +42,55 @@ export class SSEClient {
   }
 
   _open() {
-    if (this._stopped) return;
+    const es = new EventSource(`/api/sessions/${this.sid}/events`);
+    this.es = es;
 
-    this.es = new EventSource(`/api/sessions/${this.sid}/events`);
-
-    this.es.onmessage = (e) => {
-      this._dispatch('message', e);
+    es.onopen = () => {
+      this._retryDelay = 1000;
+      this._setStatus('connected');
     };
 
-    for (const eventName of ['file_changed', 'heartbeat']) {
-      this.es.addEventListener(eventName, (e) => {
+    es.onmessage = (e) => this._dispatch('message', e);
+
+    for (const name of ['file_changed', 'heartbeat']) {
+      es.addEventListener(name, (e) => {
         let data = {};
-        try { data = JSON.parse(e.data); } catch { /* non-JSON heartbeat */ }
-        this._dispatch(eventName, data);
+        try { data = JSON.parse(e.data); } catch { /* heartbeat may be empty */ }
+        this._dispatch(name, data);
       });
     }
 
-    this.es.addEventListener('shutdown', () => {
+    es.addEventListener('shutdown', () => {
+      // Server is intentionally going down and asking us to leave. Treat this as a
+      // deliberate disconnect — do not auto-retry. The follow-up `onerror` from the
+      // closed socket bails out on the 'shutdown' status check below.
       this._dispatch('shutdown', {});
-      if (this.es) {
-        this.es.close();
-        this.es = null;
-      }
+      this._close();
       this._setStatus('shutdown');
-      if (!this._stopped) {
-        this._retryTimer = setTimeout(() => {
-          this._retryTimer = null;
-          if (!this._stopped) {
-            this._setStatus('connecting');
-            this._open();
-          }
-        }, 5000);
-      }
     });
 
-    this.es.onerror = () => {
-      if (this.es) {
-        this.es.close();
-        this.es = null;
-      }
-      if (!this._stopped && this.status.value !== 'shutdown') {
-        this._setStatus('disconnected');
-        this._retryTimer = setTimeout(() => {
-          this._retryTimer = null;
-          if (this._stopped) return;
-          this._setStatus('connecting');
-          this._open();
-        }, this.retryDelay);
-        this.retryDelay = Math.min(this.retryDelay * 2, 30000);
-      }
-    };
-
-    this.es.onopen = () => {
-      this.retryDelay = 1000;
-      this._setStatus('connected');
+    es.onerror = () => {
+      if (this.status.value === 'shutdown') return;
+      this._scheduleRetry(this._retryDelay, 'disconnected');
+      this._retryDelay = Math.min(this._retryDelay * 2, 30000);
     };
   }
 
-  _setStatus(status) {
-    this.status.value = status;
+  _scheduleRetry(ms, status) {
+    if (this.es) {
+      this.es.close();
+      this.es = null;
+    }
+    this._setStatus(status);
+    this._retryTimer = setTimeout(() => {
+      this._retryTimer = null;
+      this._setStatus('connecting');
+      this._open();
+    }, ms);
+  }
+
+  _setStatus(s) {
+    this.status.value = s;
   }
 
   _dispatch(event, data) {

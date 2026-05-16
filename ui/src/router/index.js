@@ -1,3 +1,4 @@
+import { computed, watch } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import SessionListView from '../views/SessionListView.vue'
 import SessionView from '../views/SessionView.vue'
@@ -12,6 +13,7 @@ const router = createRouter({
     {
       path: '/sessions/:id',
       component: SessionView,
+      meta: { sse: true },
       children: [
         { path: 'code', component: CodeView },
         { path: 'issues', component: IssuesView },
@@ -21,13 +23,11 @@ const router = createRouter({
   ],
 })
 
-router.afterEach((to) => {
-  const onSession = to.matched.some((r) => r.path.startsWith('/sessions/:id'))
-  if (onSession && to.params.id) {
-    sseClient.connect(to.params.id)
-  } else {
-    sseClient.disconnect()
-  }
+const sseSessionId = computed(() => {
+  const r = router.currentRoute.value
+  return r.meta.sse ? (r.params.id ?? null) : null
 })
+
+watch(sseSessionId, (sid) => sseClient.setSessionId(sid), { immediate: true })
 
 export default router
