@@ -1,6 +1,7 @@
 import os
 import pathspec
 import logging
+from functools import lru_cache
 
 logger = logging.getLogger("auditview")
 
@@ -15,18 +16,15 @@ _DEFAULT_EXCLUDES = [
     "**/static/assets/**",
 ]
 
-_base_spec_cache: dict[str, pathspec.PathSpec] = {}
 
-
+@lru_cache(maxsize=32)
 def _base_spec(exclusion_patterns_str: str) -> pathspec.PathSpec:
-    if exclusion_patterns_str not in _base_spec_cache:
-        patterns = list(_DEFAULT_EXCLUDES)
-        for line in exclusion_patterns_str.splitlines():
-            line = line.strip()
-            if line and not line.startswith("#"):
-                patterns.append(line)
-        _base_spec_cache[exclusion_patterns_str] = pathspec.PathSpec.from_lines("gitwildmatch", patterns)
-    return _base_spec_cache[exclusion_patterns_str]
+    patterns = list(_DEFAULT_EXCLUDES)
+    for line in exclusion_patterns_str.splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            patterns.append(line)
+    return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
 
 
 def _load_gitignore_patterns(path):
@@ -62,7 +60,7 @@ def scan_folder(root, exclusion_patterns_str=""):
             rel_path = os.path.relpath(full_path, root).replace(os.sep, "/")
 
             if base_spec.match_file(rel_path):
-                logger.debug('path %s ignored by base_sepc rule %r', rel_path, base_spec)
+                logger.debug('path %s ignored by base_spec rule %r', rel_path, base_spec)
                 continue
 
             excluded = False
