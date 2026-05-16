@@ -21,6 +21,7 @@ async def event_stream(session_id):
 
     async def generate():
         try:
+            yield "event: heartbeat\ndata: {}\n\n"
             while True:
                 try:
                     event = await asyncio.wait_for(q.get(), timeout=15)
