@@ -30,4 +30,8 @@ async def event_stream(session_id):
         finally:
             watcher.unregister_client(session_id, q)
 
-    return Response(generate(), content_type="text/event-stream")
+    response = Response(generate(), content_type="text/event-stream")
+    response.timeout = None
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["X-Accel-Buffering"] = "no"
+    return response
