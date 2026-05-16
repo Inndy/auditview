@@ -44,15 +44,26 @@ def scan_folder(root, exclusion_patterns_str=""):
     real_root = os.path.realpath(root)
     base_spec = _base_spec(exclusion_patterns_str)
 
-    dir_specs = {}
+    # Only specs whose directory is an ancestor of (or equal to) the current
+    # dirpath apply. Because os.walk is topdown and visits siblings
+    # independently, we prune to ancestors at the start of each iteration so
+    # specs from already-visited sibling subtrees do not leak.
+    active_specs = []
 
     result = []
     for dirpath, dirnames, filenames in os.walk(root, topdown=True):
+        active_specs = [
+            (d, s) for d, s in active_specs
+            if dirpath == d or dirpath.startswith(d + os.sep)
+        ]
+
         gi_path = os.path.join(dirpath, ".gitignore")
         if os.path.isfile(gi_path):
             patterns = _load_gitignore_patterns(gi_path)
             if patterns:
-                dir_specs[dirpath] = pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+                active_specs.append(
+                    (dirpath, pathspec.PathSpec.from_lines("gitwildmatch", patterns))
+                )
 
         for fname in filenames:
             full_path = os.path.join(dirpath, fname)
@@ -64,10 +75,7 @@ def scan_folder(root, exclusion_patterns_str=""):
                 continue
 
             excluded = False
-            for spec_dir, spec in dir_specs.items():
-                spec_dir_prefix = spec_dir.rstrip(os.sep) + os.sep
-                if not full_path.startswith(spec_dir_prefix):
-                    continue
+            for spec_dir, spec in active_specs:
                 rel_to_spec = os.path.relpath(full_path, spec_dir).replace(os.sep, "/")
                 if spec.match_file(rel_to_spec):
                     logger.debug('path %s ignored by dir_spec %s rule %r', rel_path, spec_dir, spec)
@@ -91,10 +99,7 @@ def scan_folder(root, exclusion_patterns_str=""):
             if base_spec.match_file(rel_d):
                 continue
             dir_excluded = False
-            for spec_dir, spec in dir_specs.items():
-                spec_dir_prefix = spec_dir.rstrip(os.sep) + os.sep
-                if not full_d.startswith(spec_dir_prefix):
-                    continue
+            for spec_dir, spec in active_specs:
                 rel_to_spec = os.path.relpath(full_d, spec_dir).replace(os.sep, "/") + "/"
                 if spec.match_file(rel_to_spec):
                     dir_excluded = True
