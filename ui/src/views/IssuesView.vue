@@ -44,7 +44,12 @@
         <div v-if="selectedIssue" class="issue-details">
           <div class="detail-row">
             <label>Title</label>
-            <input v-model="selectedIssue.title" @blur="updateField('title')" type="text" />
+            <input
+              v-model="selectedIssue.title"
+              @focus="rememberTitle"
+              @blur="updateField('title')"
+              type="text"
+            />
           </div>
           <div class="detail-row">
             <label>Severity</label>
@@ -162,6 +167,7 @@ export default {
       selectedNoteIds: [],
       showCreateIssueModal: false,
       filterOptions: FILTER_OPTIONS,
+      titleBeforeEdit: '',
     }
   },
   computed: {
@@ -188,6 +194,7 @@ export default {
   },
   watch: {
     selectedIssueId(id) {
+      this.titleBeforeEdit = ''
       if (id) {
         this.loadIssueNotes(id)
       } else {
@@ -239,12 +246,14 @@ export default {
         this.selectedNoteIds.push(noteId)
       }
     },
+    rememberTitle() {
+      this.titleBeforeEdit = this.selectedIssue?.title || ''
+    },
     async updateField(field) {
       if (!this.selectedIssue) return
       const value = this.selectedIssue[field]
       if (field === 'title' && (typeof value !== 'string' || value.trim() === '')) {
-        const original = this.issues.find((i) => i.id === this.selectedIssueId)
-        if (original) this.selectedIssue.title = original.title
+        this.selectedIssue.title = this.titleBeforeEdit
         return
       }
       try {
