@@ -19,6 +19,10 @@ pnpm run dev
 - To pick up code changes, run `./scripts/dev-restart.sh`. It signals the running supervisors to relaunch in place.
 - If it errors with "not running", start your own background server - do **not** invoke `./scripts/dev-start.sh`. That script is for a human in tmux only; it splits the current pane and would hijack your terminal.
 
+## Documentation
+
+When modifying backend code under `auditview/api/` (or anything else that changes request/response shapes, status codes, error codes, or routes), update `API.md` in the same change. `API.md` is the source of truth for clients (frontend, Neovim plugin, MCP integrations) and drifts silently otherwise.
+
 ## Architecture
 
 ### Overview
