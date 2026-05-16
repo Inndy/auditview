@@ -80,6 +80,13 @@ async def create_note(session_id):
         if start_line > len(file_lines) or end_line > len(file_lines):
             return jsonify({"error": "line range out of bounds"}), 400
 
+        if issue_id is not None:
+            cur = await conn.execute(
+                "SELECT id FROM issues WHERE id = ? AND session_id = ?", (issue_id, session_id)
+            )
+            if await cur.fetchone() is None:
+                return jsonify({"error": "Issue not found"}), 404
+
         start_idx = start_line - 1
         end_idx = end_line - 1
         start_hash = line_hash(file_lines[start_idx])
