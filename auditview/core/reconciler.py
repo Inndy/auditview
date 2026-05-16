@@ -15,19 +15,27 @@ def build_line_map(old_lines, new_lines):
     return line_map
 
 
+def _build_context_index(new_lines, new_line_hashes):
+    index = {}
+    for i in range(len(new_lines)):
+        prev_c = new_lines[i - 1] if i > 0 else ""
+        curr_c = new_lines[i]
+        next_c = new_lines[i + 1] if i < len(new_lines) - 1 else ""
+        index[(new_line_hashes[i], context_hash(prev_c, curr_c, next_c))] = i + 1
+    return index
+
+
 async def _reconcile_reviewed(conn, rows, new_lines, new_line_hashes, line_map):
     if not rows:
         return
-
-    row_ids = [r["id"] for r in rows]
-    old_line_nos = [r["line_no"] for r in rows]
 
     updates = []
     delete_ids = []
 
     if line_map is not None:
-        for row_id, old_ln in zip(row_ids, old_line_nos):
-            old_idx = old_ln - 1
+        for row in rows:
+            row_id = row["id"]
+            old_idx = row["line_no"] - 1
             new_idx = line_map.get(old_idx)
             if new_idx is None:
                 delete_ids.append(row_id)
@@ -38,18 +46,14 @@ async def _reconcile_reviewed(conn, rows, new_lines, new_line_hashes, line_map):
                 next_content = new_lines[new_idx + 1] if new_idx < len(new_lines) - 1 else ""
                 updates.append((new_ln, line_hash(curr_content), context_hash(prev_content, curr_content, next_content), row_id))
     else:
-        old_actual_lines = [r["line_hash"] for r in rows]
-        fallback_map = build_line_map(old_actual_lines, new_line_hashes)
-        for i, row_id in enumerate(row_ids):
-            if i in fallback_map:
-                new_idx = fallback_map[i]
-                new_ln = new_idx + 1
-                prev_content = new_lines[new_idx - 1] if new_idx > 0 else ""
-                curr_content = new_lines[new_idx]
-                next_content = new_lines[new_idx + 1] if new_idx < len(new_lines) - 1 else ""
-                updates.append((new_ln, line_hash(curr_content), context_hash(prev_content, curr_content, next_content), row_id))
-            else:
-                delete_ids.append(row_id)
+        context_index = _build_context_index(new_lines, new_line_hashes)
+        for row in rows:
+            key = (row["line_hash"], row["context_hash"])
+            new_ln = context_index.get(key)
+            if new_ln is None:
+                delete_ids.append(row["id"])
+            elif new_ln != row["line_no"]:
+                updates.append((new_ln, row["line_hash"], row["context_hash"], row["id"]))
 
     if updates:
         await conn.executemany(
