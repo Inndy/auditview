@@ -7,6 +7,8 @@
         v-model="content"
         placeholder="Enter note content…"
         @keydown.esc.stop="cancel"
+        @keydown.ctrl.enter.stop.prevent="submit"
+        @keydown.meta.enter.stop.prevent="submit"
       ></textarea>
       <div class="modal-actions">
         <button @click="cancel">Cancel</button>
