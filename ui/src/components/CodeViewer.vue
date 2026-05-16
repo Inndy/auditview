@@ -1,6 +1,5 @@
 <template>
   <div class="code-viewer-main" :class="{ 'wrap-lines': wrapLines }" ref="container" style="position:relative">
-    <div class="sse-indicator" :class="'sse-' + sseStatus" :title="'Live updates: ' + sseStatus">●</div>
     <div v-if="!filePath" class="no-file">Select a file from the tree.</div>
     <div v-else-if="loading" class="no-file">Loading…</div>
     <div v-else-if="error" class="no-file error-text">{{ error }}</div>
@@ -47,7 +46,7 @@
 import { getFile } from '../api/files.js'
 import { markLines } from '../api/lines.js'
 import { createNote } from '../api/notes.js'
-import { SSEClient } from '../api/events.js'
+import { sseClient } from '../api/events.js'
 import LineRow from './LineRow.vue'
 import CreateNoteModal from './CreateNoteModal.vue'
 import IssuePickerModal from './IssuePickerModal.vue'
@@ -120,7 +119,6 @@ export default {
       pendingNote: null,
       loading: false,
       error: null,
-      sseStatus: 'disconnected',
     }
   },
   computed: {
@@ -168,20 +166,12 @@ export default {
     this._mouseUpHandler = this.onDocMouseUp.bind(this)
     document.addEventListener('mouseup', this._mouseUpHandler)
 
-    this._sse = new SSEClient(this.sessionId)
-    this._sse.on('status', ({ status }) => {
-      this.sseStatus = status
-    })
-    this._sse.on('file_changed', (data) => {
+    this._sseUnsub = sseClient.on('file_changed', async (data) => {
       if (data.rel_path === this.filePath) {
-        this.loadFile(this.filePath).then(() => {
-          this.$emit('file-reloaded')
-        })
-      } else {
-        this.$emit('file-reloaded')
+        await this.loadFile(this.filePath)
       }
+      this.$emit('file-reloaded')
     })
-    this._sse.connect()
 
     if (this.filePath) {
       this.loadFile(this.filePath)
@@ -190,7 +180,7 @@ export default {
   beforeUnmount() {
     document.removeEventListener('keydown', this._keyHandler)
     document.removeEventListener('mouseup', this._mouseUpHandler)
-    if (this._sse) this._sse.disconnect()
+    this._sseUnsub?.()
   },
   methods: {
     async loadFile(path) {
@@ -532,20 +522,6 @@ export default {
 </script>
 
 <style scoped>
-.sse-indicator {
-  position: absolute;
-  top: 6px;
-  right: 8px;
-  font-size: 10px;
-  line-height: 1;
-  pointer-events: none;
-}
-
-.sse-connected    { color: var(--status-success); }
-.sse-connecting   { color: var(--status-warning); }
-.sse-disconnected { color: var(--status-error); }
-.sse-shutdown     { color: var(--text-faint); }
-
 .no-file {
   padding: 40px;
   color: var(--text-faint);

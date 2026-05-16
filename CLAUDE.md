@@ -38,7 +38,7 @@ Auditview is a line-level code review/audit tool: a Quart (async) JSON API backe
 
 **SSE for real-time** - no WebSockets. `WatcherService` holds one `asyncio.Queue` per connected client; `events.py` yields from the queue with a 15-second heartbeat. Client→server is always plain HTTP (mark, note actions).
 
-**Vue Options API only** - Composition API is intentionally not used. Keep all new components in Options API style.
+**Vue Options API for components (personal preference)** - keep all new `.vue` components in Options API style. Composition API may be mixed in non-component modules (e.g. `ui/src/api/events.js` exposes `sseClient.status` as a `ref()`) when it yields a more elegant architecture — for example, a singleton service whose reactive state is consumed by components via a computed.
 
 **`WatcherService` uses asyncio.Queue for thread→async bridging** - watchdog runs file observer threads that post paths via `loop.call_soon_threadsafe`. An async worker task consumes and does all DB work. Each operation opens its own short-lived aiosqlite connection.
 
