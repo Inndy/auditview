@@ -24,9 +24,3 @@ def is_countable_line(line, ext, skip_comments=True):
             if re.match(pattern, line):
                 return False
     return True
-
-
-def compute_coverage(lines, ext, skip_comments=True):
-    countable = sum(1 for l in lines if is_countable_line(l, ext, skip_comments))
-    reviewed = sum(1 for l in lines if l.get("is_reviewed") and is_countable_line(l["content"], ext, skip_comments))
-    return countable, reviewed
