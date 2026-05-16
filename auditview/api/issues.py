@@ -139,14 +139,17 @@ async def delete_issue(session_id, issue_id):
                 "UPDATE notes SET issue_id = NULL WHERE issue_id = ? AND session_id = ?",
                 (issue_id, session_id),
             )
-            await conn.execute(
+            cur = await conn.execute(
                 "DELETE FROM issues WHERE id = ? AND session_id = ?",
                 (issue_id, session_id),
             )
+            deleted = cur.rowcount
             await conn.execute("COMMIT")
         except Exception:
             await conn.execute("ROLLBACK")
             raise
+    if not deleted:
+        return jsonify({"error": "issue not found"}), 404
     return jsonify({"deleted": True})
 
 
