@@ -3,6 +3,7 @@ import os
 
 from auditview.core.hashing import line_hash, context_hash
 from auditview.core.coverage import is_countable_line
+from auditview.core.io_utils import read_file_lines
 
 
 def build_line_map(old_lines, new_lines):
@@ -131,8 +132,7 @@ async def _reconcile_notes(conn, session_id, file_path, new_lines, new_line_hash
 async def reconcile_file(conn, session_id, file_path, root_path):
     full_path = os.path.join(root_path, file_path)
     try:
-        with open(full_path, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read()
+        new_lines = await read_file_lines(full_path)
     except FileNotFoundError:
         await conn.execute("BEGIN")
         try:
@@ -153,7 +153,6 @@ async def reconcile_file(conn, session_id, file_path, root_path):
             await conn.execute("ROLLBACK")
         return
 
-    new_lines = content.splitlines()
     new_line_hashes = [line_hash(l) for l in new_lines]
 
     cur = await conn.execute(

@@ -4,6 +4,7 @@ from auditview.db.connection import open_db
 from auditview.core.hashing import line_hash, context_hash
 from auditview.core.coverage import is_countable_line
 from auditview.core.reconciler import reconcile_file
+from auditview.core.io_utils import read_file_lines
 from auditview.api.util import safe_path
 
 bp = Blueprint("files", __name__)
@@ -75,8 +76,8 @@ async def list_files(session_id):
             countable = 0
             if os.path.isfile(full_path):
                 try:
-                    with open(full_path, "r", encoding="utf-8", errors="replace") as f:
-                        countable = sum(1 for l in f.read().splitlines() if is_countable_line(l, ext))
+                    lines = await read_file_lines(full_path)
+                    countable = sum(1 for l in lines if is_countable_line(l, ext))
                 except OSError:
                     pass
             await conn.execute(
@@ -162,9 +163,7 @@ async def get_file(session_id, fpath):
         skip_comments = request.args.get("skip_comments", "1") != "0"
         ext = os.path.splitext(fpath)[1].lower()
 
-        with open(full_path, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read()
-        lines = content.splitlines()
+        lines = await read_file_lines(full_path)
 
         cur = await conn.execute(
             "SELECT line_hash, context_hash FROM reviewed_lines WHERE session_id = ? AND file_path = ?",

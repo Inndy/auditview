@@ -2,6 +2,7 @@ import os
 from quart import Blueprint, request, jsonify, current_app
 from auditview.db.connection import open_db
 from auditview.core.hashing import line_hash
+from auditview.core.io_utils import read_file_lines
 from auditview.api.util import safe_path
 
 bp = Blueprint("notes", __name__)
@@ -74,8 +75,7 @@ async def create_note(session_id):
         if not os.path.isfile(full_path):
             return jsonify({"error": "File not found"}), 404
 
-        with open(full_path, "r", encoding="utf-8", errors="replace") as f:
-            file_lines = f.read().splitlines()
+        file_lines = await read_file_lines(full_path)
 
         if start_line > len(file_lines) or end_line > len(file_lines):
             return jsonify({"error": "line range out of bounds"}), 400

@@ -3,6 +3,7 @@ from quart import Blueprint, request, jsonify, current_app
 from auditview.db.connection import open_db
 from auditview.core.hashing import line_hash, context_hash
 from auditview.core.coverage import is_countable_line
+from auditview.core.io_utils import read_file_lines
 from auditview.api.util import safe_path
 
 bp = Blueprint("lines", __name__)
@@ -37,8 +38,7 @@ async def mark_lines(session_id):
 
         ext = os.path.splitext(file_path)[1].lower()
         try:
-            with open(full_path, "r", encoding="utf-8", errors="replace") as f:
-                file_lines = f.read().splitlines()
+            file_lines = await read_file_lines(full_path)
         except OSError:
             return jsonify({"error": "Could not read file"}), 500
 
