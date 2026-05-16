@@ -24,6 +24,7 @@
         @skip-comments-change="skipComments = $event"
         @wrap-lines-change="setWrapLines($event)"
         @show-help="showHelp = true"
+        @coverage-refreshed="coverage = $event"
       />
       <KeyboardHelpModal :visible="showHelp" @close="showHelp = false" />
     </template>

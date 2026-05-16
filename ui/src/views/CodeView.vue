@@ -61,7 +61,7 @@ export default {
     skipComments: Boolean,
     wrapLines: Boolean,
   },
-  emits: ['skip-comments-change', 'wrap-lines-change', 'show-help'],
+  emits: ['skip-comments-change', 'wrap-lines-change', 'show-help', 'coverage-refreshed'],
   data() {
     return {
       id: this.$route.params.id,
@@ -101,8 +101,8 @@ export default {
     },
     async refreshCoverage() {
       try {
-        this.coverage = await getCoverage(this.id)
-      } catch { }
+        this.$emit('coverage-refreshed', await getCoverage(this.id))
+      } catch { /* non-critical, stale coverage is acceptable */ }
     },
     onFileReloaded() {
       this.$refs.fileTree?.refresh()
