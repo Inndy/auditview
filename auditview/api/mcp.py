@@ -13,18 +13,23 @@ active, stop and tell the user to open the auditview web UI and activate a sessi
 
 ## Workflow
 1. `check_context` — confirm session and root path
-2. `list_issues` — see existing open issues (default: open)
+2. `list_issues` — see existing issues. When fixing issues, pass
+   `status="open"` to skip already resolved/dismissed ones. Omit `status`
+   only when auditing history or looking for past decisions.
 3. `list_notes` — browse existing notes/TODOs, optionally filtered by file;
    pass include_context=true to include the current code snippet (or original
    snapshot for orphaned notes)
 4. `create_note` — attach a note or TODO to a line range in a file
 5. `create_issue` — open a new issue (severity: P0=critical, P1=high, P2=medium)
-6. `update_issue` — change title, severity, or status (open/resolved/dismissed)
+6. `update_issue` — change title, severity, or status. Mark an issue
+   `resolved` once its fix lands, or `dismissed` if it turns out to be a
+   non-issue, so future `list_issues(status="open")` calls stay focused.
 
 ## Rules
 - Always use relative file paths (relative to root_path)
 - Notes must reference real line ranges in the file you are reviewing
 - Prefer attaching notes to an existing issue via issue_id over creating duplicates
+- Default to `list_issues(status="open")` when picking work to fix
 """.strip()
 
 mcp = FastMCP("auditview", instructions=_INSTRUCTIONS, stateless_http=True)
@@ -196,19 +201,35 @@ async def create_note(
     return f"Created {kind} #{data['id']} on {data['file_path']}:{data['start_line']}-{data['end_line']}"
 
 
+_VALID_ISSUE_STATUSES = ("open", "resolved", "dismissed")
+
+
 @mcp.tool()
 async def list_issues(status: Optional[str] = None) -> str:
     """List issues in the active audit session.
 
+    When you are actively fixing issues, pass status="open" — this hides
+    already resolved or dismissed items so you do not re-do completed work.
+    Omit status only when you need the full history (e.g. auditing past
+    decisions or rediscovering a dismissed report).
+
     Args:
-        status: Filter by status — 'open', 'resolved', or 'dismissed' (omit for all)
+        status: Filter by status — 'open', 'resolved', or 'dismissed'.
+            Omit for all. Recommended: 'open' when iterating on fixes.
     """
+    if status is not None and status not in _VALID_ISSUE_STATUSES:
+        raise ValueError(
+            f"status must be one of {_VALID_ISSUE_STATUSES} or omitted"
+        )
     api = await _session_api()
     path = "/issues" + (f"?status={status}" if status else "")
     issues = await api.get(path)
     if not issues:
-        return "No issues found."
-    return "\n".join(f"[#{i['id']}] [{i['severity']}] [{i['status']}] {i['title']}" for i in issues)
+        scope = f" with status={status}" if status else ""
+        return f"No issues found{scope}."
+    header = f"Showing issues with status={status}" if status else "Showing all issues (any status)"
+    body = "\n".join(f"[#{i['id']}] [{i['severity']}] [{i['status']}] {i['title']}" for i in issues)
+    return f"{header}\n{body}"
 
 
 @mcp.tool()
