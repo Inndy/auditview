@@ -4,6 +4,7 @@ from auditview.db.connection import open_db
 from auditview.core.hashing import line_hash, context_hash
 from auditview.core.coverage import is_countable_line
 from auditview.core.io_utils import read_file_lines
+from auditview.core.reconciler import ensure_snapshot
 from auditview.api.util import safe_path
 
 bp = Blueprint("lines", __name__)
@@ -91,6 +92,9 @@ async def mark_lines(session_id):
         except Exception:
             await conn.execute("ROLLBACK")
             raise
+
+        if reviewed and accepted:
+            await ensure_snapshot(conn, session_id, file_path, root_path)
 
     return jsonify({
         "updated": len(accepted),

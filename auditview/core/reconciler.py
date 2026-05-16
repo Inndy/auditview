@@ -129,6 +129,52 @@ async def _reconcile_notes(conn, session_id, file_path, new_lines, new_line_hash
                 await conn.execute("UPDATE notes SET is_orphaned = 1 WHERE id = ?", (note_id,))
 
 
+async def _has_migration_state(conn, session_id, file_path):
+    cur = await conn.execute(
+        "SELECT "
+        "  EXISTS(SELECT 1 FROM reviewed_lines WHERE session_id = ? AND file_path = ?) "
+        "  OR EXISTS(SELECT 1 FROM notes WHERE session_id = ? AND file_path = ? AND is_orphaned = 0) "
+        "  AS has_state",
+        (session_id, file_path, session_id, file_path),
+    )
+    row = await cur.fetchone()
+    return bool(row["has_state"])
+
+
+async def ensure_snapshot(conn, session_id, file_path, root_path):
+    """Populate prev_line_hashes for a file if not yet stored.
+
+    Call when reviewed lines or notes are first attached to a file so the next
+    reconcile can run line-map migration instead of context-hash fallback.
+    """
+    cur = await conn.execute(
+        "SELECT prev_line_hashes FROM files WHERE session_id = ? AND rel_path = ?",
+        (session_id, file_path),
+    )
+    row = await cur.fetchone()
+    if row is not None and row["prev_line_hashes"]:
+        return
+
+    full_path = os.path.join(root_path, file_path)
+    try:
+        lines = await read_file_lines(full_path)
+    except (FileNotFoundError, OSError):
+        return
+
+    new_phashes = "\n".join(line_hash(l) for l in lines)
+    mtime = os.path.getmtime(full_path)
+    ext = os.path.splitext(file_path)[1].lower()
+    countable = sum(1 for l in lines if is_countable_line(l, ext))
+    await conn.execute(
+        "INSERT INTO files (session_id, rel_path, last_mtime, prev_line_hashes, countable_lines) "
+        "VALUES (?, ?, ?, ?, ?) "
+        "ON CONFLICT(session_id, rel_path) DO UPDATE SET "
+        "last_mtime=excluded.last_mtime, prev_line_hashes=excluded.prev_line_hashes, "
+        "countable_lines=excluded.countable_lines",
+        (session_id, file_path, mtime, new_phashes, countable),
+    )
+
+
 async def reconcile_file(conn, session_id, file_path, root_path):
     full_path = os.path.join(root_path, file_path)
     try:
@@ -153,10 +199,31 @@ async def reconcile_file(conn, session_id, file_path, root_path):
             await conn.execute("ROLLBACK")
         return
 
+    ext = os.path.splitext(file_path)[1].lower()
+    mtime = os.path.getmtime(full_path)
+    countable = sum(1 for l in new_lines if is_countable_line(l, ext))
+
+    has_state = await _has_migration_state(conn, session_id, file_path)
+
+    if not has_state:
+        # No reviewed lines or live notes to migrate. Skip per-line hashing,
+        # SequenceMatcher, and the snapshot write — those exist solely to
+        # support migration. Just refresh mtime/countable and drop any stale
+        # snapshot from a prior version of this file.
+        await conn.execute(
+            "INSERT INTO files (session_id, rel_path, last_mtime, prev_line_hashes, countable_lines) "
+            "VALUES (?, ?, ?, NULL, ?) "
+            "ON CONFLICT(session_id, rel_path) DO UPDATE SET "
+            "last_mtime=excluded.last_mtime, prev_line_hashes=NULL, "
+            "countable_lines=excluded.countable_lines",
+            (session_id, file_path, mtime, countable),
+        )
+        return
+
     new_line_hashes = [line_hash(l) for l in new_lines]
 
     cur = await conn.execute(
-        "SELECT last_mtime, prev_line_hashes FROM files WHERE session_id = ? AND rel_path = ?",
+        "SELECT prev_line_hashes FROM files WHERE session_id = ? AND rel_path = ?",
         (session_id, file_path),
     )
     file_row = await cur.fetchone()
@@ -181,10 +248,7 @@ async def reconcile_file(conn, session_id, file_path, root_path):
         await _reconcile_reviewed(conn, rows, new_lines, new_line_hashes, line_map)
         await _reconcile_notes(conn, session_id, file_path, new_lines, new_line_hashes, line_map)
 
-        mtime = os.path.getmtime(full_path)
         new_phashes = "\n".join(new_line_hashes)
-        ext = os.path.splitext(file_path)[1].lower()
-        countable = sum(1 for l in new_lines if is_countable_line(l, ext))
         await conn.execute(
             "INSERT INTO files (session_id, rel_path, last_mtime, prev_line_hashes, countable_lines) "
             "VALUES (?, ?, ?, ?, ?) "

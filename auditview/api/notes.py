@@ -3,6 +3,7 @@ from quart import Blueprint, request, jsonify, current_app
 from auditview.db.connection import open_db
 from auditview.core.hashing import line_hash
 from auditview.core.io_utils import read_file_lines
+from auditview.core.reconciler import ensure_snapshot
 from auditview.api.util import safe_path
 
 bp = Blueprint("notes", __name__)
@@ -99,6 +100,7 @@ async def create_note(session_id):
             (session_id, file_path, start_line, end_line, start_hash, end_hash, snapshot_text, content, int(is_todo), issue_id),
         )
         row_id = cur.lastrowid
+        await ensure_snapshot(conn, session_id, file_path, root_path)
         cur = await conn.execute(
             "SELECT id, file_path, start_line, end_line, content, is_todo, is_orphaned, snapshot_text, created_at, issue_id "
             "FROM notes WHERE id = ?",
