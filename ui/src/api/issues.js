@@ -5,10 +5,10 @@ export function listIssues(sessionId, status = null) {
   return apiFetch(url)
 }
 
-export function createIssue(sessionId, title, severity = 'P2') {
+export function createIssue(sessionId, title, severity = 'P2', noteIds = []) {
   return apiFetch(`/api/sessions/${sessionId}/issues`, {
     method: 'POST',
-    body: JSON.stringify({ title, severity }),
+    body: JSON.stringify({ title, severity, note_ids: noteIds }),
   })
 }
 

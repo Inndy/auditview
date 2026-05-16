@@ -29,22 +29,51 @@ async def create_issue(session_id):
     data = await request.get_json(force=True, silent=True) or {}
     title = data.get("title", "").strip()
     severity = data.get("severity", "P2")
+    note_ids = data.get("note_ids", [])
 
     if not title:
         return jsonify({"error": "title is required"}), 400
     if severity not in ("P0", "P1", "P2"):
         return jsonify({"error": "severity must be P0, P1, or P2"}), 400
+    if not isinstance(note_ids, list) or not all(isinstance(n, int) for n in note_ids):
+        return jsonify({"error": "note_ids must be an array of integers"}), 400
 
     async with open_db(current_app.config["DB_PATH"]) as conn:
         cur = await conn.execute("SELECT id FROM sessions WHERE id = ?", (session_id,))
         if await cur.fetchone() is None:
             return jsonify({"error": "Session not found"}), 404
 
-        cur = await conn.execute(
-            "INSERT INTO issues (session_id, title, severity) VALUES (?, ?, ?)",
-            (session_id, title, severity),
-        )
-        row_id = cur.lastrowid
+        if note_ids:
+            placeholders = ",".join("?" * len(note_ids))
+            cur = await conn.execute(
+                f"SELECT id FROM notes WHERE session_id = ? AND id IN ({placeholders})",
+                (session_id, *note_ids),
+            )
+            found = {r["id"] for r in await cur.fetchall()}
+            missing = [n for n in note_ids if n not in found]
+            if missing:
+                return jsonify({
+                    "error": "some note_ids do not exist in this session",
+                    "missing": missing,
+                }), 400
+
+        await conn.execute("BEGIN")
+        try:
+            cur = await conn.execute(
+                "INSERT INTO issues (session_id, title, severity) VALUES (?, ?, ?)",
+                (session_id, title, severity),
+            )
+            row_id = cur.lastrowid
+            if note_ids:
+                await conn.executemany(
+                    "UPDATE notes SET issue_id = ? WHERE id = ? AND session_id = ?",
+                    [(row_id, nid, session_id) for nid in note_ids],
+                )
+            await conn.execute("COMMIT")
+        except Exception:
+            await conn.execute("ROLLBACK")
+            raise
+
         cur = await conn.execute(
             "SELECT id, session_id, title, severity, status, created_at FROM issues WHERE id = ?",
             (row_id,),

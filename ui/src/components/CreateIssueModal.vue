@@ -42,7 +42,7 @@
 </template>
 
 <script>
-import { createIssue, attachNoteToIssue } from '../api/issues.js'
+import { createIssue } from '../api/issues.js'
 
 export default {
   name: 'CreateIssueModal',
@@ -66,12 +66,12 @@ export default {
       this.creating = true
       this.error = null
       try {
-        const issue = await createIssue(this.sessionId, this.title.trim(), this.severity)
-
-        for (const noteId of this.selectedNoteIds) {
-          await attachNoteToIssue(this.sessionId, noteId, issue.id)
-        }
-
+        const issue = await createIssue(
+          this.sessionId,
+          this.title.trim(),
+          this.severity,
+          this.selectedNoteIds,
+        )
         this.$emit('created', issue)
       } catch (e) {
         this.error = e.message
