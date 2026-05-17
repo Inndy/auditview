@@ -78,7 +78,8 @@ List all tracked files with per-file coverage and counts.
     "status": "partial",
     "notes_count": 2,
     "todos_count": 1,
-    "max_severity": "P1"
+    "max_severity": "P1",
+    "open_issue_count": 3
   }
 ]
 ```
@@ -90,6 +91,9 @@ List all tracked files with per-file coverage and counts.
 - `max_severity` is `"P0"` | `"P1"` | `"P2"` | `null` — the highest severity among
   **open** issues attached to any live note in this file. `null` when no open
   issues touch the file. Resolved/dismissed issues are excluded.
+- `open_issue_count` is the number of **distinct open** issues attached to any
+  live note in this file (`0` when none). Resolved/dismissed issues are excluded.
+  An issue with multiple notes in the same file is counted once.
 - Files are sorted by `rel_path` ascending
 
 **Errors**
