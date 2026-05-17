@@ -121,6 +121,21 @@ async def _build_file_list_response(conn, session_id):
     )
     notes_map = {r["file_path"]: (r["notes_cnt"] or 0, r["todos_cnt"] or 0) for r in await cur.fetchall()}
 
+    cur = await conn.execute(
+        "SELECT n.file_path, "
+        "MIN(CASE i.severity WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 END) AS sev_rank "
+        "FROM notes n JOIN issues i ON n.issue_id = i.id AND i.session_id = n.session_id "
+        "WHERE n.session_id = ? AND n.is_orphaned = 0 AND i.status = 'open' "
+        "GROUP BY n.file_path",
+        (session_id,),
+    )
+    _rank_to_sev = {0: "P0", 1: "P1", 2: "P2"}
+    severity_map = {
+        r["file_path"]: _rank_to_sev.get(r["sev_rank"])
+        for r in await cur.fetchall()
+        if r["sev_rank"] is not None
+    }
+
     result = []
     for rel_path, countable_raw in countable_map.items():
         countable = countable_raw or 0
@@ -145,6 +160,7 @@ async def _build_file_list_response(conn, session_id):
             "status": status,
             "notes_count": notes_c,
             "todos_count": todos_c,
+            "max_severity": severity_map.get(rel_path),
         })
     return result
 

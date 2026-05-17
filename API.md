@@ -77,7 +77,8 @@ List all tracked files with per-file coverage and counts.
     "coverage": 0.375,
     "status": "partial",
     "notes_count": 2,
-    "todos_count": 1
+    "todos_count": 1,
+    "max_severity": "P1"
   }
 ]
 ```
@@ -86,6 +87,9 @@ List all tracked files with per-file coverage and counts.
   `"partial"` (some reviewed), `"reviewed"` (all countable lines reviewed)
 - `reviewed_lines` is clamped to `countable_lines` so stale rows can't push it above 100%
 - `notes_count` / `todos_count` count only **live** (non-orphaned) notes
+- `max_severity` is `"P0"` | `"P1"` | `"P2"` | `null` — the highest severity among
+  **open** issues attached to any live note in this file. `null` when no open
+  issues touch the file. Resolved/dismissed issues are excluded.
 - Files are sorted by `rel_path` ascending
 
 **Errors**

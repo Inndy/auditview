@@ -7,6 +7,12 @@
     >
       <span class="tree-icon">{{ node.isFile ? '📄' : (expanded ? '📂' : '📁') }}</span>
       <span class="tree-name">{{ node.name }}</span>
+      <span
+        v-if="node.maxSeverity"
+        class="sev-badge"
+        :class="'sev-' + node.maxSeverity"
+        :title="severityTitle"
+      >{{ node.maxSeverity }}</span>
       <template v-if="node.isFile && node.fileData">
         <span v-if="node.fileData.todos_count" class="badge-todo-count" title="TODOs">{{ node.fileData.todos_count }}</span>
         <span v-if="node.fileData.notes_count" class="badge-note-count" title="Notes">{{ node.fileData.notes_count }}</span>
@@ -51,6 +57,12 @@ export default {
       if (s === 'not_viewed') return 'Not viewed'
       if (s === 'empty') return 'Empty file'
       return 'No countable lines'
+    },
+    severityTitle() {
+      const sev = this.node.maxSeverity
+      if (!sev) return ''
+      const scope = this.node.isFile ? 'open issue in this file' : 'open issue under this folder'
+      return `Highest severity ${scope}: ${sev}`
     },
   },
   methods: {
@@ -131,4 +143,19 @@ export default {
   color: var(--text-muted);
   border: 1px solid var(--border);
 }
+
+.sev-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 0 4px;
+  border-radius: 3px;
+  color: white;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+.sev-P0 { background: var(--severity-p0); }
+.sev-P1 { background: var(--severity-p1); }
+.sev-P2 { background: var(--severity-p2); }
 </style>

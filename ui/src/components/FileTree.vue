@@ -44,13 +44,31 @@ function buildTree(files) {
           children: isFile ? null : [],
           fileData: isFile ? f : null,
           path: parts.slice(0, i + 1).join('/'),
+          maxSeverity: null,
         }
         nodes.push(existing)
       }
       if (!isFile) nodes = existing.children
     }
   }
+  for (const node of root) rollupSeverity(node)
   return root
+}
+
+const SEV_RANK = { P0: 0, P1: 1, P2: 2 }
+
+function rollupSeverity(node) {
+  if (node.isFile) {
+    node.maxSeverity = node.fileData?.max_severity ?? null
+    return node.maxSeverity
+  }
+  let best = null
+  for (const child of node.children || []) {
+    const sev = rollupSeverity(child)
+    if (sev && (!best || SEV_RANK[sev] < SEV_RANK[best])) best = sev
+  }
+  node.maxSeverity = best
+  return best
 }
 
 export default {
