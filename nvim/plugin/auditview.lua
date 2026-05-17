@@ -60,6 +60,7 @@ vim.api.nvim_create_user_command("AuditviewTodo", function(opts)
 end, { range = true, nargs = "?" })
 
 vim.api.nvim_create_user_command("AuditviewNoteShow", auditview.note_show, {})
+vim.api.nvim_create_user_command("AuditviewNoteDetail", auditview.note_detail, {})
 vim.api.nvim_create_user_command("AuditviewNoteDelete", auditview.note_delete, {})
 vim.api.nvim_create_user_command("AuditviewNotes", function(opts)
   auditview.notes_list(opts.bang)
@@ -123,6 +124,10 @@ if config.options.auto_keymaps then
   if km.note_show and km.note_show ~= "" then
     vim.keymap.set("n", km.note_show, auditview.note_show,
       { desc = "auditview: show note at cursor" })
+  end
+  if km.note_detail and km.note_detail ~= "" then
+    vim.keymap.set("n", km.note_detail, auditview.note_detail,
+      { desc = "auditview: open note detail view" })
   end
   if km.note_delete and km.note_delete ~= "" then
     vim.keymap.set("n", km.note_delete, auditview.note_delete,

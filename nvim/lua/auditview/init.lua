@@ -21,6 +21,7 @@ function M.todo(content) notes.add_current(true, content) end
 function M.note_visual(content) notes.add_visual(false, content) end
 function M.todo_visual(content) notes.add_visual(true, content) end
 function M.note_show() notes.show_at_cursor() end
+function M.note_detail() notes.detail_at_cursor() end
 function M.note_delete() notes.delete_at_cursor() end
 function M.notes_list(bang)
   if bang then notes.list_all() else notes.list_in_buffer() end

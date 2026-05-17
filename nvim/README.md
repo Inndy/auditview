@@ -23,7 +23,7 @@ stays the single source of truth; the web UI sees nvim's marks live via SSE.
     "AuditviewMark", "AuditviewUnmark", "AuditviewProgress",
     "AuditviewRefresh", "AuditviewSessionReset",
     "AuditviewNote", "AuditviewTodo", "AuditviewNotes",
-    "AuditviewNoteShow", "AuditviewNoteDelete",
+    "AuditviewNoteShow", "AuditviewNoteDetail", "AuditviewNoteDelete",
     "AuditviewNextUnreviewed", "AuditviewPrevUnreviewed",
   },
   keys = {
@@ -77,6 +77,7 @@ explicitly will still prompt you to pick from all sessions on the server.
 | Normal  | `<leader>at` | add TODO on current line        |
 | Visual  | `<leader>at` | add TODO on selected range      |
 | Normal  | `<leader>aN` | show note(s) at cursor (popup)  |
+| Normal  | `<leader>ao` | open note detail view (focusable) |
 | Normal  | `<leader>aD` | delete note at cursor           |
 | Normal  | `<leader>al` | quickfix list notes in buffer   |
 | Normal  | `]r`         | jump to next unreviewed chunk   |
@@ -101,6 +102,7 @@ set a key to `""` to skip just that one.
 | `:AuditviewNotes`        | quickfix list of notes in current file                |
 | `:AuditviewNotes!`       | quickfix list of all notes in the session             |
 | `:AuditviewNoteShow`     | floating preview of note(s) covering the cursor       |
+| `:AuditviewNoteDetail`   | focusable detail window (prompt if multiple overlap)  |
 | `:AuditviewNoteDelete`   | delete note at cursor (prompt if multiple overlap)    |
 | `:AuditviewNextUnreviewed` | jump to next unreviewed chunk (accepts a count)     |
 | `:AuditviewPrevUnreviewed` | jump to previous unreviewed chunk (accepts a count) |
@@ -144,6 +146,7 @@ require("auditview").setup({
     note = "<leader>an",
     todo = "<leader>at",
     note_show = "<leader>aN",
+    note_detail = "<leader>ao",
     note_delete = "<leader>aD",
     notes_list = "<leader>al",
     next_unreviewed = "]r",

@@ -28,6 +28,7 @@ M.defaults = {
     note = "<leader>an",
     todo = "<leader>at",
     note_show = "<leader>aN",
+    note_detail = "<leader>ao",
     note_delete = "<leader>aD",
     notes_list = "<leader>al",
     next_unreviewed = "]r",

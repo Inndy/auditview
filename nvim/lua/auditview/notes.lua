@@ -125,6 +125,105 @@ function M.show_at_cursor(opts)
   })
 end
 
+local function present(v)
+  if v == nil or v == vim.NIL then return nil end
+  return v
+end
+
+local function open_detail_window(note)
+  local lines = {}
+  local tag = note.is_todo and "TODO" or "NOTE"
+  if note.is_orphaned then tag = tag .. " · ORPHANED" end
+  table.insert(lines, string.format("# %s #%d", tag, note.id))
+  if note.start_line == note.end_line then
+    table.insert(lines, string.format("Line:    %d", note.start_line))
+  else
+    table.insert(lines, string.format("Lines:   %d-%d", note.start_line, note.end_line))
+  end
+  local created_at = present(note.created_at)
+  if created_at then
+    table.insert(lines, "Created: " .. created_at)
+  end
+  local issue_id = present(note.issue_id)
+  if issue_id then
+    local severity = present(note.issue_severity)
+    local sev = severity and (" [" .. severity .. "]") or ""
+    table.insert(lines, string.format("Issue:   #%d%s", issue_id, sev))
+  end
+  table.insert(lines, "")
+  for _, content_line in ipairs(vim.split(note.content or "", "\n", { plain = true })) do
+    table.insert(lines, content_line)
+  end
+  local snapshot_text = present(note.snapshot_text)
+  if note.is_orphaned and snapshot_text and snapshot_text ~= "" then
+    table.insert(lines, "")
+    table.insert(lines, "---")
+    table.insert(lines, "Anchor snapshot:")
+    for _, snap_line in ipairs(vim.split(snapshot_text, "\n", { plain = true })) do
+      table.insert(lines, "  " .. snap_line)
+    end
+  end
+
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].filetype = "markdown"
+  vim.bo[buf].modifiable = false
+  vim.bo[buf].bufhidden = "wipe"
+
+  local max_width = config.options.hover.max_width or 80
+  local width = math.min(max_width, math.max(40, vim.o.columns - 4))
+  local content_height = #lines
+  for _, l in ipairs(lines) do
+    local extra = math.floor(vim.fn.strdisplaywidth(l) / width)
+    content_height = content_height + extra
+  end
+  local height = math.min(content_height, math.floor(vim.o.lines * 0.6))
+  if height < 1 then height = 1 end
+
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "editor",
+    width = width,
+    height = height,
+    row = math.floor((vim.o.lines - height) / 2) - 1,
+    col = math.floor((vim.o.columns - width) / 2),
+    border = config.options.hover.border or "rounded",
+    title = " Note Detail ",
+    title_pos = "center",
+    style = "minimal",
+  })
+  vim.wo[win].wrap = true
+  vim.wo[win].linebreak = true
+  vim.wo[win].conceallevel = 2
+
+  local function close()
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end
+  vim.keymap.set("n", "q", close, { buffer = buf, nowait = true, silent = true })
+  vim.keymap.set("n", "<Esc>", close, { buffer = buf, nowait = true, silent = true })
+end
+
+function M.detail_at_cursor()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local ln = vim.api.nvim_win_get_cursor(0)[1]
+  local hits = buffer.notes_at_line(bufnr, ln)
+  if #hits == 0 then
+    vim.notify("auditview: no note at line " .. ln, vim.log.levels.WARN)
+    return
+  end
+  if #hits == 1 then
+    open_detail_window(hits[1])
+    return
+  end
+  vim.ui.select(hits, {
+    prompt = "auditview: open detail of which note?",
+    format_item = format_note_line,
+  }, function(picked)
+    if picked then open_detail_window(picked) end
+  end)
+end
+
 function M.delete_at_cursor()
   local bufnr = vim.api.nvim_get_current_buf()
   local ln = vim.api.nvim_win_get_cursor(0)[1]
