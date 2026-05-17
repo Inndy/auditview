@@ -78,11 +78,11 @@
               @blur="saveDescription"
               @keydown.esc="cancelEditDescription"
             ></textarea>
-            <div
+            <MarkdownView
               v-else-if="selectedIssue.description"
-              class="description-rendered markdown-body"
-              v-html="renderedDescription"
-            ></div>
+              class="description-rendered"
+              :source="selectedIssue.description"
+            />
             <div
               v-else
               class="description-empty"
@@ -173,8 +173,8 @@
 <script>
 import { listIssues, updateIssue as apiUpdateIssue, deleteIssue as apiDeleteIssue, getIssueNotes } from '../api/issues.js'
 import { listNotes } from '../api/notes.js'
-import { renderMarkdown } from '../markdown.js'
 import CreateIssueModal from '../components/CreateIssueModal.vue'
+import MarkdownView from '../components/MarkdownView.vue'
 
 const FILTER_OPTIONS = [
   { value: 'all', label: 'all' },
@@ -185,7 +185,7 @@ const FILTER_OPTIONS = [
 
 export default {
   name: 'IssuesView',
-  components: { CreateIssueModal },
+  components: { CreateIssueModal, MarkdownView },
   props: {
     session: Object,
   },
@@ -221,9 +221,6 @@ export default {
     },
     closeRoute() {
       return { path: `/sessions/${this.session.id}/issues`, query: { status: this.statusFilter } }
-    },
-    renderedDescription() {
-      return renderMarkdown(this.selectedIssue?.description || '')
     },
   },
   mounted() {
@@ -642,10 +639,6 @@ export default {
   border: 1px solid var(--border-light);
   border-radius: 4px;
   background: var(--bg-base);
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--text);
-  overflow-wrap: break-word;
 }
 
 .description-empty {
@@ -661,69 +654,6 @@ export default {
 
 .description-empty:hover {
   background: var(--bg-hover);
-}
-
-.markdown-body :first-child { margin-top: 0; }
-.markdown-body :last-child { margin-bottom: 0; }
-.markdown-body p { margin: 0 0 8px 0; }
-.markdown-body h1,
-.markdown-body h2,
-.markdown-body h3,
-.markdown-body h4 {
-  margin: 12px 0 6px 0;
-  font-weight: 600;
-}
-.markdown-body h1 { font-size: 15px; }
-.markdown-body h2 { font-size: 14px; }
-.markdown-body h3,
-.markdown-body h4 { font-size: 13px; }
-.markdown-body ul,
-.markdown-body ol {
-  margin: 0 0 8px 0;
-  padding-left: 22px;
-}
-.markdown-body li { margin: 2px 0; }
-.markdown-body code {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 12px;
-  background: var(--bg-hover);
-  padding: 1px 4px;
-  border-radius: 3px;
-}
-.markdown-body pre {
-  background: var(--bg-hover);
-  padding: 8px 10px;
-  border-radius: 4px;
-  overflow-x: auto;
-  margin: 0 0 8px 0;
-}
-.markdown-body pre code {
-  background: transparent;
-  padding: 0;
-}
-.markdown-body blockquote {
-  margin: 0 0 8px 0;
-  padding: 0 8px;
-  border-left: 3px solid var(--border);
-  color: var(--text-muted);
-}
-.markdown-body a {
-  color: var(--primary);
-}
-.markdown-body table {
-  border-collapse: collapse;
-  margin: 0 0 8px 0;
-}
-.markdown-body th,
-.markdown-body td {
-  border: 1px solid var(--border);
-  padding: 4px 8px;
-  font-size: 12px;
-}
-.markdown-body hr {
-  border: none;
-  border-top: 1px solid var(--border);
-  margin: 12px 0;
 }
 
 .status-actions {
