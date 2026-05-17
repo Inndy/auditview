@@ -2,21 +2,48 @@
   <div class="file-tree-sidebar">
     <div class="file-tree-header">
       <strong>Files</strong>
-      <label class="hide-reviewed-label">
+      <div class="view-toggle" role="group" aria-label="View mode">
+        <button
+          type="button"
+          class="view-btn"
+          :class="{ 'is-active': viewMode === 'tree' }"
+          title="Tree view"
+          @click="viewMode = 'tree'"
+        >📁</button>
+        <button
+          type="button"
+          class="view-btn"
+          :class="{ 'is-active': viewMode === 'flat' }"
+          title="Flat list, sorted by severity"
+          @click="viewMode = 'flat'"
+        >📋</button>
+      </div>
+      <label class="hide-reviewed-label" title="Hide reviewed or empty files">
         <input type="checkbox" v-model="hideReviewed" />
-        Hide reviewed or empty
+        Hide done
       </label>
     </div>
     <div v-if="loading" class="tree-loading">Loading…</div>
     <div v-else-if="error" class="tree-error">{{ error }}</div>
     <div v-else class="tree-root">
-      <TreeNode
-        v-for="node in tree"
-        :key="node.name"
-        :node="node"
-        :currentFile="currentFile"
-        @file-selected="onFileSelected"
-      />
+      <template v-if="viewMode === 'tree'">
+        <TreeNode
+          v-for="node in tree"
+          :key="node.name"
+          :node="node"
+          :currentFile="currentFile"
+          @file-selected="onFileSelected"
+        />
+      </template>
+      <template v-else>
+        <FileRow
+          v-for="f in flatList"
+          :key="f.rel_path"
+          :file="f"
+          :isActive="f.rel_path === currentFile"
+          @click="onFileSelected(f.rel_path)"
+        />
+      </template>
     </div>
   </div>
 </template>
@@ -26,7 +53,8 @@ import { rescanSession } from '../api/files.js'
 import { sseClient } from '../api/events.js'
 import { debounce } from '../utils/debounce.js'
 import TreeNode from './TreeNode.vue'
-import { getBoolPref, setBoolPref } from '../prefs.js'
+import FileRow from './FileRow.vue'
+import { getBoolPref, setBoolPref, getPref, setPref } from '../prefs.js'
 
 function buildTree(files) {
   const root = []
@@ -44,56 +72,45 @@ function buildTree(files) {
           children: isFile ? null : [],
           fileData: isFile ? f : null,
           path: parts.slice(0, i + 1).join('/'),
-          maxSeverity: null,
         }
         nodes.push(existing)
       }
       if (!isFile) nodes = existing.children
     }
   }
-  for (const node of root) rollupSeverity(node)
   return root
 }
 
 const SEV_RANK = { P0: 0, P1: 1, P2: 2 }
 
-function rollupSeverity(node) {
-  if (node.isFile) {
-    node.maxSeverity = node.fileData?.max_severity ?? null
-    return node.maxSeverity
-  }
-  let best = null
-  for (const child of node.children || []) {
-    const sev = rollupSeverity(child)
-    if (sev && (!best || SEV_RANK[sev] < SEV_RANK[best])) best = sev
-  }
-  node.maxSeverity = best
-  return best
-}
-
 export default {
   name: 'FileTree',
-  components: { TreeNode },
+  components: { TreeNode, FileRow },
   props: {
     sessionId: [String, Number],
     currentFile: { type: String, default: null },
   },
   emits: ['file-selected'],
   data() {
+    const savedMode = getPref('viewMode', 'tree')
     return {
       files: [],
       loading: true,
       error: null,
       hideReviewed: getBoolPref('hideReviewed'),
+      viewMode: savedMode === 'flat' ? 'flat' : 'tree',
     }
   },
   watch: {
     hideReviewed(val) {
       setBoolPref('hideReviewed', val)
     },
+    viewMode(val) {
+      setPref('viewMode', val)
+    },
     currentFile() {
       this.$nextTick(() => {
-        const el = this.$el.querySelector('.tree-active')
+        const el = this.$el.querySelector('.tree-active, .flat-active')
         el?.scrollIntoView({ block: 'nearest' })
       })
     },
@@ -106,7 +123,24 @@ export default {
     tree() {
       return buildTree(this.filteredFiles)
     },
+    flatList() {
+      const arr = [...this.filteredFiles]
+      arr.sort((a, b) => {
+        const sa = a.max_severity ? SEV_RANK[a.max_severity] : 99
+        const sb = b.max_severity ? SEV_RANK[b.max_severity] : 99
+        if (sa !== sb) return sa - sb
+        const ia = a.open_issue_count || 0
+        const ib = b.open_issue_count || 0
+        if (ia !== ib) return ib - ia
+        const aa = (a.todos_count || 0) + (a.notes_count || 0)
+        const bb = (b.todos_count || 0) + (b.notes_count || 0)
+        if (aa !== bb) return bb - aa
+        return a.rel_path.localeCompare(b.rel_path)
+      })
+      return arr
+    },
     orderedPaths() {
+      if (this.viewMode === 'flat') return this.flatList.map((f) => f.rel_path)
       const out = []
       const walk = (nodes) => {
         for (const n of nodes) {
@@ -189,6 +223,35 @@ export default {
   gap: 8px;
 }
 
+.view-toggle {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.view-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 13px;
+  line-height: 1.2;
+  cursor: pointer;
+  color: var(--text-dim);
+  filter: grayscale(1) opacity(0.55);
+}
+
+.view-btn:hover {
+  background: var(--bg-hover);
+  filter: grayscale(0) opacity(0.85);
+}
+
+.view-btn.is-active {
+  background: var(--bg-active-file);
+  border-color: var(--border);
+  filter: none;
+}
+
 .hide-reviewed-label {
   display: flex;
   align-items: center;
@@ -197,7 +260,6 @@ export default {
   font-weight: normal;
   color: var(--text-dim);
   cursor: pointer;
-  margin-left: auto;
   white-space: nowrap;
 }
 

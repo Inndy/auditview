@@ -7,13 +7,13 @@
     >
       <span class="tree-icon">{{ node.isFile ? '📄' : (expanded ? '📂' : '📁') }}</span>
       <span class="tree-name">{{ node.name }}</span>
-      <span
-        v-if="node.maxSeverity"
-        class="sev-badge"
-        :class="'sev-' + node.maxSeverity"
-        :title="severityTitle"
-      >{{ node.maxSeverity }}</span>
       <template v-if="node.isFile && node.fileData">
+        <span
+          v-if="node.fileData.max_severity"
+          class="sev-badge"
+          :class="'sev-' + node.fileData.max_severity"
+          :title="severityTitle"
+        >{{ node.fileData.max_severity }}</span>
         <span v-if="node.fileData.todos_count" class="badge-todo-count" title="TODOs">{{ node.fileData.todos_count }}</span>
         <span v-if="node.fileData.notes_count" class="badge-note-count" title="Notes">{{ node.fileData.notes_count }}</span>
         <span
@@ -59,10 +59,9 @@ export default {
       return 'No countable lines'
     },
     severityTitle() {
-      const sev = this.node.maxSeverity
+      const sev = this.node.fileData?.max_severity
       if (!sev) return ''
-      const scope = this.node.isFile ? 'open issue in this file' : 'open issue under this folder'
-      return `Highest severity ${scope}: ${sev}`
+      return `Highest severity open issue in this file: ${sev}`
     },
   },
   methods: {
