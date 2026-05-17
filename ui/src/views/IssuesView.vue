@@ -39,7 +39,15 @@
       <div v-if="selectedIssueId" class="details-panel">
         <div class="panel-header">
           <h3>Issue #{{ selectedIssueId }}</h3>
-          <router-link :to="closeRoute" class="btn btn-icon" title="Back to list">✕</router-link>
+          <div class="panel-header-actions">
+            <button
+              v-if="selectedIssueStale && !editTargetDeleted"
+              class="stale-pill"
+              title="Updated elsewhere — click to refresh"
+              @click="refreshSelected"
+            >● Updated · Refresh</button>
+            <router-link :to="closeRoute" class="btn btn-icon" title="Back to list">✕</router-link>
+          </div>
         </div>
         <div v-if="editTargetDeleted" class="deleted-banner">
           This issue was deleted in another tab.
@@ -187,6 +195,7 @@
 import { listIssues, updateIssue as apiUpdateIssue, deleteIssue as apiDeleteIssue, getIssueNotes, attachNoteToIssue } from '../api/issues.js'
 import { listNotes } from '../api/notes.js'
 import { sseClient } from '../api/events.js'
+import { recordSelfMutation, consumeSelfMutation } from '../api/selfMutations.js'
 import { debounce } from '../utils/debounce.js'
 import CreateIssueModal from '../components/CreateIssueModal.vue'
 import MarkdownView from '../components/MarkdownView.vue'
@@ -215,11 +224,11 @@ export default {
       showCreateIssueModal: false,
       filterOptions: FILTER_OPTIONS,
       titleBeforeEdit: '',
-      dirtyTitle: false,
       editingDescription: false,
       descriptionDraft: '',
       descriptionBeforeEdit: '',
       editTargetDeleted: false,
+      selectedIssueStale: false,
     }
   },
   computed: {
@@ -244,7 +253,29 @@ export default {
   mounted() {
     this.load()
     this._debouncedRefresh = debounce(() => this.refresh(), 250)
-    this._sseUnsub = sseClient.on('annotation_changed', () => this._debouncedRefresh())
+    this._sseUnsub = sseClient.on('annotation_changed', (data) => {
+      // Always (silently) refresh the list views; suppress for self-initiated
+      // when we can identify the id.
+      const selfList = data.kind && data.id != null && consumeSelfMutation(data.kind, data.id)
+      if (!selfList) this._debouncedRefresh()
+      // For the currently-selected issue, mark stale (don't replace its data).
+      if (!this.selectedIssueId) return
+      if (data.kind === 'issue') {
+        if (data.id === this.selectedIssueId && !selfList) {
+          this.selectedIssueStale = true
+        }
+      } else if (data.kind === 'note') {
+        // Note cascades (id=null) or notes belonging to other files may affect
+        // the attached-notes panel for the selected issue. Conservatively flag.
+        if (data.id == null || data.file_path == null) {
+          this.selectedIssueStale = true
+        } else {
+          // Per-note event: we don't know cheaply whether it's attached to the
+          // selected issue without re-querying, so flag conservatively.
+          this.selectedIssueStale = true
+        }
+      }
+    })
   },
   beforeUnmount() {
     this._sseUnsub?.()
@@ -253,11 +284,11 @@ export default {
   watch: {
     selectedIssueId(id) {
       this.titleBeforeEdit = ''
-      this.dirtyTitle = false
       this.editingDescription = false
       this.descriptionDraft = ''
       this.descriptionBeforeEdit = ''
       this.editTargetDeleted = false
+      this.selectedIssueStale = false
       if (id) {
         this.loadIssueNotes(id)
       } else {
@@ -286,33 +317,44 @@ export default {
     },
 
     async refresh() {
-      // Silent reload triggered by SSE. Preserve unsaved edits to the
-      // currently-selected issue's title; description draft is already
-      // isolated in descriptionDraft.
+      // Silent reload triggered by SSE. Freeze the currently-selected issue's
+      // data and its attached-notes list; user opts in to refresh those via
+      // the stale indicator. Refresh everything else (list, orphan notes).
       try {
         const prevSelectedId = this.selectedIssueId
-        const oldLocal = this.selectedIssue
+        const oldSelected = this.selectedIssue
         const [issues, notes] = await Promise.all([
           listIssues(this.session.id),
           listNotes(this.session.id),
         ])
-        this.issues = issues.map((f) => {
-          if (f.id !== prevSelectedId) return f
-          if (oldLocal && this.dirtyTitle) {
-            return { ...f, title: oldLocal.title }
-          }
-          return f
-        })
+        this.issues = issues.map((f) =>
+          f.id === prevSelectedId && oldSelected ? oldSelected : f,
+        )
         this.orphanNotes = notes.filter((n) => !n.issue_id && !n.is_orphaned)
-        if (prevSelectedId) {
-          if (this.issues.find((i) => i.id === prevSelectedId)) {
-            this.loadIssueNotes(prevSelectedId)
-          } else {
-            this.editTargetDeleted = true
-          }
+        if (prevSelectedId && !issues.find((i) => i.id === prevSelectedId)) {
+          this.editTargetDeleted = true
         }
       } catch (e) {
         console.warn('Failed to refresh issues:', e.message)
+      }
+    },
+
+    async refreshSelected() {
+      if (!this.selectedIssueId) return
+      try {
+        const issues = await listIssues(this.session.id)
+        const fresh = issues.find((i) => i.id === this.selectedIssueId)
+        if (!fresh) {
+          this.editTargetDeleted = true
+          this.selectedIssueStale = false
+          return
+        }
+        const idx = this.issues.findIndex((i) => i.id === this.selectedIssueId)
+        if (idx !== -1) this.issues.splice(idx, 1, fresh)
+        await this.loadIssueNotes(this.selectedIssueId)
+        this.selectedIssueStale = false
+      } catch (e) {
+        console.warn('Failed to refresh selected issue:', e.message)
       }
     },
 
@@ -347,7 +389,6 @@ export default {
     },
     rememberTitle() {
       this.titleBeforeEdit = this.selectedIssue?.title || ''
-      this.dirtyTitle = true
     },
     startEditDescription() {
       if (!this.selectedIssue) return
@@ -371,6 +412,7 @@ export default {
           this.selectedIssueId,
           { description: value },
         )
+        recordSelfMutation('issue', updated.id)
         const idx = this.issues.findIndex((i) => i.id === this.selectedIssueId)
         if (idx !== -1) this.issues.splice(idx, 1, updated)
       } catch (e) {
@@ -382,25 +424,24 @@ export default {
       const value = this.selectedIssue[field]
       if (field === 'title' && (typeof value !== 'string' || value.trim() === '')) {
         this.selectedIssue.title = this.titleBeforeEdit
-        if (field === 'title') this.dirtyTitle = false
         return
       }
       try {
         const updates = {}
         updates[field] = value
         const updated = await apiUpdateIssue(this.session.id, this.selectedIssueId, updates)
+        recordSelfMutation('issue', updated.id)
         const idx = this.issues.findIndex((i) => i.id === this.selectedIssueId)
         if (idx !== -1) this.issues.splice(idx, 1, updated)
       } catch (e) {
         console.error('Failed to update:', e.message)
-      } finally {
-        if (field === 'title') this.dirtyTitle = false
       }
     },
     async setStatus(newStatus) {
       if (!this.selectedIssue) return
       try {
         const updated = await apiUpdateIssue(this.session.id, this.selectedIssueId, { status: newStatus })
+        recordSelfMutation('issue', updated.id)
         const idx = this.issues.findIndex((i) => i.id === this.selectedIssueId)
         if (idx !== -1) this.issues.splice(idx, 1, updated)
       } catch (e) {
@@ -410,14 +451,17 @@ export default {
     async onDeleteIssue() {
       if (!confirm('Delete this issue?')) return
       try {
-        await apiDeleteIssue(this.session.id, this.selectedIssueId)
-        this.issues = this.issues.filter((i) => i.id !== this.selectedIssueId)
+        const issueId = this.selectedIssueId
+        await apiDeleteIssue(this.session.id, issueId)
+        recordSelfMutation('issue', issueId)
+        this.issues = this.issues.filter((i) => i.id !== issueId)
         this.$router.push(this.closeRoute)
       } catch (e) {
         console.error('Failed to delete:', e.message)
       }
     },
     onIssueCreated(issue) {
+      recordSelfMutation('issue', issue.id)
       this.issues.push(issue)
       this.orphanNotes = this.orphanNotes.filter((n) => !this.selectedNoteIds.includes(n.id))
       this.selectedNoteIds = []
@@ -432,6 +476,7 @@ export default {
         await Promise.all(
           noteIds.map((nid) => attachNoteToIssue(this.session.id, nid, targetIssueId)),
         )
+        for (const nid of noteIds) recordSelfMutation('note', nid)
         this.orphanNotes = this.orphanNotes.filter((n) => !noteIds.includes(n.id))
         this.selectedNoteIds = []
         if (this.selectedIssueId === targetIssueId) {
@@ -834,5 +879,26 @@ export default {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stale-pill {
+  padding: 2px 8px;
+  border: 1px solid var(--status-warning, #c08000);
+  border-radius: 10px;
+  background: var(--badge-todo-bg, #4a3a10);
+  color: var(--badge-todo-text, #ffc857);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.stale-pill:hover {
+  filter: brightness(1.15);
 }
 </style>

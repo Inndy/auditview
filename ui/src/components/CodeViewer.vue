@@ -4,6 +4,10 @@
     <div v-else-if="loading" class="no-file">Loading…</div>
     <div v-else-if="error" class="no-file error-text">{{ error }}</div>
     <template v-else>
+      <div v-if="notesStale" class="stale-banner">
+        <span>Notes for this file were updated elsewhere.</span>
+        <button class="btn-sm" @click="reloadNotes">Refresh notes</button>
+      </div>
       <table class="code-table" @mouseleave="onTableMouseLeave">
         <tbody>
           <LineRow
@@ -47,7 +51,7 @@ import { getFile } from '../api/files.js'
 import { markLines } from '../api/lines.js'
 import { createNote } from '../api/notes.js'
 import { sseClient } from '../api/events.js'
-import { debounce } from '../utils/debounce.js'
+import { recordSelfMutation, consumeSelfMutation } from '../api/selfMutations.js'
 import LineRow from './LineRow.vue'
 import CreateNoteModal from './CreateNoteModal.vue'
 import IssuePickerModal from './IssuePickerModal.vue'
@@ -120,6 +124,7 @@ export default {
       pendingNote: null,
       loading: false,
       error: null,
+      notesStale: false,
     }
   },
   computed: {
@@ -154,7 +159,7 @@ export default {
         this.cursorLine = null
         this.anchorLine = null
         this.dragStart = null
-        this._debouncedReloadNotes?.cancel()
+        this.notesStale = false
         this.loadFile(newPath)
       }
     },
@@ -175,11 +180,16 @@ export default {
       this.$emit('file-reloaded')
     })
 
-    this._debouncedReloadNotes = debounce(() => this.reloadNotes(), 250)
     this._sseAnnoUnsub = sseClient.on('annotation_changed', (data) => {
-      if (data.kind === 'issue') return
-      if (data.file_path && data.file_path !== this.filePath) return
-      this._debouncedReloadNotes()
+      if (!this.filePath) return
+      // Issue-only changes don't affect file notes UNLESS it's a cascade
+      // (id=null) that may have re-coloured attached notes.
+      if (data.kind === 'issue' && data.id != null) return
+      // Filter by file: events scoped to other files never affect us.
+      if (data.kind === 'note' && data.file_path && data.file_path !== this.filePath) return
+      // Suppress self-initiated mutations.
+      if (data.kind === 'note' && consumeSelfMutation('note', data.id)) return
+      this.notesStale = true
     })
 
     if (this.filePath) {
@@ -191,7 +201,6 @@ export default {
     document.removeEventListener('mouseup', this._mouseUpHandler)
     this._sseFileUnsub?.()
     this._sseAnnoUnsub?.()
-    this._debouncedReloadNotes?.cancel()
   },
   methods: {
     async loadFile(path) {
@@ -483,6 +492,7 @@ export default {
           content,
           is_todo,
         })
+        recordSelfMutation('note', note.id)
         this.notes.push(note)
         this.$emit('notes-updated', this.notes)
         this.anchorLine = null
@@ -510,6 +520,7 @@ export default {
           is_todo: pending.is_todo,
           issue_id,
         })
+        recordSelfMutation('note', note.id)
         this.notes.push(note)
         this.$emit('notes-updated', this.notes)
         this.anchorLine = null
@@ -529,6 +540,7 @@ export default {
         // Only replace notes. Do NOT touch lines, loading, error, selection,
         // cursor/anchor, drag state, modal visibility, modal input, or scroll.
         this.notes = data.notes || []
+        this.notesStale = false
         this.$emit('notes-updated', this.notes)
       } catch (e) {
         console.warn('reloadNotes failed:', e.message)
@@ -554,5 +566,20 @@ export default {
 
 .error-text {
   color: var(--badge-orphan-text);
+}
+
+.stale-banner {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--status-warning, #c08000);
+  background: var(--badge-todo-bg, #4a3a10);
+  color: var(--badge-todo-text, #ffc857);
 }
 </style>
