@@ -47,3 +47,8 @@ Auditview is a line-level code review/audit tool: a Quart (async) JSON API backe
 **`WatcherService` uses asyncio.Queue for thread→async bridging** - watchdog runs file observer threads that post paths via `loop.call_soon_threadsafe`. An async worker task consumes and does all DB work. Each operation opens its own short-lived aiosqlite connection.
 
 **MCP endpoint** - `/mcp` serves JSON-RPC 2.0. Tool handlers call existing REST endpoints internally via Quart's async test client.
+
+
+### Tests
+
+We currently have no any kind of test in this repo. Ignore test step for now until we have one.
