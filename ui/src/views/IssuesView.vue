@@ -1,42 +1,44 @@
 <template>
   <div class="issues-view">
     <div v-if="loadingIssues" class="loading">Loading issues…</div>
-    <div v-else class="issues-content">
-      <div class="issues-panel">
-        <div class="panel-header">
-          <h3>Issues</h3>
-          <div class="filters">
+    <Splitpanes v-else class="issues-content" @resized="onResized">
+      <Pane :size="sizes[0]" :min-size="12">
+        <div class="issues-panel">
+          <div class="panel-header">
+            <h3>Issues</h3>
+            <div class="filters">
+              <router-link
+                v-for="opt in filterOptions"
+                :key="opt.value"
+                class="filter-btn"
+                :class="{ active: statusFilter === opt.value }"
+                :to="filterRoute(opt.value)"
+              >{{ opt.label }}</router-link>
+            </div>
+          </div>
+          <div v-if="filteredIssues.length === 0" class="empty">No issues.</div>
+          <div v-else class="issues-list">
             <router-link
-              v-for="opt in filterOptions"
-              :key="opt.value"
-              class="filter-btn"
-              :class="{ active: statusFilter === opt.value }"
-              :to="filterRoute(opt.value)"
-            >{{ opt.label }}</router-link>
+              v-for="issue in filteredIssues"
+              :key="issue.id"
+              :to="issueRoute(issue.id)"
+              class="issue-item"
+              :class="{ selected: selectedIssueId === issue.id }"
+            >
+              <div class="issue-header">
+                <span class="severity-badge" :class="'severity-' + issue.severity">{{ issue.severity }}</span>
+                <span class="title">{{ issue.title }}</span>
+              </div>
+              <div class="issue-meta">
+                <span class="status-pill" :class="'status-' + issue.status">{{ issue.status }}</span>
+                <span class="meta-date">{{ formatDate(issue.created_at) }}</span>
+              </div>
+            </router-link>
           </div>
         </div>
-        <div v-if="filteredIssues.length === 0" class="empty">No issues.</div>
-        <div v-else class="issues-list">
-          <router-link
-            v-for="issue in filteredIssues"
-            :key="issue.id"
-            :to="issueRoute(issue.id)"
-            class="issue-item"
-            :class="{ selected: selectedIssueId === issue.id }"
-          >
-            <div class="issue-header">
-              <span class="severity-badge" :class="'severity-' + issue.severity">{{ issue.severity }}</span>
-              <span class="title">{{ issue.title }}</span>
-            </div>
-            <div class="issue-meta">
-              <span class="status-pill" :class="'status-' + issue.status">{{ issue.status }}</span>
-              <span class="meta-date">{{ formatDate(issue.created_at) }}</span>
-            </div>
-          </router-link>
-        </div>
-      </div>
-
-      <div v-if="selectedIssueId" class="details-panel">
+      </Pane>
+      <Pane :size="sizes[1]" :min-size="30">
+        <div v-if="selectedIssueId" class="details-panel">
         <div class="panel-header">
           <h3>Issue #{{ selectedIssueId }}</h3>
           <div class="panel-header-actions">
@@ -136,62 +138,66 @@
         </div>
         <div v-else class="empty">Issue not found.</div>
       </div>
-      <div v-else class="details-panel no-selection">
-        <div class="no-selection-hint">Select an issue to view details</div>
-      </div>
-
-      <div class="orphan-panel">
-        <div class="panel-header">
-          <h3>Standalone TODOs</h3>
-          <span class="count">{{ orphanNotes.length }}</span>
+        <div v-else class="details-panel no-selection">
+          <div class="no-selection-hint">Select an issue to view details</div>
         </div>
-        <div v-if="orphanNotes.length === 0" class="empty">All notes are organized!</div>
-        <div v-else class="notes-list">
-          <div
-            v-for="note in orphanNotes"
-            :key="note.id"
-            class="note-item"
-            :class="{ selected: selectedNoteIds.includes(note.id) }"
-            @click="toggleNoteSelection(note.id)"
-          >
-            <input type="checkbox" :checked="selectedNoteIds.includes(note.id)" class="note-checkbox" />
-            <div class="note-info">
-              <router-link
-                class="note-file note-file-link"
-                :to="`/sessions/${session.id}/code?file=${encodeURIComponent(note.file_path)}&line=${note.start_line}&endLine=${note.end_line}`"
-                @click.stop
-              >{{ note.file_path }}:{{ note.start_line }}-{{ note.end_line }}</router-link>
-              <div class="note-content">{{ note.content }}</div>
+      </Pane>
+      <Pane :size="sizes[2]" :min-size="12">
+        <div class="orphan-panel">
+          <div class="panel-header">
+            <h3>Standalone TODOs</h3>
+            <span class="count">{{ orphanNotes.length }}</span>
+          </div>
+          <div v-if="orphanNotes.length === 0" class="empty">All notes are organized!</div>
+          <div v-else class="notes-list">
+            <div
+              v-for="note in orphanNotes"
+              :key="note.id"
+              class="note-item"
+              :class="{ selected: selectedNoteIds.includes(note.id) }"
+              @click="toggleNoteSelection(note.id)"
+            >
+              <input type="checkbox" :checked="selectedNoteIds.includes(note.id)" class="note-checkbox" />
+              <div class="note-info">
+                <router-link
+                  class="note-file note-file-link"
+                  :to="`/sessions/${session.id}/code?file=${encodeURIComponent(note.file_path)}&line=${note.start_line}&endLine=${note.end_line}`"
+                  @click.stop
+                >{{ note.file_path }}:{{ note.start_line }}-{{ note.end_line }}</router-link>
+                <div class="note-content">{{ note.content }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="selectedNoteIds.length > 0" class="action-bar">
+            <span>{{ selectedNoteIds.length }} selected</span>
+            <div class="action-bar-btns">
+              <button
+                v-if="selectedIssueId"
+                class="btn-outline-primary"
+                :disabled="attaching"
+                @click="attachSelectedToCurrentIssue"
+              >{{ attaching ? 'Adding…' : `Add to #${selectedIssueId}` }}</button>
+              <button class="btn-primary" @click="showCreateIssueModal = true">Create Issue</button>
             </div>
           </div>
         </div>
+      </Pane>
+    </Splitpanes>
 
-        <div v-if="selectedNoteIds.length > 0" class="action-bar">
-          <span>{{ selectedNoteIds.length }} selected</span>
-          <div class="action-bar-btns">
-            <button
-              v-if="selectedIssueId"
-              class="btn-outline-primary"
-              :disabled="attaching"
-              @click="attachSelectedToCurrentIssue"
-            >{{ attaching ? 'Adding…' : `Add to #${selectedIssueId}` }}</button>
-            <button class="btn-primary" @click="showCreateIssueModal = true">Create Issue</button>
-          </div>
-        </div>
-      </div>
-
-      <CreateIssueModal
-        v-if="showCreateIssueModal"
-        :selectedNoteIds="selectedNoteIds"
-        :sessionId="session.id"
-        @created="onIssueCreated"
-        @close="showCreateIssueModal = false"
-      />
-    </div>
+    <CreateIssueModal
+      v-if="showCreateIssueModal"
+      :selectedNoteIds="selectedNoteIds"
+      :sessionId="session.id"
+      @created="onIssueCreated"
+      @close="showCreateIssueModal = false"
+    />
   </div>
 </template>
 
 <script>
+import { Splitpanes, Pane } from 'splitpanes'
+import 'splitpanes/dist/splitpanes.css'
 import { listIssues, updateIssue as apiUpdateIssue, deleteIssue as apiDeleteIssue, getIssueNotes, attachNoteToIssue } from '../api/issues.js'
 import { listNotes } from '../api/notes.js'
 import { sseClient } from '../api/events.js'
@@ -207,9 +213,27 @@ const FILTER_OPTIONS = [
   { value: 'dismissed', label: 'dismissed' },
 ]
 
+const LAYOUT_STORAGE_KEY = 'auditview:layout:issues-panes'
+const DEFAULT_SIZES = [22, 56, 22]
+
+function loadSizes() {
+  try {
+    const raw = localStorage.getItem(LAYOUT_STORAGE_KEY)
+    if (!raw) return [...DEFAULT_SIZES]
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed) || parsed.length !== 3) return [...DEFAULT_SIZES]
+    if (!parsed.every((n) => typeof n === 'number' && n > 0 && n < 100)) return [...DEFAULT_SIZES]
+    const sum = parsed.reduce((a, b) => a + b, 0)
+    if (Math.abs(sum - 100) > 1) return [...DEFAULT_SIZES]
+    return parsed
+  } catch {
+    return [...DEFAULT_SIZES]
+  }
+}
+
 export default {
   name: 'IssuesView',
-  components: { CreateIssueModal, MarkdownView },
+  components: { Splitpanes, Pane, CreateIssueModal, MarkdownView },
   props: {
     session: Object,
   },
@@ -229,6 +253,7 @@ export default {
       descriptionBeforeEdit: '',
       editTargetDeleted: false,
       selectedIssueStale: false,
+      sizes: loadSizes(),
     }
   },
   computed: {
@@ -491,6 +516,15 @@ export default {
     formatDate(isoString) {
       return new Date(isoString).toLocaleDateString()
     },
+    onResized(payload) {
+      const panes = payload?.panes
+      if (!Array.isArray(panes) || panes.length !== 3) return
+      const next = panes.map((p) => p.size)
+      this.sizes = next
+      try {
+        localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(next))
+      } catch { /* storage full / disabled — non-critical */ }
+    },
   },
 }
 </script>
@@ -512,9 +546,6 @@ export default {
 }
 
 .issues-content {
-  display: grid;
-  grid-template-columns: minmax(200px, 300px) 1fr minmax(200px, 300px);
-  gap: 1px;
   flex: 1;
   overflow: hidden;
   background: var(--bg-base);
@@ -527,6 +558,7 @@ export default {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  height: 100%;
 }
 
 .panel-header {
@@ -676,9 +708,27 @@ export default {
   margin-left: auto;
 }
 
-.details-panel,
-.orphan-panel {
-  border-left: 1px solid var(--border);
+:deep(.splitpanes__splitter) {
+  position: relative;
+  width: 5px;
+  background: var(--border);
+  cursor: col-resize;
+  transition: background 0.15s;
+}
+
+:deep(.splitpanes__splitter:hover) {
+  background: var(--text-muted);
+}
+
+:deep(.splitpanes__pane) {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.splitpanes__pane) > * {
+  flex: 1;
+  min-height: 0;
 }
 
 .no-selection-hint {
