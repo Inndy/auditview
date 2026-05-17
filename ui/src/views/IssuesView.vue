@@ -156,7 +156,15 @@
 
         <div v-if="selectedNoteIds.length > 0" class="action-bar">
           <span>{{ selectedNoteIds.length }} selected</span>
-          <button class="create-issue-btn" @click="showCreateIssueModal = true">Create Issue</button>
+          <div class="action-bar-btns">
+            <button
+              v-if="selectedIssueId"
+              class="attach-issue-btn"
+              :disabled="attaching"
+              @click="attachSelectedToCurrentIssue"
+            >{{ attaching ? 'Adding…' : `Add to #${selectedIssueId}` }}</button>
+            <button class="create-issue-btn" @click="showCreateIssueModal = true">Create Issue</button>
+          </div>
         </div>
       </div>
 
@@ -172,7 +180,7 @@
 </template>
 
 <script>
-import { listIssues, updateIssue as apiUpdateIssue, deleteIssue as apiDeleteIssue, getIssueNotes } from '../api/issues.js'
+import { listIssues, updateIssue as apiUpdateIssue, deleteIssue as apiDeleteIssue, getIssueNotes, attachNoteToIssue } from '../api/issues.js'
 import { listNotes } from '../api/notes.js'
 import CreateIssueModal from '../components/CreateIssueModal.vue'
 import MarkdownView from '../components/MarkdownView.vue'
@@ -197,6 +205,7 @@ export default {
       issueNotes: [],
       loadingIssues: true,
       selectedNoteIds: [],
+      attaching: false,
       showCreateIssueModal: false,
       filterOptions: FILTER_OPTIONS,
       titleBeforeEdit: '',
@@ -357,6 +366,26 @@ export default {
       this.orphanNotes = this.orphanNotes.filter((n) => !this.selectedNoteIds.includes(n.id))
       this.selectedNoteIds = []
       this.showCreateIssueModal = false
+    },
+    async attachSelectedToCurrentIssue() {
+      if (!this.selectedIssueId || this.selectedNoteIds.length === 0 || this.attaching) return
+      const targetIssueId = this.selectedIssueId
+      const noteIds = [...this.selectedNoteIds]
+      this.attaching = true
+      try {
+        await Promise.all(
+          noteIds.map((nid) => attachNoteToIssue(this.session.id, nid, targetIssueId)),
+        )
+        this.orphanNotes = this.orphanNotes.filter((n) => !noteIds.includes(n.id))
+        this.selectedNoteIds = []
+        if (this.selectedIssueId === targetIssueId) {
+          await this.loadIssueNotes(targetIssueId)
+        }
+      } catch (e) {
+        console.error('Failed to attach notes:', e.message)
+      } finally {
+        this.attaching = false
+      }
     },
     formatDate(isoString) {
       return new Date(isoString).toLocaleDateString()
@@ -808,18 +837,44 @@ export default {
   color: var(--text-muted);
 }
 
-.create-issue-btn {
+.action-bar-btns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.create-issue-btn,
+.attach-issue-btn {
   padding: 6px 12px;
-  background: var(--primary);
-  color: white;
-  border: none;
   border-radius: 4px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 }
 
+.create-issue-btn {
+  background: var(--primary);
+  color: white;
+  border: none;
+}
+
 .create-issue-btn:hover {
   background: var(--primary-hover);
+}
+
+.attach-issue-btn {
+  background: transparent;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+}
+
+.attach-issue-btn:hover:not(:disabled) {
+  background: var(--primary);
+  color: white;
+}
+
+.attach-issue-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>
