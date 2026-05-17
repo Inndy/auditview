@@ -131,25 +131,22 @@ body {
 }
 
 .session-layout {
-  display: flex;
   height: 100vh;
   overflow: hidden;
 }
 
 .file-tree-sidebar {
-  width: 260px;
-  min-width: 180px;
   background: var(--bg-surface);
   border-right: 1px solid var(--border);
   overflow-y: auto;
-  flex-shrink: 0;
+  height: 100%;
 }
 
 .code-viewer-main {
-  flex: 1;
   overflow: auto;
   background: var(--bg-surface);
   min-width: 0;
+  height: 100%;
 }
 
 .code-viewer-main.wrap-lines {
@@ -168,12 +165,10 @@ body {
 }
 
 .right-panels {
-  width: 320px;
-  min-width: 220px;
   background: var(--bg-surface2);
   border-left: 1px solid var(--border);
   overflow-y: auto;
-  flex-shrink: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 0;

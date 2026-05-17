@@ -1,44 +1,52 @@
 <template>
   <div class="session-view-wrap">
-    <div class="session-layout">
-      <FileTree
-        ref="fileTree"
-        :sessionId="id"
-        :currentFile="currentFile"
-        @file-selected="openFile"
-      />
-      <CodeViewer
-        ref="codeViewer"
-        :sessionId="id"
-        :filePath="currentFile"
-        :wrapLines="wrapLines"
-        @notes-updated="onNotesUpdated"
-        @lines-marked="onLinesMarked"
-        @file-reloaded="onFileReloaded"
-        @show-help="$emit('show-help')"
-      />
-      <div class="right-panels">
-        <NotePanel
-          :notes="currentNotes"
+    <Splitpanes class="session-layout" @resized="onResized">
+      <Pane :size="sizes[0]" :min-size="10">
+        <FileTree
+          ref="fileTree"
           :sessionId="id"
-          @note-updated="onNoteUpdated"
-          @note-deleted="onNoteDeleted"
-          @jump="onNoteJump"
+          :currentFile="currentFile"
+          @file-selected="openFile"
         />
-        <OrphanPanel
-          :notes="currentNotes"
+      </Pane>
+      <Pane :size="sizes[1]" :min-size="30">
+        <CodeViewer
+          ref="codeViewer"
           :sessionId="id"
-          @note-updated="onNoteUpdated"
-          @note-deleted="onNoteDeleted"
-          @jump="onNoteJump"
+          :filePath="currentFile"
+          :wrapLines="wrapLines"
+          @notes-updated="onNotesUpdated"
+          @lines-marked="onLinesMarked"
+          @file-reloaded="onFileReloaded"
+          @show-help="$emit('show-help')"
         />
-      </div>
-    </div>
+      </Pane>
+      <Pane :size="sizes[2]" :min-size="12">
+        <div class="right-panels">
+          <NotePanel
+            :notes="currentNotes"
+            :sessionId="id"
+            @note-updated="onNoteUpdated"
+            @note-deleted="onNoteDeleted"
+            @jump="onNoteJump"
+          />
+          <OrphanPanel
+            :notes="currentNotes"
+            :sessionId="id"
+            @note-updated="onNoteUpdated"
+            @note-deleted="onNoteDeleted"
+            @jump="onNoteJump"
+          />
+        </div>
+      </Pane>
+    </Splitpanes>
     <KeyboardHelpModal :visible="showHelp" @close="showHelp = false" />
   </div>
 </template>
 
 <script>
+import { Splitpanes, Pane } from 'splitpanes'
+import 'splitpanes/dist/splitpanes.css'
 import { getCoverage } from '../api/coverage.js'
 import FileTree from '../components/FileTree.vue'
 import CodeViewer from '../components/CodeViewer.vue'
@@ -46,9 +54,29 @@ import NotePanel from '../components/NotePanel.vue'
 import OrphanPanel from '../components/OrphanPanel.vue'
 import KeyboardHelpModal from '../components/KeyboardHelpModal.vue'
 
+const LAYOUT_STORAGE_KEY = 'auditview:layout:panes'
+const DEFAULT_SIZES = [18, 60, 22]
+
+function loadSizes() {
+  try {
+    const raw = localStorage.getItem(LAYOUT_STORAGE_KEY)
+    if (!raw) return [...DEFAULT_SIZES]
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed) || parsed.length !== 3) return [...DEFAULT_SIZES]
+    if (!parsed.every((n) => typeof n === 'number' && n > 0 && n < 100)) return [...DEFAULT_SIZES]
+    const sum = parsed.reduce((a, b) => a + b, 0)
+    if (Math.abs(sum - 100) > 1) return [...DEFAULT_SIZES]
+    return parsed
+  } catch {
+    return [...DEFAULT_SIZES]
+  }
+}
+
 export default {
   name: 'CodeView',
   components: {
+    Splitpanes,
+    Pane,
     FileTree,
     CodeViewer,
     NotePanel,
@@ -68,6 +96,7 @@ export default {
       currentNotes: [],
       showHelp: false,
       pendingJump: null,
+      sizes: loadSizes(),
     }
   },
   mounted() {
@@ -122,6 +151,15 @@ export default {
     onNoteJump(note) {
       this.$refs.codeViewer?.jumpToRange(note.start_line, note.end_line)
     },
+    onResized(payload) {
+      const panes = payload?.panes
+      if (!Array.isArray(panes) || panes.length !== 3) return
+      const next = panes.map((p) => p.size)
+      this.sizes = next
+      try {
+        localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(next))
+      } catch { /* storage full / disabled — non-critical */ }
+    },
     onKeyDown(e) {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return
       if (document.querySelector('.modal-overlay')) return
@@ -147,7 +185,6 @@ export default {
 }
 
 .session-layout {
-  display: flex;
   flex: 1;
   overflow: hidden;
 }
@@ -161,5 +198,28 @@ export default {
 
 .error-full {
   color: var(--badge-orphan-text);
+}
+
+:deep(.splitpanes__splitter) {
+  position: relative;
+  width: 5px;
+  background: var(--border);
+  cursor: col-resize;
+  transition: background 0.15s;
+}
+
+:deep(.splitpanes__splitter:hover) {
+  background: var(--text-muted);
+}
+
+:deep(.splitpanes__pane) {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.splitpanes__pane) > * {
+  flex: 1;
+  min-height: 0;
 }
 </style>

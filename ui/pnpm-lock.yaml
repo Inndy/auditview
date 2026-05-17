@@ -29,6 +29,9 @@ importers:
       markdown-it:
         specifier: ^14.1.1
         version: 14.1.1
+      splitpanes:
+        specifier: ^4.0.4
+        version: 4.0.4(vue@3.6.0-beta.11)
       vue:
         specifier: beta
         version: 3.6.0-beta.11
@@ -1378,6 +1381,11 @@ packages:
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
+
+  splitpanes@4.0.4:
+    resolution: {integrity: sha512-RbysugZhjbCw5fgplvk3hOXr41stahQDtZhHVkhnnJI6H4wlGDhM2kIpbehy7v92duy9GnMa8zIhHigIV1TWtg==}
+    peerDependencies:
+      vue: ^3.2.0
 
   tinyglobby@0.2.16:
     resolution: {integrity: sha512-pn99VhoACYR8nFHhxqix+uvsbXineAasWm5ojXoN8xEwK5Kd3/TrhNn1wByuD52UxWRLy8pu+kRMniEi6Eq9Zg==}
@@ -2744,6 +2752,10 @@ snapshots:
       totalist: 3.0.1
 
   source-map-js@1.2.1: {}
+
+  splitpanes@4.0.4(vue@3.6.0-beta.11):
+    dependencies:
+      vue: 3.6.0-beta.11
 
   tinyglobby@0.2.16:
     dependencies:
