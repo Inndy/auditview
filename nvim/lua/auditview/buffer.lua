@@ -30,10 +30,16 @@ local function render_reviewed(bufnr, lines)
   end
 end
 
+local function present(v)
+  if v == nil or v == vim.NIL then return nil end
+  return v
+end
+
 local function render_note_signs(bufnr, notes)
   if not vim.api.nvim_buf_is_valid(bufnr) then return end
   vim.api.nvim_buf_clear_namespace(bufnr, ns_notes_sign, 0, -1)
   local line_count = vim.api.nvim_buf_line_count(bufnr)
+  local severity_map = config.options.severity_sign_hl or {}
   for _, note in ipairs(notes or {}) do
     if not note.is_orphaned
         and note.start_line >= 1
@@ -44,6 +50,10 @@ local function render_note_signs(bufnr, notes)
       local sign_hl = note.is_todo
         and config.options.todo_sign_hl
         or config.options.note_sign_hl
+      local severity = present(note.issue_severity)
+      if severity and severity_map[severity] then
+        sign_hl = severity_map[severity]
+      end
       vim.api.nvim_buf_set_extmark(bufnr, ns_notes_sign, note.start_line - 1, 0, {
         sign_text = sign_text,
         sign_hl_group = sign_hl,

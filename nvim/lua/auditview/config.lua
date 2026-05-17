@@ -12,6 +12,12 @@ M.defaults = {
   todo_sign_text = "◆",
   todo_sign_hl = "AuditviewTodoSign",
 
+  severity_sign_hl = {
+    P0 = "AuditviewSeverityP0",
+    P1 = "AuditviewSeverityP1",
+    P2 = "AuditviewSeverityP2",
+  },
+
   note_virt_text = "cursor",
   note_virt_text_max_width = 60,
   note_virt_text_hl = "AuditviewNoteVirtText",

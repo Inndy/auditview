@@ -125,6 +125,16 @@ require("auditview").setup({
   todo_sign_text = "◆",
   todo_sign_hl = "AuditviewTodoSign",        -- linked to Todo
 
+  -- when a note/TODO is attached to an issue, the sign color follows
+  -- the issue's severity instead of the note/todo defaults above.
+  -- the glyph (■ / ◆) still tells you note vs. TODO; the color tells
+  -- you severity. unattached notes keep the default coloring.
+  severity_sign_hl = {
+    P0 = "AuditviewSeverityP0",              -- linked to DiagnosticError
+    P1 = "AuditviewSeverityP1",              -- linked to DiagnosticWarn
+    P2 = "AuditviewSeverityP2",              -- linked to DiagnosticInfo
+  },
+
   -- EOL virtual text label for notes: "none" | "cursor" | "all"
   --   none   — never show
   --   cursor — show on the current cursor line when it's covered by a note
@@ -171,6 +181,9 @@ Buffer indicators (linked to sensible defaults — override with `:hi`):
 | `AuditviewTodoSign`    | `Todo`       | TODO glyph in sign column              |
 | `AuditviewNoteVirtText`| `Comment`    | EOL inline note label                  |
 | `AuditviewTodoVirtText`| `Todo`       | EOL inline TODO label                  |
+| `AuditviewSeverityP0`  | `DiagnosticError` | sign color for note attached to a P0 issue |
+| `AuditviewSeverityP1`  | `DiagnosticWarn`  | sign color for note attached to a P1 issue |
+| `AuditviewSeverityP2`  | `DiagnosticInfo`  | sign color for note attached to a P2 issue |
 
 ## Notes
 
