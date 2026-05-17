@@ -22,10 +22,13 @@ stays the single source of truth; the web UI sees nvim's marks live via SSE.
   cmd = {
     "AuditviewMark", "AuditviewUnmark", "AuditviewProgress",
     "AuditviewRefresh", "AuditviewSessionReset",
+    "AuditviewNextUnreviewed", "AuditviewPrevUnreviewed",
   },
   keys = {
     { "<leader>am", mode = { "n", "x" }, desc = "auditview: mark reviewed" },
     { "<leader>au", mode = { "n", "x" }, desc = "auditview: unmark" },
+    { "]r", desc = "auditview: next unreviewed chunk" },
+    { "[r", desc = "auditview: prev unreviewed chunk" },
   },
   opts = { base_url = "http://127.0.0.1:5000" },
 },
@@ -64,6 +67,8 @@ explicitly will still prompt you to pick from all sessions on the server.
 | Visual  | `<leader>am` | mark selected lines reviewed |
 | Normal  | `<leader>au` | unmark current line          |
 | Visual  | `<leader>au` | unmark selected lines        |
+| Normal  | `]r`         | jump to next unreviewed chunk |
+| Normal  | `[r`         | jump to previous unreviewed chunk |
 
 Disable with `setup({ auto_keymaps = false })` and bind `AuditviewMark` /
 `AuditviewUnmark` yourself.
@@ -78,6 +83,8 @@ Disable with `setup({ auto_keymaps = false })` and bind `AuditviewMark` /
 | `:AuditviewProgress!`    | quickfix list of every file's coverage                |
 | `:AuditviewRefresh`      | refetch current buffer's state from the server        |
 | `:AuditviewSessionReset` | drop cached session id (next action re-resolves)      |
+| `:AuditviewNextUnreviewed` | jump to next unreviewed chunk (accepts a count)     |
+| `:AuditviewPrevUnreviewed` | jump to previous unreviewed chunk (accepts a count) |
 
 ## Configuration
 
@@ -87,7 +94,12 @@ require("auditview").setup({
   sign_text = "▎",
   sign_hl = "AuditviewReviewed",   -- linked to DiffAdd by default
   auto_keymaps = true,
-  keymaps = { mark = "<leader>am", unmark = "<leader>au" },
+  keymaps = {
+    mark = "<leader>am",
+    unmark = "<leader>au",
+    next_unreviewed = "]r",
+    prev_unreviewed = "[r",
+  },
 })
 ```
 
@@ -100,6 +112,9 @@ require("auditview").setup({
   re-enter the buffer).
 - Marking is blocked while a buffer is `modified` — save first so the
   server hashes match what you see.
+- `]r` / `[r` skip past the chunk you're currently inside (gitsigns-style),
+  treating blank/comment lines as connective tissue and stopping only at
+  reviewed lines or file edges. Accepts a count: `3]r` jumps three chunks.
 
 ## nvim-tree integration (optional)
 

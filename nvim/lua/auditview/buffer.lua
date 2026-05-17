@@ -25,6 +25,31 @@ function M.get(bufnr)
   return cache[bufnr]
 end
 
+function M.unreviewed_chunks(bufnr)
+  local entry = cache[bufnr]
+  if not entry or not entry.lines then return {} end
+  if not vim.api.nvim_buf_is_valid(bufnr) then return {} end
+  local line_count = vim.api.nvim_buf_line_count(bufnr)
+  local chunks = {}
+  local first_countable, last_countable = nil, nil
+  for i = 1, line_count do
+    local line = entry.lines[i]
+    if line and line.is_reviewed then
+      if first_countable then
+        table.insert(chunks, { start = first_countable, finish = last_countable })
+      end
+      first_countable, last_countable = nil, nil
+    elseif line and line.is_countable then
+      first_countable = first_countable or i
+      last_countable = i
+    end
+  end
+  if first_countable then
+    table.insert(chunks, { start = first_countable, finish = last_countable })
+  end
+  return chunks
+end
+
 function M.fetch(bufnr, cb)
   cb = cb or function() end
   local rel = session.rel_path(bufnr)

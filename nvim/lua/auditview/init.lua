@@ -84,6 +84,63 @@ function M.progress(bang)
   if bang then all_files_progress() else current_buffer_progress() end
 end
 
+local function jump_unreviewed(direction)
+  local bufnr = vim.api.nvim_get_current_buf()
+  if not buffer.get(bufnr) then
+    vim.notify("auditview: buffer not tracked", vim.log.levels.WARN)
+    return
+  end
+  local chunks = buffer.unreviewed_chunks(bufnr)
+  if #chunks == 0 then
+    vim.notify("auditview: no unreviewed chunks", vim.log.levels.INFO)
+    return
+  end
+  local count = vim.v.count1
+  local cur_pos = vim.api.nvim_win_get_cursor(0)[1]
+  local anchor_start, anchor_finish = cur_pos, cur_pos
+  for _, c in ipairs(chunks) do
+    if c.start <= cur_pos and cur_pos <= c.finish then
+      anchor_start, anchor_finish = c.start, c.finish
+      break
+    end
+  end
+  local target
+  for _ = 1, count do
+    local found
+    if direction == "next" then
+      for _, c in ipairs(chunks) do
+        if c.start > anchor_finish then found = c; break end
+      end
+    else
+      if anchor_start < cur_pos and cur_pos <= anchor_finish then
+        found = { start = anchor_start, finish = anchor_finish }
+      else
+        for i = #chunks, 1, -1 do
+          if chunks[i].finish < anchor_start then found = chunks[i]; break end
+        end
+      end
+    end
+    if not found then break end
+    target = found
+    anchor_start, anchor_finish = found.start, found.finish
+    cur_pos = found.start
+  end
+  if not target then
+    vim.notify(
+      direction == "next"
+        and "auditview: no more unreviewed chunks below"
+        or "auditview: no more unreviewed chunks above",
+      vim.log.levels.INFO
+    )
+    return
+  end
+  vim.cmd("normal! m'")
+  vim.api.nvim_win_set_cursor(0, { target.start, 0 })
+end
+
+function M.jump_next_unreviewed() jump_unreviewed("next") end
+function M.jump_prev_unreviewed() jump_unreviewed("prev") end
+
 function M.refresh()
   local bufnr = vim.api.nvim_get_current_buf()
   buffer.invalidate(bufnr)

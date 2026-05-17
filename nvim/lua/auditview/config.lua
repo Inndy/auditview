@@ -7,6 +7,8 @@ M.defaults = {
   keymaps = {
     mark = "<leader>am",
     unmark = "<leader>au",
+    next_unreviewed = "]r",
+    prev_unreviewed = "[r",
   },
   auto_keymaps = true,
 }

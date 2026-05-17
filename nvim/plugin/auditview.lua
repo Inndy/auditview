@@ -29,6 +29,11 @@ vim.api.nvim_create_user_command("AuditviewProgress", function(opts)
   auditview.progress(opts.bang)
 end, { bang = true })
 
+vim.api.nvim_create_user_command("AuditviewNextUnreviewed",
+  auditview.jump_next_unreviewed, { count = true })
+vim.api.nvim_create_user_command("AuditviewPrevUnreviewed",
+  auditview.jump_prev_unreviewed, { count = true })
+
 vim.api.nvim_create_user_command("AuditviewRefresh", auditview.refresh, {})
 vim.api.nvim_create_user_command("AuditviewSessionReset", auditview.session_reset, {})
 
@@ -55,5 +60,13 @@ if config.options.auto_keymaps then
     vim.keymap.set("n", km.unmark, auditview.unmark, { desc = "auditview: unmark line" })
     vim.keymap.set("x", km.unmark, ":<C-u>lua require('auditview.marks').unmark_visual()<CR>",
       { desc = "auditview: unmark range", silent = true })
+  end
+  if km.next_unreviewed and km.next_unreviewed ~= "" then
+    vim.keymap.set("n", km.next_unreviewed, auditview.jump_next_unreviewed,
+      { desc = "auditview: jump to next unreviewed chunk" })
+  end
+  if km.prev_unreviewed and km.prev_unreviewed ~= "" then
+    vim.keymap.set("n", km.prev_unreviewed, auditview.jump_prev_unreviewed,
+      { desc = "auditview: jump to previous unreviewed chunk" })
   end
 end
