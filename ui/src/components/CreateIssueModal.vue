@@ -21,6 +21,15 @@
           </select>
         </div>
 
+        <div class="form-group">
+          <label>Description <span class="hint">(markdown, optional)</span></label>
+          <textarea
+            v-model="description"
+            rows="5"
+            placeholder="Optional details — supports markdown"
+          ></textarea>
+        </div>
+
         <div class="notes-preview">
           <h4>Selected Notes</h4>
           <div class="notes-list">
@@ -55,6 +64,7 @@ export default {
     return {
       title: '',
       severity: 'P2',
+      description: '',
       creating: false,
       error: null,
     }
@@ -71,6 +81,7 @@ export default {
           this.title.trim(),
           this.severity,
           this.selectedNoteIds,
+          this.description,
         )
         this.$emit('created', issue)
       } catch (e) {
@@ -155,7 +166,8 @@ export default {
 }
 
 .form-group input,
-.form-group select {
+.form-group select,
+.form-group textarea {
   width: 100%;
   padding: 8px 10px;
   border: 1px solid var(--border);
@@ -164,6 +176,19 @@ export default {
   background: var(--bg);
   color: var(--text);
   font-family: inherit;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.form-group label .hint {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-left: 4px;
 }
 
 .notes-preview {

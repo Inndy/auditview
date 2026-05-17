@@ -256,6 +256,12 @@ async def get_issue(issue_id: int, include_context: bool = False) -> str:
         f"[#{issue['id']}] [{issue['severity']}] [{issue['status']}] {issue['title']}",
         f"  created_at: {issue['created_at']}",
     ]
+    description = (issue.get("description") or "").strip()
+    if description:
+        lines.append("")
+        lines.append("Description:")
+        for dl in description.splitlines():
+            lines.append(f"  {dl}")
 
     if not notes:
         lines.append("")
@@ -292,15 +298,19 @@ async def get_issue(issue_id: int, include_context: bool = False) -> str:
 
 
 @mcp.tool()
-async def create_issue(title: str, severity: str) -> str:
+async def create_issue(title: str, severity: str, description: Optional[str] = None) -> str:
     """Create a new issue in the active audit session.
 
     Args:
         title: Issue title
         severity: P0=critical, P1=high, P2=medium
+        description: Optional long-form markdown description (rendered in the UI)
     """
     api = await _session_api()
-    data = await api.post("/issues", {"title": title, "severity": severity})
+    payload = {"title": title, "severity": severity}
+    if description is not None:
+        payload["description"] = description
+    data = await api.post("/issues", payload)
     return f"Created issue #{data['id']}: [{data['severity']}] {data['title']}"
 
 
@@ -310,16 +320,27 @@ async def update_issue(
     title: Optional[str] = None,
     severity: Optional[str] = None,
     status: Optional[str] = None,
+    description: Optional[str] = None,
 ) -> str:
-    """Update an existing issue's title, severity, or status.
+    """Update an existing issue's title, severity, status, or description.
 
     Args:
         issue_id: The issue ID to update
         title: New title
         severity: New severity (P0/P1/P2)
         status: New status (open/resolved/dismissed)
+        description: New markdown description (pass an empty string to clear)
     """
-    payload = {k: v for k, v in {"title": title, "severity": severity, "status": status}.items() if v is not None}
+    payload = {
+        k: v
+        for k, v in {
+            "title": title,
+            "severity": severity,
+            "status": status,
+            "description": description,
+        }.items()
+        if v is not None
+    }
     if not payload:
         raise ValueError("At least one field to update is required")
     api = await _session_api()

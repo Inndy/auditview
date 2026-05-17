@@ -60,6 +60,36 @@
             </select>
           </div>
           <div class="detail-row">
+            <label>
+              Description
+              <button
+                v-if="!editingDescription"
+                class="link-btn"
+                @click="startEditDescription"
+              >{{ selectedIssue.description ? 'Edit' : 'Add' }}</button>
+            </label>
+            <textarea
+              v-if="editingDescription"
+              ref="descriptionEditor"
+              v-model="descriptionDraft"
+              class="description-editor"
+              rows="6"
+              placeholder="Markdown supported"
+              @blur="saveDescription"
+              @keydown.esc="cancelEditDescription"
+            ></textarea>
+            <div
+              v-else-if="selectedIssue.description"
+              class="description-rendered markdown-body"
+              v-html="renderedDescription"
+            ></div>
+            <div
+              v-else
+              class="description-empty"
+              @click="startEditDescription"
+            >No description.</div>
+          </div>
+          <div class="detail-row">
             <label>Status: <span class="status-pill" :class="'status-' + selectedIssue.status">{{ selectedIssue.status }}</span></label>
             <div class="status-actions">
               <template v-if="selectedIssue.status === 'open'">
@@ -143,6 +173,7 @@
 <script>
 import { listIssues, updateIssue as apiUpdateIssue, deleteIssue as apiDeleteIssue, getIssueNotes } from '../api/issues.js'
 import { listNotes } from '../api/notes.js'
+import { renderMarkdown } from '../markdown.js'
 import CreateIssueModal from '../components/CreateIssueModal.vue'
 
 const FILTER_OPTIONS = [
@@ -168,6 +199,9 @@ export default {
       showCreateIssueModal: false,
       filterOptions: FILTER_OPTIONS,
       titleBeforeEdit: '',
+      editingDescription: false,
+      descriptionDraft: '',
+      descriptionBeforeEdit: '',
     }
   },
   computed: {
@@ -188,6 +222,9 @@ export default {
     closeRoute() {
       return { path: `/sessions/${this.session.id}/issues`, query: { status: this.statusFilter } }
     },
+    renderedDescription() {
+      return renderMarkdown(this.selectedIssue?.description || '')
+    },
   },
   mounted() {
     this.load()
@@ -195,6 +232,9 @@ export default {
   watch: {
     selectedIssueId(id) {
       this.titleBeforeEdit = ''
+      this.editingDescription = false
+      this.descriptionDraft = ''
+      this.descriptionBeforeEdit = ''
       if (id) {
         this.loadIssueNotes(id)
       } else {
@@ -248,6 +288,34 @@ export default {
     },
     rememberTitle() {
       this.titleBeforeEdit = this.selectedIssue?.title || ''
+    },
+    startEditDescription() {
+      if (!this.selectedIssue) return
+      this.descriptionBeforeEdit = this.selectedIssue.description || ''
+      this.descriptionDraft = this.descriptionBeforeEdit
+      this.editingDescription = true
+      this.$nextTick(() => this.$refs.descriptionEditor?.focus())
+    },
+    cancelEditDescription() {
+      this.editingDescription = false
+      this.descriptionDraft = ''
+    },
+    async saveDescription() {
+      if (!this.editingDescription || !this.selectedIssue) return
+      this.editingDescription = false
+      const value = this.descriptionDraft
+      if (value === this.descriptionBeforeEdit) return
+      try {
+        const updated = await apiUpdateIssue(
+          this.session.id,
+          this.selectedIssueId,
+          { description: value },
+        )
+        const idx = this.issues.findIndex((i) => i.id === this.selectedIssueId)
+        if (idx !== -1) this.issues.splice(idx, 1, updated)
+      } catch (e) {
+        console.error('Failed to update description:', e.message)
+      }
     },
     async updateField(field) {
       if (!this.selectedIssue) return
@@ -528,7 +596,8 @@ export default {
 }
 
 .detail-row input,
-.detail-row select {
+.detail-row select,
+.detail-row textarea {
   width: 100%;
   padding: 6px;
   border: 1px solid var(--border);
@@ -537,6 +606,124 @@ export default {
   background: var(--bg-surface);
   color: var(--text);
   font-family: inherit;
+}
+
+.detail-row label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--primary);
+  cursor: pointer;
+  text-transform: none;
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+}
+
+.description-editor {
+  resize: vertical;
+  min-height: 96px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+
+.description-rendered {
+  padding: 8px 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  background: var(--bg-base);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  overflow-wrap: break-word;
+}
+
+.description-empty {
+  padding: 8px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+  cursor: pointer;
+}
+
+.description-empty:hover {
+  background: var(--bg-hover);
+}
+
+.markdown-body :first-child { margin-top: 0; }
+.markdown-body :last-child { margin-bottom: 0; }
+.markdown-body p { margin: 0 0 8px 0; }
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  margin: 12px 0 6px 0;
+  font-weight: 600;
+}
+.markdown-body h1 { font-size: 15px; }
+.markdown-body h2 { font-size: 14px; }
+.markdown-body h3,
+.markdown-body h4 { font-size: 13px; }
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0 0 8px 0;
+  padding-left: 22px;
+}
+.markdown-body li { margin: 2px 0; }
+.markdown-body code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  background: var(--bg-hover);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.markdown-body pre {
+  background: var(--bg-hover);
+  padding: 8px 10px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 0 0 8px 0;
+}
+.markdown-body pre code {
+  background: transparent;
+  padding: 0;
+}
+.markdown-body blockquote {
+  margin: 0 0 8px 0;
+  padding: 0 8px;
+  border-left: 3px solid var(--border);
+  color: var(--text-muted);
+}
+.markdown-body a {
+  color: var(--primary);
+}
+.markdown-body table {
+  border-collapse: collapse;
+  margin: 0 0 8px 0;
+}
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 12px 0;
 }
 
 .status-actions {

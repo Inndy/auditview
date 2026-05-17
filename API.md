@@ -364,12 +364,14 @@ List issues for the session, newest first.
     "id": 12,
     "session_id": 1,
     "title": "Path traversal in file handler",
+    "description": "User input from `req.path` is joined with the upload dir without normalization…",
     "severity": "P1",
     "status": "open",
     "created_at": "2026-05-14T10:15:00Z"
   }
 ]
 ```
+- `description` is a free-form markdown string (empty by default). The UI renders it as sanitized HTML.
 
 ---
 
@@ -392,25 +394,27 @@ Create a new issue, optionally attaching existing notes to it atomically.
 ```json
 {
   "title": "Path traversal in file handler",
+  "description": "User input from `req.path` is joined with the upload dir without normalization…",
   "severity": "P1",
   "note_ids": [7, 8]
 }
 ```
 - `title`: required, non-empty string
+- `description`: optional string (default `""`); free-form markdown rendered as sanitized HTML in the UI
 - `severity`: one of `P0` / `P1` / `P2` (default `P2`); `P0`=critical, `P1`=high, `P2`=medium
 - `note_ids`: optional array of integers; all referenced notes must exist in this session
 
 **Response 201**: the created issue (same shape as a list entry).
 
 **Errors**
-- `400` — missing/invalid `title`, invalid `severity`, malformed `note_ids`, or some `note_ids` do not exist (response includes `"missing": [...]`)
+- `400` — missing/invalid `title`, invalid `severity`, non-string `description`, malformed `note_ids`, or some `note_ids` do not exist (response includes `"missing": [...]`)
 - `404` — session not found
 
 ---
 
 ### PATCH /api/sessions/:id/issues/:issue_id
 
-Update one or more of `title`, `severity`, `status`.
+Update one or more of `title`, `description`, `severity`, `status`.
 
 **Request body**
 ```json
@@ -419,13 +423,14 @@ Update one or more of `title`, `severity`, `status`.
 }
 ```
 - `title`: optional, non-empty when provided
+- `description`: optional string (markdown); pass `""` to clear
 - `severity`: optional, one of `P0` / `P1` / `P2`
 - `status`: optional, one of `open` / `resolved` / `dismissed`
 
 **Response 200**: the updated issue.
 
 **Errors**
-- `400` — invalid value, empty title, or no fields to update
+- `400` — invalid value, empty title, non-string description, or no fields to update
 - `404` — issue not found
 
 ---

@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS issues (
     id INTEGER PRIMARY KEY,
     session_id INTEGER NOT NULL REFERENCES sessions(id),
     title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
     severity TEXT NOT NULL DEFAULT 'P2',
     status TEXT NOT NULL DEFAULT 'open',
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
@@ -78,6 +79,7 @@ _MIGRATIONS = [
     "CREATE TABLE IF NOT EXISTS app_config (key TEXT PRIMARY KEY, value TEXT)",
     "CREATE TABLE IF NOT EXISTS issues (id INTEGER PRIMARY KEY, session_id INTEGER NOT NULL REFERENCES sessions(id), title TEXT NOT NULL, severity TEXT NOT NULL DEFAULT 'P2', status TEXT NOT NULL DEFAULT 'open', created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')))",
     "ALTER TABLE notes ADD COLUMN issue_id INTEGER REFERENCES issues(id)",
+    "ALTER TABLE issues ADD COLUMN description TEXT NOT NULL DEFAULT ''",
 ]
 
 _IDEMPOTENT_ERROR_FRAGMENTS = ("duplicate column name", "already exists")

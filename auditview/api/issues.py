@@ -3,6 +3,8 @@ from auditview.db.connection import open_db
 
 bp = Blueprint("issues", __name__)
 
+_ISSUE_COLUMNS = "id, session_id, title, description, severity, status, created_at"
+
 
 @bp.route("/sessions/<int:session_id>/issues", methods=["GET"])
 async def list_issues(session_id):
@@ -10,13 +12,13 @@ async def list_issues(session_id):
     async with open_db(current_app.config["DB_PATH"]) as conn:
         if status_filter:
             cur = await conn.execute(
-                "SELECT id, session_id, title, severity, status, created_at "
+                f"SELECT {_ISSUE_COLUMNS} "
                 "FROM issues WHERE session_id = ? AND status = ? ORDER BY created_at DESC",
                 (session_id, status_filter),
             )
         else:
             cur = await conn.execute(
-                "SELECT id, session_id, title, severity, status, created_at "
+                f"SELECT {_ISSUE_COLUMNS} "
                 "FROM issues WHERE session_id = ? ORDER BY created_at DESC",
                 (session_id,),
             )
@@ -28,7 +30,7 @@ async def list_issues(session_id):
 async def get_issue(session_id, issue_id):
     async with open_db(current_app.config["DB_PATH"]) as conn:
         cur = await conn.execute(
-            "SELECT id, session_id, title, severity, status, created_at "
+            f"SELECT {_ISSUE_COLUMNS} "
             "FROM issues WHERE id = ? AND session_id = ?",
             (issue_id, session_id),
         )
@@ -43,12 +45,15 @@ async def create_issue(session_id):
     data = await request.get_json(force=True, silent=True) or {}
     title = data.get("title", "").strip()
     severity = data.get("severity", "P2")
+    description = data.get("description", "")
     note_ids = data.get("note_ids", [])
 
     if not title:
         return jsonify({"error": "title is required"}), 400
     if severity not in ("P0", "P1", "P2"):
         return jsonify({"error": "severity must be P0, P1, or P2"}), 400
+    if not isinstance(description, str):
+        return jsonify({"error": "description must be a string"}), 400
     if not isinstance(note_ids, list) or not all(isinstance(n, int) for n in note_ids):
         return jsonify({"error": "note_ids must be an array of integers"}), 400
 
@@ -74,8 +79,8 @@ async def create_issue(session_id):
         await conn.execute("BEGIN")
         try:
             cur = await conn.execute(
-                "INSERT INTO issues (session_id, title, severity) VALUES (?, ?, ?)",
-                (session_id, title, severity),
+                "INSERT INTO issues (session_id, title, description, severity) VALUES (?, ?, ?, ?)",
+                (session_id, title, description, severity),
             )
             row_id = cur.lastrowid
             if note_ids:
@@ -89,7 +94,7 @@ async def create_issue(session_id):
             raise
 
         cur = await conn.execute(
-            "SELECT id, session_id, title, severity, status, created_at FROM issues WHERE id = ?",
+            f"SELECT {_ISSUE_COLUMNS} FROM issues WHERE id = ?",
             (row_id,),
         )
         row = await cur.fetchone()
@@ -102,6 +107,7 @@ async def update_issue(session_id, issue_id):
     title = data.get("title")
     severity = data.get("severity")
     status = data.get("status")
+    description = data.get("description")
 
     if title is not None:
         title = title.strip()
@@ -111,6 +117,8 @@ async def update_issue(session_id, issue_id):
         return jsonify({"error": "severity must be P0, P1, or P2"}), 400
     if status is not None and status not in ("open", "resolved", "dismissed"):
         return jsonify({"error": "status must be open, resolved, or dismissed"}), 400
+    if description is not None and not isinstance(description, str):
+        return jsonify({"error": "description must be a string"}), 400
 
     async with open_db(current_app.config["DB_PATH"]) as conn:
         updates = []
@@ -124,6 +132,9 @@ async def update_issue(session_id, issue_id):
         if status is not None:
             updates.append("status = ?")
             params.append(status)
+        if description is not None:
+            updates.append("description = ?")
+            params.append(description)
 
         if not updates:
             return jsonify({"error": "no fields to update"}), 400
@@ -134,7 +145,7 @@ async def update_issue(session_id, issue_id):
             params,
         )
         cur = await conn.execute(
-            "SELECT id, session_id, title, severity, status, created_at FROM issues WHERE id = ? AND session_id = ?",
+            f"SELECT {_ISSUE_COLUMNS} FROM issues WHERE id = ? AND session_id = ?",
             (issue_id, session_id),
         )
         row = await cur.fetchone()
