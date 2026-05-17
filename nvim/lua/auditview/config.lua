@@ -2,8 +2,9 @@ local M = {}
 
 M.defaults = {
   base_url = "http://127.0.0.1:5000",
-  sign_text = "▎",
-  sign_hl = "AuditviewReviewed",
+  reviewed_style = "line",
+  reviewed_sign_text = "▎",
+  reviewed_hl = "AuditviewReviewed",
   keymaps = {
     mark = "<leader>am",
     unmark = "<leader>au",

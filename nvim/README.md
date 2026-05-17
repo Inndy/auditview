@@ -53,7 +53,8 @@ ln -s /path/to/auditview-nvim/nvim ~/.config/nvim/pack/auditview/start/auditview
    cwd looking for `.auditview.db`; if found, it matches the containing
    directory against `session.root_path` from the API. A single match
    is auto-selected silently. Multiple matches prompt via `vim.ui.select`.
-4. Open a file. Reviewed lines show with a sign in the sign column.
+4. Open a file. Reviewed lines get a full-line background tint by default
+   (set `reviewed_style = "sign"` for a sign-column glyph instead).
 
 If no `.auditview.db` is found above cwd, the plugin stays dormant on
 buffer-open (no prompts). Running `:AuditviewMark` or `:AuditviewProgress`
@@ -91,8 +92,13 @@ Disable with `setup({ auto_keymaps = false })` and bind `AuditviewMark` /
 ```lua
 require("auditview").setup({
   base_url = "http://127.0.0.1:5000",
-  sign_text = "▎",
-  sign_hl = "AuditviewReviewed",   -- linked to DiffAdd by default
+
+  -- reviewed lines: "line" (default, full-line background tint) | "sign"
+  -- (sign-column glyph).
+  reviewed_style = "line",
+  reviewed_sign_text = "▎",                  -- only when reviewed_style == "sign"
+  reviewed_hl = "AuditviewReviewed",         -- linked to DiffAdd by default
+
   auto_keymaps = true,
   keymaps = {
     mark = "<leader>am",
@@ -112,6 +118,9 @@ require("auditview").setup({
   re-enter the buffer).
 - Marking is blocked while a buffer is `modified` — save first so the
   server hashes match what you see.
+- Reviewed lines render as a whole-line background tint by default
+  (`reviewed_style = "line"`). Set `reviewed_style = "sign"` to use a
+  sign-column glyph instead.
 - `]r` / `[r` skip past the chunk you're currently inside (gitsigns-style),
   treating blank/comment lines as connective tissue and stopping only at
   reviewed lines or file edges. Accepts a count: `3]r` jumps three chunks.

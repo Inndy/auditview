@@ -4,19 +4,26 @@ local session = require("auditview.session")
 
 local M = {}
 
-local ns = vim.api.nvim_create_namespace("auditview")
+local ns_reviewed = vim.api.nvim_create_namespace("auditview")
 local cache = {}
 
-local function render_signs(bufnr, lines)
+local function render_reviewed(bufnr, lines)
   if not vim.api.nvim_buf_is_valid(bufnr) then return end
-  vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
+  vim.api.nvim_buf_clear_namespace(bufnr, ns_reviewed, 0, -1)
   local line_count = vim.api.nvim_buf_line_count(bufnr)
+  local style = config.options.reviewed_style
   for line_no, entry in pairs(lines) do
     if entry.is_reviewed and line_no >= 1 and line_no <= line_count then
-      vim.api.nvim_buf_set_extmark(bufnr, ns, line_no - 1, 0, {
-        sign_text = config.options.sign_text,
-        sign_hl_group = config.options.sign_hl,
-      })
+      local opts
+      if style == "sign" then
+        opts = {
+          sign_text = config.options.reviewed_sign_text,
+          sign_hl_group = config.options.reviewed_hl,
+        }
+      else
+        opts = { line_hl_group = config.options.reviewed_hl }
+      end
+      vim.api.nvim_buf_set_extmark(bufnr, ns_reviewed, line_no - 1, 0, opts)
     end
   end
 end
@@ -83,7 +90,7 @@ function M.fetch(bufnr, cb)
     lines = lines,
     fetched_at = os.time(),
   }
-  render_signs(bufnr, lines)
+  render_reviewed(bufnr, lines)
   cb(cache[bufnr])
 end
 
@@ -98,7 +105,7 @@ end
 function M.invalidate(bufnr)
   cache[bufnr] = nil
   if vim.api.nvim_buf_is_valid(bufnr) then
-    vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
+    vim.api.nvim_buf_clear_namespace(bufnr, ns_reviewed, 0, -1)
   end
 end
 
