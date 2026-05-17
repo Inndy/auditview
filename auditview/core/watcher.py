@@ -100,6 +100,14 @@ class WatcherService:
                     except asyncio.QueueFull:
                         pass
 
+    def broadcast_to_session(self, session_id, event):
+        with self._lock:
+            for q in list(self._clients.get(session_id, [])):
+                try:
+                    q.put_nowait(event)
+                except asyncio.QueueFull:
+                    pass
+
     async def get_scan(self, session_id, root_path, exclusion_patterns):
         patterns_str = exclusion_patterns or ""
         spec = _base_spec(patterns_str)
@@ -232,11 +240,6 @@ class WatcherService:
                             rel_path, sid,
                         )
 
-                event = {"type": "file_changed", "rel_path": rel_path}
                 with self._lock:
                     self._scan_cache[sid] = None
-                    for q in list(self._clients.get(sid, [])):
-                        try:
-                            q.put_nowait(event)
-                        except asyncio.QueueFull:
-                            pass
+                self.broadcast_to_session(sid, {"type": "file_changed", "rel_path": rel_path})

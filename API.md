@@ -585,12 +585,23 @@ data: {}
 event: file_changed
 data: {"rel_path": "src/main.py"}
 
+event: annotation_changed
+data: {"kind": "note", "action": "create", "id": 42, "file_path": "src/main.py", "is_todo": false}
+
 event: shutdown
 data: {}
 ```
 
 - `heartbeat`: keep-alive; one is sent immediately on connect, then every 15 s
 - `file_changed`: emitted after reconciliation completes for a file; clients should re-fetch `/api/sessions/:id/files/:path`
+- `annotation_changed`: emitted after a note or issue is created/updated/deleted
+  - `kind`: `"note"` or `"issue"`
+  - `action`: `"create"`, `"update"`, or `"delete"`
+  - `id`: integer id of the affected record, or `null` for cascade events that touch many records
+  - `file_path`: notes only — the file the note belongs to; `null` for cascade events (issue create/delete touching multiple notes, severity update affecting all attached notes) where consumers should reload conservatively
+  - `is_todo`: notes only, optional — present on create/update
+  - Cascades: `create_issue` with `note_ids` emits one `issue/create` followed by one `note/update` with `id: null, file_path: null`. `delete_issue` emits one `issue/delete` followed by one `note/update` with `id: null, file_path: null` if any notes had their `issue_id` cleared. `PATCH issue` with `severity` change emits one `issue/update` followed by one `note/update` cascade (so coloured-line overlays in CodeView refresh).
+  - Clients should debounce reactions (250 ms trailing edge is suggested) to coalesce bursts (e.g. bulk creation via MCP).
 - `shutdown`: emitted once when the server begins graceful shutdown; the stream terminates after this event
 
 **Errors**

@@ -98,6 +98,20 @@ async def create_issue(session_id):
             (row_id,),
         )
         row = await cur.fetchone()
+    current_app.watcher.broadcast_to_session(session_id, {
+        "type": "annotation_changed",
+        "kind": "issue",
+        "action": "create",
+        "id": row_id,
+    })
+    if note_ids:
+        current_app.watcher.broadcast_to_session(session_id, {
+            "type": "annotation_changed",
+            "kind": "note",
+            "action": "update",
+            "id": None,
+            "file_path": None,
+        })
     return jsonify(dict(row)), 201
 
 
@@ -152,6 +166,22 @@ async def update_issue(session_id, issue_id):
 
     if not row:
         return jsonify({"error": "issue not found"}), 404
+    current_app.watcher.broadcast_to_session(session_id, {
+        "type": "annotation_changed",
+        "kind": "issue",
+        "action": "update",
+        "id": issue_id,
+    })
+    # If severity changed, notes attached to this issue need a re-color in CodeView
+    # (lineSeverityMap reads issue_severity from notes).
+    if severity is not None:
+        current_app.watcher.broadcast_to_session(session_id, {
+            "type": "annotation_changed",
+            "kind": "note",
+            "action": "update",
+            "id": None,
+            "file_path": None,
+        })
     return jsonify(dict(row))
 
 
@@ -160,10 +190,11 @@ async def delete_issue(session_id, issue_id):
     async with open_db(current_app.config["DB_PATH"]) as conn:
         await conn.execute("BEGIN")
         try:
-            await conn.execute(
+            cur = await conn.execute(
                 "UPDATE notes SET issue_id = NULL WHERE issue_id = ? AND session_id = ?",
                 (issue_id, session_id),
             )
+            notes_touched = cur.rowcount
             cur = await conn.execute(
                 "DELETE FROM issues WHERE id = ? AND session_id = ?",
                 (issue_id, session_id),
@@ -175,6 +206,20 @@ async def delete_issue(session_id, issue_id):
             raise
     if not deleted:
         return jsonify({"error": "issue not found"}), 404
+    current_app.watcher.broadcast_to_session(session_id, {
+        "type": "annotation_changed",
+        "kind": "issue",
+        "action": "delete",
+        "id": issue_id,
+    })
+    if notes_touched:
+        current_app.watcher.broadcast_to_session(session_id, {
+            "type": "annotation_changed",
+            "kind": "note",
+            "action": "update",
+            "id": None,
+            "file_path": None,
+        })
     return jsonify({"deleted": True})
 
 
@@ -200,9 +245,10 @@ async def attach_note_to_issue(session_id, note_id):
 
     async with open_db(current_app.config["DB_PATH"]) as conn:
         cur = await conn.execute(
-            "SELECT id FROM notes WHERE id = ? AND session_id = ?", (note_id, session_id)
+            "SELECT file_path FROM notes WHERE id = ? AND session_id = ?", (note_id, session_id)
         )
-        if await cur.fetchone() is None:
+        note_row = await cur.fetchone()
+        if note_row is None:
             return jsonify({"error": "Note not found"}), 404
 
         cur = await conn.execute(
@@ -215,4 +261,11 @@ async def attach_note_to_issue(session_id, note_id):
             "UPDATE notes SET issue_id = ? WHERE id = ? AND session_id = ?",
             (issue_id, note_id, session_id),
         )
+    current_app.watcher.broadcast_to_session(session_id, {
+        "type": "annotation_changed",
+        "kind": "note",
+        "action": "update",
+        "id": note_id,
+        "file_path": note_row["file_path"],
+    })
     return jsonify({"attached": True})

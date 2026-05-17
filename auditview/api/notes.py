@@ -107,6 +107,14 @@ async def create_note(session_id):
             (row_id,),
         )
         row = await cur.fetchone()
+    current_app.watcher.broadcast_to_session(session_id, {
+        "type": "annotation_changed",
+        "kind": "note",
+        "action": "create",
+        "id": row_id,
+        "file_path": file_path,
+        "is_todo": bool(is_todo),
+    })
     return jsonify(_note_row(row)), 201
 
 
@@ -147,6 +155,14 @@ async def update_note(session_id, note_id):
             (note_id,),
         )
         row = await cur.fetchone()
+    current_app.watcher.broadcast_to_session(session_id, {
+        "type": "annotation_changed",
+        "kind": "note",
+        "action": "update",
+        "id": note_id,
+        "file_path": row["file_path"],
+        "is_todo": bool(row["is_todo"]),
+    })
     return jsonify(_note_row(row))
 
 
@@ -158,10 +174,18 @@ async def delete_note(session_id, note_id):
             return jsonify({"error": "Session not found"}), 404
 
         cur = await conn.execute(
-            "SELECT id FROM notes WHERE id = ? AND session_id = ?", (note_id, session_id)
+            "SELECT file_path FROM notes WHERE id = ? AND session_id = ?", (note_id, session_id)
         )
-        if await cur.fetchone() is None:
+        note_row = await cur.fetchone()
+        if note_row is None:
             return jsonify({"error": "Note not found"}), 404
 
         await conn.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+    current_app.watcher.broadcast_to_session(session_id, {
+        "type": "annotation_changed",
+        "kind": "note",
+        "action": "delete",
+        "id": note_id,
+        "file_path": note_row["file_path"],
+    })
     return jsonify({"deleted": True})
