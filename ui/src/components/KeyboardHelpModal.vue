@@ -3,7 +3,7 @@
     <div class="modal-box help-box">
       <div class="help-header">
         <h3>Keyboard Shortcuts</h3>
-        <button class="btn-close" @click="$emit('close')">✕</button>
+        <button class="btn-icon" @click="$emit('close')">✕</button>
       </div>
       <table class="help-table">
         <tbody>
@@ -50,15 +50,6 @@ export default {
 .help-header h3 {
   font-size: 14px;
   margin: 0;
-}
-
-.btn-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 14px;
-  color: var(--text-muted);
-  padding: 0;
 }
 
 .help-table {

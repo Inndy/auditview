@@ -39,7 +39,7 @@
       <div v-if="selectedIssueId" class="details-panel">
         <div class="panel-header">
           <h3>Issue #{{ selectedIssueId }}</h3>
-          <router-link :to="closeRoute" class="close-btn" title="Back to list">✕</router-link>
+          <router-link :to="closeRoute" class="btn btn-icon" title="Back to list">✕</router-link>
         </div>
         <div v-if="selectedIssue" class="issue-details">
           <div class="detail-row">
@@ -64,7 +64,7 @@
               Description
               <button
                 v-if="!editingDescription"
-                class="link-btn"
+                class="btn-link"
                 @click="startEditDescription"
               >{{ selectedIssue.description ? 'Edit' : 'Add' }}</button>
             </label>
@@ -96,13 +96,13 @@
             </div>
             <div class="status-actions">
               <template v-if="selectedIssue.status === 'open'">
-                <button class="btn-action btn-resolve" @click="setStatus('resolved')">Resolve</button>
-                <button class="btn-action btn-dismiss" @click="setStatus('dismissed')">Dismiss</button>
+                <button class="btn-action btn-outline-success" @click="setStatus('resolved')">Resolve</button>
+                <button class="btn-action btn-outline-muted" @click="setStatus('dismissed')">Dismiss</button>
               </template>
               <template v-else>
-                <button class="btn-action btn-reopen" @click="setStatus('open')">Reopen</button>
+                <button class="btn-action btn-ghost" @click="setStatus('open')">Reopen</button>
               </template>
-              <button class="btn-action btn-delete" @click="onDeleteIssue">Delete</button>
+              <button class="btn-action btn-outline-danger" @click="onDeleteIssue">Delete</button>
             </div>
           </div>
 
@@ -159,11 +159,11 @@
           <div class="action-bar-btns">
             <button
               v-if="selectedIssueId"
-              class="attach-issue-btn"
+              class="btn-outline-primary"
               :disabled="attaching"
               @click="attachSelectedToCurrentIssue"
             >{{ attaching ? 'Adding…' : `Add to #${selectedIssueId}` }}</button>
-            <button class="create-issue-btn" @click="showCreateIssueModal = true">Create Issue</button>
+            <button class="btn-primary" @click="showCreateIssueModal = true">Create Issue</button>
           </div>
         </div>
       </div>
@@ -589,21 +589,6 @@ export default {
   font-size: 13px;
 }
 
-.close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 18px;
-  color: var(--text-muted);
-  padding: 0 4px;
-  text-decoration: none;
-  line-height: 1;
-}
-
-.close-btn:hover {
-  color: var(--text);
-}
-
 .issue-details {
   flex: 1;
   overflow-y: auto;
@@ -635,14 +620,6 @@ export default {
   font-family: inherit;
 }
 
-.detail-row label {
-  display: block;
-  font-size: 11px;
-  font-weight: 600;
-  margin-bottom: 4px;
-  color: var(--text-muted);
-}
-
 .detail-row label.label-with-action {
   display: flex;
   align-items: center;
@@ -661,21 +638,6 @@ export default {
   font-size: 11px;
   font-weight: 600;
   color: var(--text-muted);
-}
-
-.link-btn {
-  background: none;
-  border: none;
-  padding: 0;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--primary);
-  cursor: pointer;
-  text-transform: none;
-}
-
-.link-btn:hover {
-  text-decoration: underline;
 }
 
 .description-editor {
@@ -714,49 +676,10 @@ export default {
 
 .btn-action {
   flex: 1;
-  padding: 6px 4px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  min-width: 0;
+  padding-left: 4px;
+  padding-right: 4px;
   font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  background: var(--bg-surface);
-  color: var(--text);
-  white-space: nowrap;
-}
-
-.btn-resolve {
-  border-color: var(--status-success);
-  color: var(--status-success);
-}
-
-.btn-resolve:hover {
-  background: var(--status-success);
-  color: white;
-}
-
-.btn-dismiss {
-  border-color: var(--text-muted);
-  color: var(--text-muted);
-}
-
-.btn-dismiss:hover {
-  background: var(--text-muted);
-  color: white;
-}
-
-.btn-reopen:hover {
-  background: var(--bg-hover);
-}
-
-.btn-delete {
-  border-color: var(--danger);
-  color: var(--danger);
-}
-
-.btn-delete:hover {
-  background: var(--danger);
-  color: white;
 }
 
 .notes-section {
@@ -841,40 +764,5 @@ export default {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-
-.create-issue-btn,
-.attach-issue-btn {
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.create-issue-btn {
-  background: var(--primary);
-  color: white;
-  border: none;
-}
-
-.create-issue-btn:hover {
-  background: var(--primary-hover);
-}
-
-.attach-issue-btn {
-  background: transparent;
-  color: var(--primary);
-  border: 1px solid var(--primary);
-}
-
-.attach-issue-btn:hover:not(:disabled) {
-  background: var(--primary);
-  color: white;
-}
-
-.attach-issue-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 </style>

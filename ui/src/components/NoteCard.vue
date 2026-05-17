@@ -5,8 +5,8 @@
       <span v-if="note.is_todo" class="badge badge-todo">TODO</span>
       <span v-if="note.is_orphaned" class="badge badge-orphan">orphan</span>
       <span class="note-actions">
-        <button class="btn-icon" title="Edit" @click.stop="startEdit">✏️</button>
-        <button class="btn-icon" title="Delete" @click.stop="remove">🗑️</button>
+        <button class="btn-icon btn-sm" title="Edit" @click.stop="startEdit">✏️</button>
+        <button class="btn-icon btn-sm" title="Delete" @click.stop="remove">🗑️</button>
       </span>
       <span class="note-time">{{ note.created_at }}</span>
     </div>
@@ -98,19 +98,6 @@ export default {
   margin-left: 4px;
 }
 
-.btn-icon {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0 2px;
-  font-size: 12px;
-  opacity: 0.5;
-}
-
-.btn-icon:hover {
-  opacity: 1;
-}
-
 .edit-textarea {
   width: 100%;
   margin-top: 6px;
@@ -137,22 +124,6 @@ export default {
   align-items: center;
   gap: 3px;
   flex: 1;
-}
-
-.btn-sm {
-  padding: 3px 10px;
-  font-size: 12px;
-  border-radius: 3px;
-  border: 1px solid var(--border);
-  cursor: pointer;
-  background: var(--bg-surface);
-  color: var(--text);
-}
-
-.btn-sm.btn-primary {
-  background: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
 }
 
 .note-snapshot {

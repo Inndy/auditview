@@ -3,7 +3,7 @@
     <div class="modal">
       <div class="modal-header">
         <h3>Create Issue from {{ selectedNoteIds.length }} Note(s)</h3>
-        <button class="close-btn" @click="$emit('close')">✕</button>
+        <button class="btn-icon" @click="$emit('close')">✕</button>
       </div>
 
       <div class="modal-body">
@@ -41,8 +41,8 @@
       </div>
 
       <div class="modal-footer">
-        <button class="btn-cancel" @click="$emit('close')">Cancel</button>
-        <button class="btn-create" @click="create" :disabled="!title.trim() || creating">
+        <button @click="$emit('close')">Cancel</button>
+        <button class="btn-primary" @click="create" :disabled="!title.trim() || creating">
           {{ creating ? 'Creating…' : 'Create Issue' }}
         </button>
       </div>
@@ -133,20 +133,6 @@ export default {
   font-weight: 600;
 }
 
-.close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 24px;
-  color: var(--text-muted);
-  padding: 0;
-  line-height: 1;
-}
-
-.close-btn:hover {
-  color: var(--text);
-}
-
 .modal-body {
   flex: 1;
   overflow-y: auto;
@@ -234,34 +220,4 @@ export default {
   flex-shrink: 0;
 }
 
-.btn-cancel,
-.btn-create {
-  padding: 8px 16px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  background: var(--bg);
-  color: var(--text);
-}
-
-.btn-create {
-  background: var(--primary);
-  color: white;
-  border-color: var(--primary);
-}
-
-.btn-create:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-cancel:hover {
-  background: var(--bg-hover);
-}
-
-.btn-create:hover:not(:disabled) {
-  opacity: 0.9;
-}
 </style>

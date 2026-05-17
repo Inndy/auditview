@@ -360,31 +360,164 @@ table.code-table tr.cursor.anchor td:first-child {
   margin-top: 12px;
 }
 
+/*
+ * Button system. The bare <button> baseline is equivalent to `.btn` — use
+ * `.btn` only on non-button elements (links, etc.) that need the same look.
+ *
+ * Pick exactly one variant per button:
+ *   filled:   .btn-primary  .btn-danger
+ *   outlined: .btn-outline-primary  .btn-outline-success  .btn-outline-danger  .btn-outline-muted
+ *   minimal:  .btn-ghost    .btn-icon    .btn-link
+ *   (no variant) = default outlined neutral
+ *
+ * Optional modifiers:
+ *   .btn-sm     smaller padding/font
+ *   .btn-block  width: 100%
+ */
+.btn,
 button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 6px 14px;
-  border-radius: 4px;
   border: 1px solid var(--border);
-  cursor: pointer;
-  font-size: 13px;
+  border-radius: 4px;
   background: var(--bg-surface);
   color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
 }
 
-button.btn-primary {
+.btn:hover:not(:disabled),
+button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.btn:disabled,
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
   background: var(--primary);
-  color: #fff;
   border-color: var(--primary);
+  color: #fff;
 }
 
-button.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
 }
 
-button.btn-danger {
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--danger);
+  border-color: var(--danger);
+  opacity: 0.9;
+}
+
+.btn-outline-primary {
+  background: transparent;
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.btn-outline-primary:hover:not(:disabled) {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btn-outline-success {
+  background: transparent;
+  border-color: var(--status-success);
+  color: var(--status-success);
+}
+.btn-outline-success:hover:not(:disabled) {
+  background: var(--status-success);
+  color: #fff;
+}
+
+.btn-outline-danger {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.btn-outline-danger:hover:not(:disabled) {
   background: var(--danger);
   color: #fff;
-  border-color: var(--danger);
+}
+
+.btn-outline-muted {
+  background: transparent;
+  border-color: var(--text-muted);
+  color: var(--text-muted);
+}
+.btn-outline-muted:hover:not(:disabled) {
+  background: var(--text-muted);
+  color: #fff;
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+.btn-icon {
+  background: transparent;
+  border-color: transparent;
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+}
+.btn-icon:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.btn-icon.btn-sm {
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+  padding: 0;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--primary);
+  font-weight: 500;
+  font-size: inherit;
+  white-space: normal;
+  text-align: left;
+}
+.btn-link:hover:not(:disabled) {
+  background: none;
+  text-decoration: underline;
+}
+
+.btn-sm {
+  padding: 3px 10px;
+  font-size: 12px;
+  border-radius: 3px;
+}
+
+.btn-block {
+  width: 100%;
 }
 
 a {

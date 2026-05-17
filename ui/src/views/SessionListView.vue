@@ -27,7 +27,7 @@
     <div v-if="mcpSessionId !== null && config && config.mcp_session" class="mcp-guide">
       <div class="mcp-guide-header">
         <span class="mcp-guide-title">MCP active &mdash; {{ config.mcp_session.label }}</span>
-        <button class="mcp-copy-btn" @click="copySnippet" :title="copied ? 'Copied!' : 'Copy to clipboard'">{{ copied ? 'Copied!' : 'Copy' }}</button>
+        <button class="btn-sm" @click="copySnippet" :title="copied ? 'Copied!' : 'Copy to clipboard'">{{ copied ? 'Copied!' : 'Copy' }}</button>
       </div>
       <p class="mcp-guide-desc">Add this to your <code>.claude/settings.json</code> to connect an AI agent:</p>
       <pre class="mcp-snippet">{{ mcpSettingsSnippet }}</pre>
@@ -55,7 +55,7 @@
             <td>{{ s.created_at }}</td>
             <td>
               <button
-                class="mcp-btn"
+                class="btn-sm mcp-btn"
                 :class="{ active: s.id === mcpSessionId }"
                 :title="s.id === mcpSessionId ? 'Deactivate MCP target' : 'Set as MCP target'"
                 @click="toggleMcpSession(s.id)"
@@ -274,12 +274,6 @@ td {
 }
 
 .mcp-btn {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 2px 8px;
-  font-size: 12px;
-  cursor: pointer;
   color: var(--text-muted);
   min-width: 6em;
 }
@@ -327,21 +321,6 @@ td {
 .mcp-guide-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--primary);
-}
-
-.mcp-copy-btn {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 2px 10px;
-  font-size: 12px;
-  cursor: pointer;
-  color: var(--text-muted);
-}
-
-.mcp-copy-btn:hover {
-  border-color: var(--primary);
   color: var(--primary);
 }
 

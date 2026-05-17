@@ -194,20 +194,6 @@ export default {
   text-overflow: ellipsis;
 }
 
-.btn-link {
-  background: none;
-  border: none;
-  color: var(--link);
-  cursor: pointer;
-  font-size: 13px;
-  padding: 4px 0;
-  text-align: left;
-}
-
-.btn-link:hover {
-  text-decoration: underline;
-}
-
 .new-issue-form {
   margin-bottom: 8px;
 }
