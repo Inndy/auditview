@@ -2,6 +2,7 @@ local config = require("auditview.config")
 local session = require("auditview.session")
 local buffer = require("auditview.buffer")
 local marks = require("auditview.marks")
+local notes = require("auditview.notes")
 local http = require("auditview.http")
 
 local M = {}
@@ -14,6 +15,16 @@ function M.mark() marks.mark_current() end
 function M.unmark() marks.unmark_current() end
 function M.mark_visual() marks.mark_visual() end
 function M.unmark_visual() marks.unmark_visual() end
+
+function M.note(content) notes.add_current(false, content) end
+function M.todo(content) notes.add_current(true, content) end
+function M.note_visual(content) notes.add_visual(false, content) end
+function M.todo_visual(content) notes.add_visual(true, content) end
+function M.note_show() notes.show_at_cursor() end
+function M.note_delete() notes.delete_at_cursor() end
+function M.notes_list(bang)
+  if bang then notes.list_all() else notes.list_in_buffer() end
+end
 
 function M.on_buf_read(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()

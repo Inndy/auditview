@@ -41,4 +41,8 @@ function M.post(path, body)
   })
 end
 
+function M.delete(path)
+  return run({ "curl", "-sS", "-X", "DELETE", M.url(path) })
+end
+
 return M
