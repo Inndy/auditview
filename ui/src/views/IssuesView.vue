@@ -60,7 +60,7 @@
             </select>
           </div>
           <div class="detail-row">
-            <label>
+            <label class="label-with-action">
               Description
               <button
                 v-if="!editingDescription"
@@ -90,19 +90,20 @@
             >No description.</div>
           </div>
           <div class="detail-row">
-            <label>Status: <span class="status-pill" :class="'status-' + selectedIssue.status">{{ selectedIssue.status }}</span></label>
+            <div class="field-label">
+              <span class="field-label-text">Status</span>
+              <span class="status-pill" :class="'status-' + selectedIssue.status">{{ selectedIssue.status }}</span>
+            </div>
             <div class="status-actions">
               <template v-if="selectedIssue.status === 'open'">
-                <button class="btn-resolve" @click="setStatus('resolved')">Resolve</button>
-                <button class="btn-dismiss" @click="setStatus('dismissed')">Dismiss</button>
+                <button class="btn-action btn-resolve" @click="setStatus('resolved')">Resolve</button>
+                <button class="btn-action btn-dismiss" @click="setStatus('dismissed')">Dismiss</button>
               </template>
               <template v-else>
-                <button class="btn-reopen" @click="setStatus('open')">Reopen</button>
+                <button class="btn-action btn-reopen" @click="setStatus('open')">Reopen</button>
               </template>
+              <button class="btn-action btn-delete" @click="onDeleteIssue">Delete</button>
             </div>
-          </div>
-          <div class="detail-row">
-            <button class="delete-btn" @click="onDeleteIssue">Delete Issue</button>
           </div>
 
           <div class="notes-section">
@@ -606,10 +607,31 @@ export default {
 }
 
 .detail-row label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--text-muted);
+}
+
+.detail-row label.label-with-action {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.field-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.field-label-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
 .link-btn {
@@ -659,14 +681,11 @@ export default {
 .status-actions {
   display: flex;
   gap: 6px;
-  margin-top: 4px;
 }
 
-.btn-resolve,
-.btn-dismiss,
-.btn-reopen {
+.btn-action {
   flex: 1;
-  padding: 6px;
+  padding: 6px 4px;
   border: 1px solid var(--border);
   border-radius: 4px;
   font-size: 12px;
@@ -674,6 +693,7 @@ export default {
   cursor: pointer;
   background: var(--bg-surface);
   color: var(--text);
+  white-space: nowrap;
 }
 
 .btn-resolve {
@@ -700,19 +720,12 @@ export default {
   background: var(--bg-hover);
 }
 
-.delete-btn {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid var(--danger);
-  border-radius: 4px;
-  background: transparent;
+.btn-delete {
+  border-color: var(--danger);
   color: var(--danger);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
 }
 
-.delete-btn:hover {
+.btn-delete:hover {
   background: var(--danger);
   color: white;
 }
