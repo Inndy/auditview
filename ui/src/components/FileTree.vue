@@ -23,6 +23,8 @@
 
 <script>
 import { rescanSession } from '../api/files.js'
+import { sseClient } from '../api/events.js'
+import { debounce } from '../utils/debounce.js'
 import TreeNode from './TreeNode.vue'
 import { getBoolPref, setBoolPref } from '../prefs.js'
 
@@ -100,17 +102,23 @@ export default {
   },
   mounted() {
     this.load()
+    this._debouncedRefresh = debounce(() => this.load({ silent: true }), 250)
+    this._sseUnsub = sseClient.on('annotation_changed', () => this._debouncedRefresh())
+  },
+  beforeUnmount() {
+    this._sseUnsub?.()
+    this._debouncedRefresh?.cancel()
   },
   methods: {
-    async load() {
-      this.loading = true
+    async load({ silent = false } = {}) {
+      if (!silent) this.loading = true
       this.error = null
       try {
         this.files = await rescanSession(this.sessionId)
       } catch (e) {
-        this.error = e.message
+        if (!silent) this.error = e.message
       } finally {
-        this.loading = false
+        if (!silent) this.loading = false
       }
     },
     onFileSelected(path) {
@@ -131,7 +139,7 @@ export default {
       if (list[prev] !== this.currentFile) this.$emit('file-selected', list[prev])
     },
     refresh() {
-      return this.load()
+      return this.load({ silent: true })
     },
     updateFile(path, { countable_lines, reviewed_lines }) {
       const f = this.files.find((f) => f.rel_path === path)

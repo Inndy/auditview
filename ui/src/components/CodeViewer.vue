@@ -47,6 +47,7 @@ import { getFile } from '../api/files.js'
 import { markLines } from '../api/lines.js'
 import { createNote } from '../api/notes.js'
 import { sseClient } from '../api/events.js'
+import { debounce } from '../utils/debounce.js'
 import LineRow from './LineRow.vue'
 import CreateNoteModal from './CreateNoteModal.vue'
 import IssuePickerModal from './IssuePickerModal.vue'
@@ -153,6 +154,7 @@ export default {
         this.cursorLine = null
         this.anchorLine = null
         this.dragStart = null
+        this._debouncedReloadNotes?.cancel()
         this.loadFile(newPath)
       }
     },
@@ -166,11 +168,18 @@ export default {
     this._mouseUpHandler = this.onDocMouseUp.bind(this)
     document.addEventListener('mouseup', this._mouseUpHandler)
 
-    this._sseUnsub = sseClient.on('file_changed', async (data) => {
+    this._sseFileUnsub = sseClient.on('file_changed', async (data) => {
       if (data.rel_path === this.filePath) {
         await this.loadFile(this.filePath)
       }
       this.$emit('file-reloaded')
+    })
+
+    this._debouncedReloadNotes = debounce(() => this.reloadNotes(), 250)
+    this._sseAnnoUnsub = sseClient.on('annotation_changed', (data) => {
+      if (data.kind === 'issue') return
+      if (data.file_path && data.file_path !== this.filePath) return
+      this._debouncedReloadNotes()
     })
 
     if (this.filePath) {
@@ -180,7 +189,9 @@ export default {
   beforeUnmount() {
     document.removeEventListener('keydown', this._keyHandler)
     document.removeEventListener('mouseup', this._mouseUpHandler)
-    this._sseUnsub?.()
+    this._sseFileUnsub?.()
+    this._sseAnnoUnsub?.()
+    this._debouncedReloadNotes?.cancel()
   },
   methods: {
     async loadFile(path) {
@@ -509,6 +520,19 @@ export default {
 
     reload() {
       if (this.filePath) this.loadFile(this.filePath)
+    },
+
+    async reloadNotes() {
+      if (!this.filePath) return
+      try {
+        const data = await getFile(this.sessionId, this.filePath)
+        // Only replace notes. Do NOT touch lines, loading, error, selection,
+        // cursor/anchor, drag state, modal visibility, modal input, or scroll.
+        this.notes = data.notes || []
+        this.$emit('notes-updated', this.notes)
+      } catch (e) {
+        console.warn('reloadNotes failed:', e.message)
+      }
     },
 
     escapeHtml(str) {

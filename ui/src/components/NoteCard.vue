@@ -18,7 +18,7 @@
           <input type="checkbox" v-model="editIsTodo" /> TODO
         </label>
         <button class="btn-sm btn-primary" @click="save" :disabled="!editContent.trim()">Save</button>
-        <button class="btn-sm" @click="editing = false">Cancel</button>
+        <button class="btn-sm" @click="cancelEdit">Cancel</button>
       </div>
     </template>
     <div v-else class="note-content">{{ note.content }}</div>
@@ -41,7 +41,7 @@ export default {
     note: { type: Object, required: true },
     sessionId: { type: [String, Number], required: true },
   },
-  emits: ['updated', 'deleted', 'jump'],
+  emits: ['updated', 'deleted', 'jump', 'edit-started', 'edit-ended'],
   data() {
     return {
       editing: false,
@@ -54,6 +54,15 @@ export default {
       this.editContent = this.note.content
       this.editIsTodo = this.note.is_todo
       this.editing = true
+      this.$emit('edit-started', {
+        id: this.note.id,
+        startLine: this.note.start_line,
+        endLine: this.note.end_line,
+      })
+    },
+    cancelEdit() {
+      this.editing = false
+      this.$emit('edit-ended', this.note.id)
     },
     async save() {
       try {
@@ -63,6 +72,7 @@ export default {
         })
         this.editing = false
         this.$emit('updated', updated)
+        this.$emit('edit-ended', this.note.id)
       } catch (e) {
         console.error('updateNote error:', e.message)
       }

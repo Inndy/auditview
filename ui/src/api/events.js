@@ -52,7 +52,7 @@ export class SSEClient {
 
     es.onmessage = (e) => this._dispatch('message', e);
 
-    for (const name of ['file_changed', 'heartbeat']) {
+    for (const name of ['file_changed', 'heartbeat', 'annotation_changed']) {
       es.addEventListener(name, (e) => {
         let data = {};
         try { data = JSON.parse(e.data); } catch { /* heartbeat may be empty */ }

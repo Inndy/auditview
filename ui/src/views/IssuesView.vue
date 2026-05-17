@@ -41,6 +41,10 @@
           <h3>Issue #{{ selectedIssueId }}</h3>
           <router-link :to="closeRoute" class="btn btn-icon" title="Back to list">✕</router-link>
         </div>
+        <div v-if="editTargetDeleted" class="deleted-banner">
+          This issue was deleted in another tab.
+          <button class="btn-link" @click="dismissDeletedBanner">Dismiss</button>
+        </div>
         <div v-if="selectedIssue" class="issue-details">
           <div class="detail-row">
             <label>Title</label>
@@ -182,6 +186,8 @@
 <script>
 import { listIssues, updateIssue as apiUpdateIssue, deleteIssue as apiDeleteIssue, getIssueNotes, attachNoteToIssue } from '../api/issues.js'
 import { listNotes } from '../api/notes.js'
+import { sseClient } from '../api/events.js'
+import { debounce } from '../utils/debounce.js'
 import CreateIssueModal from '../components/CreateIssueModal.vue'
 import MarkdownView from '../components/MarkdownView.vue'
 
@@ -209,9 +215,11 @@ export default {
       showCreateIssueModal: false,
       filterOptions: FILTER_OPTIONS,
       titleBeforeEdit: '',
+      dirtyTitle: false,
       editingDescription: false,
       descriptionDraft: '',
       descriptionBeforeEdit: '',
+      editTargetDeleted: false,
     }
   },
   computed: {
@@ -235,13 +243,21 @@ export default {
   },
   mounted() {
     this.load()
+    this._debouncedRefresh = debounce(() => this.refresh(), 250)
+    this._sseUnsub = sseClient.on('annotation_changed', () => this._debouncedRefresh())
+  },
+  beforeUnmount() {
+    this._sseUnsub?.()
+    this._debouncedRefresh?.cancel()
   },
   watch: {
     selectedIssueId(id) {
       this.titleBeforeEdit = ''
+      this.dirtyTitle = false
       this.editingDescription = false
       this.descriptionDraft = ''
       this.descriptionBeforeEdit = ''
+      this.editTargetDeleted = false
       if (id) {
         this.loadIssueNotes(id)
       } else {
@@ -267,6 +283,42 @@ export default {
       } finally {
         this.loadingIssues = false
       }
+    },
+
+    async refresh() {
+      // Silent reload triggered by SSE. Preserve unsaved edits to the
+      // currently-selected issue's title; description draft is already
+      // isolated in descriptionDraft.
+      try {
+        const prevSelectedId = this.selectedIssueId
+        const oldLocal = this.selectedIssue
+        const [issues, notes] = await Promise.all([
+          listIssues(this.session.id),
+          listNotes(this.session.id),
+        ])
+        this.issues = issues.map((f) => {
+          if (f.id !== prevSelectedId) return f
+          if (oldLocal && this.dirtyTitle) {
+            return { ...f, title: oldLocal.title }
+          }
+          return f
+        })
+        this.orphanNotes = notes.filter((n) => !n.issue_id && !n.is_orphaned)
+        if (prevSelectedId) {
+          if (this.issues.find((i) => i.id === prevSelectedId)) {
+            this.loadIssueNotes(prevSelectedId)
+          } else {
+            this.editTargetDeleted = true
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to refresh issues:', e.message)
+      }
+    },
+
+    dismissDeletedBanner() {
+      this.editTargetDeleted = false
+      this.$router.push(this.closeRoute)
     },
     async loadIssueNotes(issueId) {
       try {
@@ -295,6 +347,7 @@ export default {
     },
     rememberTitle() {
       this.titleBeforeEdit = this.selectedIssue?.title || ''
+      this.dirtyTitle = true
     },
     startEditDescription() {
       if (!this.selectedIssue) return
@@ -329,6 +382,7 @@ export default {
       const value = this.selectedIssue[field]
       if (field === 'title' && (typeof value !== 'string' || value.trim() === '')) {
         this.selectedIssue.title = this.titleBeforeEdit
+        if (field === 'title') this.dirtyTitle = false
         return
       }
       try {
@@ -339,6 +393,8 @@ export default {
         if (idx !== -1) this.issues.splice(idx, 1, updated)
       } catch (e) {
         console.error('Failed to update:', e.message)
+      } finally {
+        if (field === 'title') this.dirtyTitle = false
       }
     },
     async setStatus(newStatus) {
@@ -764,5 +820,19 @@ export default {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.deleted-banner {
+  margin: 8px 12px 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--status-warning, #c08000);
+  border-radius: 4px;
+  background: var(--badge-todo-bg, #4a3a10);
+  color: var(--badge-todo-text, #ffc857);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 </style>
