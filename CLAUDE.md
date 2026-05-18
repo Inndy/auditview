@@ -51,4 +51,8 @@ Auditview is a line-level code review/audit tool: a Quart (async) JSON API backe
 
 ### Tests
 
-We currently have no any kind of test in this repo. Ignore test step for now until we have one.
+Pytest + pytest-asyncio (strict mode) live under `tests/`. Install dev deps with `uv sync --group dev`, then run with `uv run pytest`.
+
+The first test is a **reconciler fuzzer** (`tests/test_reconciler_fuzz.py`): it generates synthetic files + random edit patches with ID-tracked ground truth, runs the real `reconcile_file`, and asserts that no surviving `reviewed_lines` row ends up on a line whose content the user never marked. False positives fail the test; false unmarks (dropped marks) are counted but acceptable, per the [reviewed-state safety invariant](#). When a false positive is found, the harness shrinks the case and writes a minimal repro to `tests/fuzz/saved_seeds/fp_<sha8>.json`. **Treat anything committed under `tests/fuzz/saved_seeds/` as a regression fixture** — these are reproducers for bugs the fuzzer has found in past runs.
+
+Flags: `--fuzz-iters=N` (default 100), `--fuzz-seed=N` (default 0), `--fuzz-save-fn` (also save a capped sample of false-unmark cases for later classification).
