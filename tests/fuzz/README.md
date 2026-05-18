@@ -84,6 +84,18 @@ Files under `saved_seeds/` committed to the repo are regression fixtures —
 they represent cases where the reconciler was not conservative enough, and
 must continue to pass (i.e. no FP) after any reconciler change.
 
+## Future work
+
+### Calibrate false-negative rate
+
+The fuzzer currently only enforces the safety invariant (no FPs). But tightening the reconciler's guards to eliminate FPs also increases false negatives — dropped marks that force the reviewer to re-examine lines they already covered. Too many drops make the tool impractical.
+
+The right threshold is not "zero FPs at any cost" but a balance: minimize FPs while keeping the FN rate low enough that review workload stays manageable. That balance point is currently unknown.
+
+One concrete way to measure it: take a real git repository, mark all lines as reviewed at an early commit, then walk each subsequent commit one by one through the reconciler and count how many marks survive. A well-calibrated reconciler should preserve the vast majority of marks across typical commits (refactors, renames, small edits) and only drop marks where genuine ambiguity exists. This gives a realistic FN rate grounded in actual developer behavior rather than synthetic generators.
+
+A secondary metric worth tracking: what fraction of dropped marks were in regions that actually changed (acceptable drops) vs. regions that were untouched (unnecessary drops from overly conservative guards).
+
 To replay a saved seed manually:
 
 ```python
