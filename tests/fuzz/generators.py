@@ -35,6 +35,64 @@ def random_line(rng: random.Random) -> str:
     return "".join(rng.choice(_LINE_CHARS) for _ in range(length))
 
 
+def make_repetitive_seed_file(rng: random.Random) -> tuple[list[str], list[int]]:
+    """Generate files with high content-duplication to stress context-hash disambiguation.
+
+    Five strategies, chosen randomly:
+      0 - sequence repeat:  [a, b, c] * N
+      1 - triangle:         line_i appears i+1 times consecutively
+      2 - nested-loop:      for i in range(n): for j in range(i+1): append(seq[j])
+      3 - interleaved:      sequence repeat with random filler lines between blocks
+      4 - scatter:          one anchor line scattered throughout unique content
+    """
+    strategy = rng.randint(0, 4)
+
+    if strategy == 0:
+        seq_len = rng.randint(2, 6)
+        seq = [random_line(rng) for _ in range(seq_len)]
+        repeats = rng.randint(3, 10)
+        lines = seq * repeats
+
+    elif strategy == 1:
+        n_unique = rng.randint(4, 10)
+        lines = []
+        for i in range(n_unique):
+            content = random_line(rng)
+            lines.extend([content] * (i + 1))
+
+    elif strategy == 2:
+        n_unique = rng.randint(4, 8)
+        seq = [random_line(rng) for _ in range(n_unique)]
+        lines = []
+        for i in range(n_unique):
+            for j in range(i + 1):
+                lines.append(seq[j])
+
+    elif strategy == 3:
+        seq_len = rng.randint(2, 5)
+        seq = [random_line(rng) for _ in range(seq_len)]
+        repeats = rng.randint(3, 8)
+        filler_pool = [random_line(rng) for _ in range(rng.randint(2, 6))]
+        lines = []
+        for _ in range(repeats):
+            lines.extend(seq)
+            for _ in range(rng.randint(0, 3)):
+                lines.append(rng.choice(filler_pool))
+
+    else:
+        anchor = random_line(rng)
+        n_total = rng.randint(20, 60)
+        filler_pool = [random_line(rng) for _ in range(rng.randint(5, 15))]
+        anchor_prob = rng.uniform(0.2, 0.5)
+        lines = [
+            anchor if rng.random() < anchor_prob else rng.choice(filler_pool)
+            for _ in range(n_total)
+        ]
+
+    ids = list(range(len(lines)))
+    return lines, ids
+
+
 def make_seed_file(rng: random.Random) -> tuple[list[str], list[int]]:
     n = rng.randint(20, 200)
     pool_size = rng.randint(5, max(5, n // 3))

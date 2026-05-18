@@ -8,6 +8,7 @@ of ops without re-rolling).
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import random
 import tempfile
@@ -22,9 +23,12 @@ from tests.fuzz.generators import (
     Op,
     apply_ops_pure,
     generate_patch_ops,
+    make_repetitive_seed_file,
     make_seed_file,
     pick_marked_ids,
 )
+
+_SHM_DIR = "/dev/shm" if os.path.isdir("/dev/shm") else None
 
 
 @dataclass
@@ -47,12 +51,19 @@ class Outcome:
         return bool(self.fp_rows)
 
 
-async def run_one(seed: int) -> Outcome:
+async def run_one(seed: int, file_gen=None) -> Outcome:
+    if file_gen is None:
+        file_gen = make_seed_file
     rng = random.Random(seed)
-    initial_lines, initial_ids = make_seed_file(rng)
+    initial_lines, initial_ids = file_gen(rng)
     marked_ids = pick_marked_ids(rng, initial_ids)
     ops = generate_patch_ops(rng, initial_lines)
     return await run_with_inputs(seed, initial_lines, initial_ids, marked_ids, ops)
+
+
+def run_one_sync(seed: int, use_repetitive: bool = False) -> Outcome:
+    gen = make_repetitive_seed_file if use_repetitive else make_seed_file
+    return asyncio.run(run_one(seed, file_gen=gen))
 
 
 async def run_with_inputs(
@@ -64,7 +75,7 @@ async def run_with_inputs(
 ) -> Outcome:
     new_lines, new_ids = apply_ops_pure(initial_lines, initial_ids, ops)
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(dir=_SHM_DIR) as tmp:
         db_path = os.path.join(tmp, "fuzz.db")
         rel_path = "f.txt"
         full_path = os.path.join(tmp, rel_path)

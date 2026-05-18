@@ -7,13 +7,21 @@ unmarks (dropped marks) are acceptable.
 """
 from __future__ import annotations
 
+import asyncio
+from concurrent.futures import ProcessPoolExecutor
+
 import pytest
 
-from tests.fuzz.harness import run_one
+from tests.fuzz.harness import Outcome, run_one_sync
 from tests.fuzz.shrink import save_outcome, shrink
 
 
 FN_SAVE_CAP = 32
+
+
+def _fuzz_worker(args: tuple) -> Outcome:
+    seed, use_repetitive = args
+    return run_one_sync(seed, use_repetitive=use_repetitive)
 
 
 @pytest.mark.asyncio
@@ -21,15 +29,21 @@ async def test_fuzz_no_false_positives(pytestconfig):
     base_seed = pytestconfig.getoption("--fuzz-seed")
     iters = pytestconfig.getoption("--fuzz-iters")
     save_fn = pytestconfig.getoption("--fuzz-save-fn")
+    jobs = pytestconfig.getoption("--fuzz-jobs")
+
+    loop = asyncio.get_running_loop()
+    task_args = [(base_seed + i, i % 2 == 0) for i in range(iters)]
+
+    with ProcessPoolExecutor(max_workers=jobs) as pool:
+        futures = [loop.run_in_executor(pool, _fuzz_worker, args) for args in task_args]
+        all_outcomes: list[Outcome] = await asyncio.gather(*futures)
 
     tp_total = fp_total = fn_total = tn_total = 0
     fp_outcomes: list = []
     fn_samples: list = []
     fn_seen = 0
 
-    for i in range(iters):
-        seed = base_seed + i
-        outcome = await run_one(seed)
+    for outcome in all_outcomes:
         tp_total += len(outcome.tp_ids)
         fp_total += len(outcome.fp_rows)
         fn_total += len(outcome.fn_ids)
@@ -43,9 +57,10 @@ async def test_fuzz_no_false_positives(pytestconfig):
             if save_fn and len(fn_samples) < FN_SAVE_CAP:
                 fn_samples.append(outcome)
 
+    shrunk_list: list = await asyncio.gather(*[shrink(o) for o in fp_outcomes])
+
     saved_fp_paths: list = []
-    for outcome in fp_outcomes:
-        shrunk = await shrink(outcome)
+    for shrunk in shrunk_list:
         path = save_outcome(shrunk, prefix="fp")
         saved_fp_paths.append(path)
 
@@ -56,7 +71,7 @@ async def test_fuzz_no_false_positives(pytestconfig):
             saved_fn_paths.append(path)
 
     print()
-    print(f"fuzz summary over {iters} iters (base seed {base_seed}):")
+    print(f"fuzz summary over {iters} iters (base seed {base_seed}, {jobs} workers):")
     print(f"  TP (mark correctly migrated): {tp_total}")
     print(f"  FP (mark landed on unreviewed code): {fp_total}   <-- must be 0")
     print(f"  FN (mark dropped though line survived): {fn_total} across {fn_seen} iters")
