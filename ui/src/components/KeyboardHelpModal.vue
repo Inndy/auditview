@@ -9,7 +9,12 @@
         <tbody>
           <tr><td class="key">↑ / ↓</td><td>Previous / next file</td></tr>
           <tr><td class="key">j / k</td><td>Move line cursor down / up</td></tr>
+          <tr><td class="key">{count}j / {count}k</td><td>Move N lines (e.g. 10j)</td></tr>
           <tr><td class="key">{ / }</td><td>Jump to previous / next empty line (head/tail if none)</td></tr>
+          <tr><td class="key">[r / ]r</td><td>Previous / next unreviewed line</td></tr>
+          <tr><td class="key">Ctrl-d / Ctrl-u</td><td>Half-page down / up</td></tr>
+          <tr><td class="key">H / L</td><td>Cursor to top / bottom of visible viewport</td></tr>
+          <tr><td class="key">zz / zt / zb</td><td>Center / top-align / bottom-align cursor</td></tr>
           <tr><td class="key">v / Space</td><td>Set / clear anchor at cursor (extends selection with j/k)</td></tr>
           <tr><td class="key">m</td><td>Mark / unmark selected lines</td></tr>
           <tr><td class="key">M</td><td>Mark / unmark entire file</td></tr>

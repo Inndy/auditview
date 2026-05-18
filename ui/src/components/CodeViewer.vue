@@ -167,6 +167,9 @@ export default {
   },
   created() {
     this._loadToken = 0
+    this._pendingOp = null
+    this._pendingOpTimer = null
+    this._countBuffer = ''
   },
   mounted() {
     this._keyHandler = this.onKeyDown.bind(this)
@@ -308,6 +311,86 @@ export default {
       this.scrollCursorIntoView()
     },
 
+    jumpUnreviewed(direction) {
+      if (this.lines.length === 0) return
+      const idxByLineNo = new Map()
+      this.lines.forEach((l, i) => idxByLineNo.set(l.line_no, i))
+      let idx
+      if (this.cursorLine === null) {
+        idx = direction > 0 ? -1 : this.lines.length
+      } else {
+        idx = idxByLineNo.get(this.cursorLine) ?? 0
+      }
+      let i = idx + direction
+      while (i >= 0 && i < this.lines.length) {
+        const l = this.lines[i]
+        if (l.is_countable && !l.is_reviewed) {
+          this.cursorLine = l.line_no
+          this.scrollCursorIntoView()
+          return
+        }
+        i += direction
+      }
+    },
+
+    movePage(direction) {
+      const container = this.$refs.container
+      if (!container || this.lines.length === 0) return
+      const probe = container.querySelector('tr[data-line-no]')
+      const lineH = probe?.getBoundingClientRect().height || 18
+      const rows = Math.max(1, Math.floor(container.clientHeight / lineH / 2))
+      this.moveCursor(rows * direction)
+    },
+
+    cursorToViewportEdge(edge) {
+      const container = this.$refs.container
+      if (!container) return
+      const rows = container.querySelectorAll('tr[data-line-no]')
+      const cRect = container.getBoundingClientRect()
+      let pick = null
+      for (const tr of rows) {
+        const r = tr.getBoundingClientRect()
+        if (r.bottom < cRect.top || r.top > cRect.bottom) continue
+        if (edge === 'top') { pick = tr; break }
+        pick = tr
+      }
+      if (pick) {
+        this.cursorLine = parseInt(pick.getAttribute('data-line-no'), 10)
+      }
+    },
+
+    alignCursor(where) {
+      if (this.cursorLine === null) return
+      this.$nextTick(() => {
+        const el = this.$refs.container?.querySelector(`[data-line-no="${this.cursorLine}"]`)
+        el?.scrollIntoView({ block: where })
+      })
+    },
+
+    setPendingOp(op) {
+      this._pendingOp = op
+      if (this._pendingOpTimer) clearTimeout(this._pendingOpTimer)
+      this._pendingOpTimer = setTimeout(() => {
+        this._pendingOp = null
+        this._pendingOpTimer = null
+      }, 1000)
+    },
+
+    resetPending() {
+      this._pendingOp = null
+      if (this._pendingOpTimer) {
+        clearTimeout(this._pendingOpTimer)
+        this._pendingOpTimer = null
+      }
+      this._countBuffer = ''
+    },
+
+    consumeCount() {
+      const n = this._countBuffer ? parseInt(this._countBuffer, 10) : 1
+      this._countBuffer = ''
+      return Math.min(Math.max(n, 1), 9999)
+    },
+
     toggleAnchor() {
       if (this.cursorLine === null) {
         if (this.lines.length === 0) return
@@ -350,6 +433,46 @@ export default {
 
       const key = e.key
 
+      if (this._pendingOp) {
+        const op = this._pendingOp
+        let handled = false
+        if (op === 'z') {
+          if (key === 'z') { this.alignCursor('center'); handled = true }
+          else if (key === 't') { this.alignCursor('start'); handled = true }
+          else if (key === 'b') { this.alignCursor('end'); handled = true }
+        } else if (op === ']' && key === 'r') {
+          this.jumpUnreviewed(1); handled = true
+        } else if (op === '[' && key === 'r') {
+          this.jumpUnreviewed(-1); handled = true
+        }
+        this.resetPending()
+        if (handled) { e.preventDefault(); return }
+      }
+
+      if (/^[0-9]$/.test(key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (this._countBuffer === '' && key === '0') {
+          e.preventDefault()
+          return
+        }
+        this._countBuffer += key
+        e.preventDefault()
+        return
+      }
+
+      if (key === 'j') {
+        e.preventDefault()
+        this.moveCursor(this.consumeCount())
+        return
+      }
+
+      if (key === 'k') {
+        e.preventDefault()
+        this.moveCursor(-this.consumeCount())
+        return
+      }
+
+      this._countBuffer = ''
+
       if (key === '?') {
         e.preventDefault()
         this.$emit('show-help')
@@ -359,20 +482,19 @@ export default {
       if (key === 'Escape') {
         this.cursorLine = null
         this.anchorLine = null
+        this.resetPending()
         return
       }
 
-      if (key === 'j') {
+      if (e.ctrlKey && (key === 'd' || key === 'u')) {
         e.preventDefault()
-        this.moveCursor(1)
+        this.movePage(key === 'd' ? 1 : -1)
         return
       }
 
-      if (key === 'k') {
-        e.preventDefault()
-        this.moveCursor(-1)
-        return
-      }
+      if (key === 'z') { e.preventDefault(); this.setPendingOp('z'); return }
+      if (key === ']') { e.preventDefault(); this.setPendingOp(']'); return }
+      if (key === '[') { e.preventDefault(); this.setPendingOp('['); return }
 
       if (key === '{') {
         e.preventDefault()
@@ -383,6 +505,18 @@ export default {
       if (key === '}') {
         e.preventDefault()
         this.jumpEmpty(1)
+        return
+      }
+
+      if (key === 'H') {
+        e.preventDefault()
+        this.cursorToViewportEdge('top')
+        return
+      }
+
+      if (key === 'L') {
+        e.preventDefault()
+        this.cursorToViewportEdge('bottom')
         return
       }
 
