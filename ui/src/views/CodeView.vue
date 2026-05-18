@@ -18,6 +18,7 @@
           @notes-updated="onNotesUpdated"
           @lines-marked="onLinesMarked"
           @file-reloaded="onFileReloaded"
+          @selection-change="onSelectionChange"
           @show-help="$emit('show-help')"
         />
       </Pane>
@@ -112,6 +113,10 @@ export default {
   watch: {
     '$route.query'({ file, line, endLine }) {
       if (file) this.currentFile = file
+      if (this._writingFromCursor) {
+        this._writingFromCursor = false
+        return
+      }
       this.pendingJump = line ? { start: parseInt(line), end: parseInt(endLine || line) } : null
     },
   },
@@ -134,6 +139,17 @@ export default {
         this.pendingJump = null
         this.$nextTick(() => this.$refs.codeViewer?.jumpToRange(start, end))
       }
+    },
+    onSelectionChange({ start, end }) {
+      const q = this.$route.query
+      const wantLine = start != null ? String(start) : undefined
+      const wantEnd = end != null && end !== start ? String(end) : undefined
+      if ((q.line ?? undefined) === wantLine && (q.endLine ?? undefined) === wantEnd) return
+      const next = { ...q }
+      if (wantLine == null) delete next.line; else next.line = wantLine
+      if (wantEnd == null) delete next.endLine; else next.endLine = wantEnd
+      this._writingFromCursor = true
+      this.$router.replace({ query: next })
     },
     onLinesMarked({ filePath, countable, reviewed }) {
       this.$refs.fileTree?.updateFile(filePath, { countable_lines: countable, reviewed_lines: reviewed })

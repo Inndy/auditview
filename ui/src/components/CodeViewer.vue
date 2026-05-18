@@ -110,7 +110,7 @@ export default {
     filePath: { type: String, default: null },
     wrapLines: { type: Boolean, default: false },
   },
-  emits: ['notes-updated', 'lines-marked', 'file-reloaded', 'show-help'],
+  emits: ['notes-updated', 'lines-marked', 'file-reloaded', 'show-help', 'selection-change'],
   data() {
     return {
       lines: [],
@@ -138,6 +138,9 @@ export default {
       const a = this.anchorLine ?? this.cursorLine
       return Math.max(a, this.cursorLine)
     },
+    selectionRange() {
+      return [this.rangeMin, this.rangeMax]
+    },
     lineSeverityMap() {
       const RANK = { P0: 3, P1: 2, P2: 1, NONE: 0 }
       const map = {}
@@ -162,6 +165,11 @@ export default {
         this.notesStale = false
         this.loadFile(newPath)
       }
+    },
+    selectionRange: {
+      handler([start, end]) {
+        this.$emit('selection-change', { start, end })
+      },
     },
   },
   created() {
