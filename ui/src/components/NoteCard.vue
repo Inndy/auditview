@@ -34,7 +34,6 @@
 
 <script>
 import { updateNote, deleteNote } from '../api/notes.js'
-import { recordSelfMutation } from '../api/selfMutations.js'
 
 export default {
   name: 'NoteCard',
@@ -71,7 +70,6 @@ export default {
           content: this.editContent,
           is_todo: this.editIsTodo,
         })
-        recordSelfMutation('note', updated.id)
         this.editing = false
         this.$emit('updated', updated)
         this.$emit('edit-ended', this.note.id)
@@ -82,7 +80,6 @@ export default {
     async remove() {
       try {
         await deleteNote(this.sessionId, this.note.id)
-        recordSelfMutation('note', this.note.id)
         this.$emit('deleted', this.note.id)
       } catch (e) {
         console.error('deleteNote error:', e.message)

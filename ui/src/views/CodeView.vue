@@ -49,6 +49,8 @@
 import { Splitpanes, Pane } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import { getCoverage } from '../api/coverage.js'
+import { sseClient } from '../api/events.js'
+import { debounce } from '../utils/debounce.js'
 import FileTree from '../components/FileTree.vue'
 import CodeViewer from '../components/CodeViewer.vue'
 import NotePanel from '../components/NotePanel.vue'
@@ -106,9 +108,13 @@ export default {
     if (line) this.pendingJump = { start: parseInt(line), end: parseInt(endLine || line) }
     this._keyHandler = this.onKeyDown.bind(this)
     document.addEventListener('keydown', this._keyHandler)
+    this._debouncedCoverage = debounce(() => this.refreshCoverage(), 250)
+    this._sseUnsub = sseClient.on('file_changed', () => this._debouncedCoverage())
   },
   beforeUnmount() {
     document.removeEventListener('keydown', this._keyHandler)
+    this._sseUnsub?.()
+    this._debouncedCoverage?.cancel()
   },
   watch: {
     '$route.query'({ file, line, endLine }) {
@@ -161,7 +167,6 @@ export default {
       } catch { /* non-critical, stale coverage is acceptable */ }
     },
     onFileReloaded() {
-      this.$refs.fileTree?.refresh()
       this.refreshCoverage()
     },
     onNoteUpdated(updated) {

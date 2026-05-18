@@ -8,8 +8,15 @@ from auditview.api.util import safe_path
 
 bp = Blueprint("notes", __name__)
 
+NOTE_SELECT_COLUMNS = (
+    "n.id, n.file_path, n.start_line, n.end_line, n.content, n.is_todo, "
+    "n.is_orphaned, n.snapshot_text, n.created_at, n.issue_id, "
+    "i.severity AS issue_severity"
+)
+NOTE_SELECT_FROM = "notes n LEFT JOIN issues i ON n.issue_id = i.id"
 
-def _note_row(r):
+
+def note_row(r):
     return {
         "id": r["id"],
         "file_path": r["file_path"],
@@ -21,6 +28,7 @@ def _note_row(r):
         "snapshot_text": r["snapshot_text"],
         "created_at": r["created_at"],
         "issue_id": r["issue_id"],
+        "issue_severity": r["issue_severity"],
     }
 
 
@@ -32,12 +40,12 @@ async def list_notes(session_id):
             return jsonify({"error": "Session not found"}), 404
 
         cur = await conn.execute(
-            "SELECT id, file_path, start_line, end_line, content, is_todo, is_orphaned, snapshot_text, created_at, issue_id "
-            "FROM notes WHERE session_id = ? ORDER BY file_path, start_line",
+            f"SELECT {NOTE_SELECT_COLUMNS} FROM {NOTE_SELECT_FROM} "
+            "WHERE n.session_id = ? ORDER BY n.file_path, n.start_line",
             (session_id,),
         )
         rows = await cur.fetchall()
-    return jsonify([_note_row(r) for r in rows])
+    return jsonify([note_row(r) for r in rows])
 
 
 @bp.route("/sessions/<int:session_id>/notes", methods=["POST"])
@@ -102,20 +110,18 @@ async def create_note(session_id):
         row_id = cur.lastrowid
         await ensure_snapshot(conn, session_id, file_path, root_path)
         cur = await conn.execute(
-            "SELECT id, file_path, start_line, end_line, content, is_todo, is_orphaned, snapshot_text, created_at, issue_id "
-            "FROM notes WHERE id = ?",
+            f"SELECT {NOTE_SELECT_COLUMNS} FROM {NOTE_SELECT_FROM} WHERE n.id = ?",
             (row_id,),
         )
         row = await cur.fetchone()
+    note = note_row(row)
     current_app.watcher.broadcast_to_session(session_id, {
         "type": "annotation_changed",
         "kind": "note",
         "action": "create",
-        "id": row_id,
-        "file_path": file_path,
-        "is_todo": bool(is_todo),
+        "note": note,
     })
-    return jsonify(_note_row(row)), 201
+    return jsonify(note), 201
 
 
 @bp.route("/sessions/<int:session_id>/notes/<int:note_id>", methods=["PATCH"])
@@ -150,20 +156,18 @@ async def update_note(session_id, note_id):
             (*updates.values(), note_id),
         )
         cur = await conn.execute(
-            "SELECT id, file_path, start_line, end_line, content, is_todo, is_orphaned, snapshot_text, created_at, issue_id "
-            "FROM notes WHERE id = ?",
+            f"SELECT {NOTE_SELECT_COLUMNS} FROM {NOTE_SELECT_FROM} WHERE n.id = ?",
             (note_id,),
         )
         row = await cur.fetchone()
+    note = note_row(row)
     current_app.watcher.broadcast_to_session(session_id, {
         "type": "annotation_changed",
         "kind": "note",
         "action": "update",
-        "id": note_id,
-        "file_path": row["file_path"],
-        "is_todo": bool(row["is_todo"]),
+        "note": note,
     })
-    return jsonify(_note_row(row))
+    return jsonify(note)
 
 
 @bp.route("/sessions/<int:session_id>/notes/<int:note_id>", methods=["DELETE"])

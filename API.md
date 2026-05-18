@@ -243,10 +243,13 @@ by `file_path` then `start_line`.
     "is_orphaned": false,
     "snapshot_text": "line3\nline4\nline5",
     "created_at": "2026-05-14T10:05:00Z",
-    "issue_id": null
+    "issue_id": null,
+    "issue_severity": null
   }
 ]
 ```
+
+- `issue_id` / `issue_severity`: present when the note is attached to an issue; both `null` otherwise
 
 **Errors**
 - `404` — session not found
@@ -289,7 +292,8 @@ file content at creation time and refreshes the file's checkpoint snapshot.
   "is_orphaned": false,
   "snapshot_text": "line3\nline4\nline5",
   "created_at": "2026-05-14T10:05:00Z",
-  "issue_id": 12
+  "issue_id": 12,
+  "issue_severity": "P1"
 }
 ```
 
@@ -462,7 +466,7 @@ cleared to `NULL` so they survive as standalone notes.
 
 List all notes attached to a specific issue, ordered by `created_at` ascending.
 
-**Response 200**: array of note objects (same shape as `GET /notes`, without `issue_id`).
+**Response 200**: array of note objects (same shape as `GET /notes`; every entry has the issue's `issue_id` and `issue_severity` populated).
 
 ---
 
@@ -594,7 +598,22 @@ event: file_changed
 data: {"rel_path": "src/main.py"}
 
 event: annotation_changed
-data: {"kind": "note", "action": "create", "id": 42, "file_path": "src/main.py", "is_todo": false}
+data: {"kind": "note", "action": "create", "note": {<full note row>}}
+
+event: annotation_changed
+data: {"kind": "note", "action": "update", "note": {<full note row>}}
+
+event: annotation_changed
+data: {"kind": "note", "action": "delete", "id": 42, "file_path": "src/main.py"}
+
+event: annotation_changed
+data: {"kind": "issue", "action": "create", "issue": {<full issue row>}}
+
+event: annotation_changed
+data: {"kind": "issue", "action": "update", "issue": {<full issue row>}}
+
+event: annotation_changed
+data: {"kind": "issue", "action": "delete", "id": 12}
 
 event: shutdown
 data: {}
@@ -605,10 +624,13 @@ data: {}
 - `annotation_changed`: emitted after a note or issue is created/updated/deleted
   - `kind`: `"note"` or `"issue"`
   - `action`: `"create"`, `"update"`, or `"delete"`
-  - `id`: integer id of the affected record, or `null` for cascade events that touch many records
-  - `file_path`: notes only — the file the note belongs to; `null` for cascade events (issue create/delete touching multiple notes, severity update affecting all attached notes) where consumers should reload conservatively
-  - `is_todo`: notes only, optional — present on create/update
-  - Cascades: `create_issue` with `note_ids` emits one `issue/create` followed by one `note/update` with `id: null, file_path: null`. `delete_issue` emits one `issue/delete` followed by one `note/update` with `id: null, file_path: null` if any notes had their `issue_id` cleared. `PATCH issue` with `severity` change emits one `issue/update` followed by one `note/update` cascade (so coloured-line overlays in CodeView refresh).
+  - `note` / `issue`: the full row (same shape as the corresponding REST response) on create and update. Consumers apply the row to local state directly — no refetch is required.
+  - `id` + `file_path` (for `note/delete`) or `id` (for `issue/delete`): just enough to remove the record from local state.
+  - Cascades emit one event per affected record (no `id: null` placeholders):
+    - `POST /issues` with `note_ids`: one `issue/create` followed by one `note/update` per attached note (each carrying the note's full new row, including the new `issue_id` and `issue_severity`).
+    - `DELETE /issues/:id`: one `issue/delete` followed by one `note/update` per note whose `issue_id` was cleared.
+    - `PATCH /issues/:id` with `severity` change: one `issue/update` followed by one `note/update` per attached note (so colour overlays in CodeView refresh).
+    - `PUT /notes/:id/issue`: one `note/update` with the note's new row.
   - Clients should debounce reactions (250 ms trailing edge is suggested) to coalesce bursts (e.g. bulk creation via MCP).
 - `shutdown`: emitted once when the server begins graceful shutdown; the stream terminates after this event
 

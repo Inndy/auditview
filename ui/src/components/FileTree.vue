@@ -155,10 +155,12 @@ export default {
   mounted() {
     this.load()
     this._debouncedRefresh = debounce(() => this.load({ silent: true }), 250)
-    this._sseUnsub = sseClient.on('annotation_changed', () => this._debouncedRefresh())
+    this._sseUnsubAnno = sseClient.on('annotation_changed', () => this._debouncedRefresh())
+    this._sseUnsubFile = sseClient.on('file_changed', () => this._debouncedRefresh())
   },
   beforeUnmount() {
-    this._sseUnsub?.()
+    this._sseUnsubAnno?.()
+    this._sseUnsubFile?.()
     this._debouncedRefresh?.cancel()
   },
   methods: {

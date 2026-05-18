@@ -1,9 +1,45 @@
 from quart import Blueprint, request, jsonify, current_app
 from auditview.db.connection import open_db
+from auditview.api.notes import NOTE_SELECT_COLUMNS, NOTE_SELECT_FROM, note_row
 
 bp = Blueprint("issues", __name__)
 
 _ISSUE_COLUMNS = "id, session_id, title, description, severity, status, created_at"
+
+
+async def _broadcast_notes_by_ids(conn, session_id, note_ids):
+    if not note_ids:
+        return
+    placeholders = ",".join("?" * len(note_ids))
+    cur = await conn.execute(
+        f"SELECT {NOTE_SELECT_COLUMNS} FROM {NOTE_SELECT_FROM} "
+        f"WHERE n.session_id = ? AND n.id IN ({placeholders})",
+        (session_id, *note_ids),
+    )
+    rows = await cur.fetchall()
+    for r in rows:
+        current_app.watcher.broadcast_to_session(session_id, {
+            "type": "annotation_changed",
+            "kind": "note",
+            "action": "update",
+            "note": note_row(r),
+        })
+
+
+async def _broadcast_notes_by_issue(conn, session_id, issue_id):
+    cur = await conn.execute(
+        f"SELECT {NOTE_SELECT_COLUMNS} FROM {NOTE_SELECT_FROM} "
+        "WHERE n.session_id = ? AND n.issue_id = ?",
+        (session_id, issue_id),
+    )
+    rows = await cur.fetchall()
+    for r in rows:
+        current_app.watcher.broadcast_to_session(session_id, {
+            "type": "annotation_changed",
+            "kind": "note",
+            "action": "update",
+            "note": note_row(r),
+        })
 
 
 @bp.route("/sessions/<int:session_id>/issues", methods=["GET"])
@@ -98,21 +134,15 @@ async def create_issue(session_id):
             (row_id,),
         )
         row = await cur.fetchone()
-    current_app.watcher.broadcast_to_session(session_id, {
-        "type": "annotation_changed",
-        "kind": "issue",
-        "action": "create",
-        "id": row_id,
-    })
-    if note_ids:
+        issue_dict = dict(row)
         current_app.watcher.broadcast_to_session(session_id, {
             "type": "annotation_changed",
-            "kind": "note",
-            "action": "update",
-            "id": None,
-            "file_path": None,
+            "kind": "issue",
+            "action": "create",
+            "issue": issue_dict,
         })
-    return jsonify(dict(row)), 201
+        await _broadcast_notes_by_ids(conn, session_id, note_ids)
+    return jsonify(issue_dict), 201
 
 
 @bp.route("/sessions/<int:session_id>/issues/<int:issue_id>", methods=["PATCH"])
@@ -163,26 +193,19 @@ async def update_issue(session_id, issue_id):
             (issue_id, session_id),
         )
         row = await cur.fetchone()
+        if not row:
+            return jsonify({"error": "issue not found"}), 404
 
-    if not row:
-        return jsonify({"error": "issue not found"}), 404
-    current_app.watcher.broadcast_to_session(session_id, {
-        "type": "annotation_changed",
-        "kind": "issue",
-        "action": "update",
-        "id": issue_id,
-    })
-    # If severity changed, notes attached to this issue need a re-color in CodeView
-    # (lineSeverityMap reads issue_severity from notes).
-    if severity is not None:
+        issue_dict = dict(row)
         current_app.watcher.broadcast_to_session(session_id, {
             "type": "annotation_changed",
-            "kind": "note",
+            "kind": "issue",
             "action": "update",
-            "id": None,
-            "file_path": None,
+            "issue": issue_dict,
         })
-    return jsonify(dict(row))
+        if severity is not None:
+            await _broadcast_notes_by_issue(conn, session_id, issue_id)
+    return jsonify(issue_dict)
 
 
 @bp.route("/sessions/<int:session_id>/issues/<int:issue_id>", methods=["DELETE"])
@@ -191,10 +214,14 @@ async def delete_issue(session_id, issue_id):
         await conn.execute("BEGIN")
         try:
             cur = await conn.execute(
+                "SELECT id FROM notes WHERE issue_id = ? AND session_id = ?",
+                (issue_id, session_id),
+            )
+            affected_note_ids = [r["id"] for r in await cur.fetchall()]
+            await conn.execute(
                 "UPDATE notes SET issue_id = NULL WHERE issue_id = ? AND session_id = ?",
                 (issue_id, session_id),
             )
-            notes_touched = cur.rowcount
             cur = await conn.execute(
                 "DELETE FROM issues WHERE id = ? AND session_id = ?",
                 (issue_id, session_id),
@@ -204,22 +231,16 @@ async def delete_issue(session_id, issue_id):
         except Exception:
             await conn.execute("ROLLBACK")
             raise
-    if not deleted:
-        return jsonify({"error": "issue not found"}), 404
-    current_app.watcher.broadcast_to_session(session_id, {
-        "type": "annotation_changed",
-        "kind": "issue",
-        "action": "delete",
-        "id": issue_id,
-    })
-    if notes_touched:
+
+        if not deleted:
+            return jsonify({"error": "issue not found"}), 404
         current_app.watcher.broadcast_to_session(session_id, {
             "type": "annotation_changed",
-            "kind": "note",
-            "action": "update",
-            "id": None,
-            "file_path": None,
+            "kind": "issue",
+            "action": "delete",
+            "id": issue_id,
         })
+        await _broadcast_notes_by_ids(conn, session_id, affected_note_ids)
     return jsonify({"deleted": True})
 
 
@@ -227,12 +248,12 @@ async def delete_issue(session_id, issue_id):
 async def list_issue_notes(session_id, issue_id):
     async with open_db(current_app.config["DB_PATH"]) as conn:
         cur = await conn.execute(
-            "SELECT id, file_path, start_line, end_line, content, is_todo, is_orphaned, snapshot_text, created_at "
-            "FROM notes WHERE session_id = ? AND issue_id = ? ORDER BY created_at",
+            f"SELECT {NOTE_SELECT_COLUMNS} FROM {NOTE_SELECT_FROM} "
+            "WHERE n.session_id = ? AND n.issue_id = ? ORDER BY n.created_at",
             (session_id, issue_id),
         )
         rows = await cur.fetchall()
-    return jsonify([dict(r) for r in rows])
+    return jsonify([note_row(r) for r in rows])
 
 
 @bp.route("/sessions/<int:session_id>/notes/<int:note_id>/issue", methods=["PUT"])
@@ -245,10 +266,9 @@ async def attach_note_to_issue(session_id, note_id):
 
     async with open_db(current_app.config["DB_PATH"]) as conn:
         cur = await conn.execute(
-            "SELECT file_path FROM notes WHERE id = ? AND session_id = ?", (note_id, session_id)
+            "SELECT id FROM notes WHERE id = ? AND session_id = ?", (note_id, session_id)
         )
-        note_row = await cur.fetchone()
-        if note_row is None:
+        if await cur.fetchone() is None:
             return jsonify({"error": "Note not found"}), 404
 
         cur = await conn.execute(
@@ -261,11 +281,5 @@ async def attach_note_to_issue(session_id, note_id):
             "UPDATE notes SET issue_id = ? WHERE id = ? AND session_id = ?",
             (issue_id, note_id, session_id),
         )
-    current_app.watcher.broadcast_to_session(session_id, {
-        "type": "annotation_changed",
-        "kind": "note",
-        "action": "update",
-        "id": note_id,
-        "file_path": note_row["file_path"],
-    })
+        await _broadcast_notes_by_ids(conn, session_id, [note_id])
     return jsonify({"attached": True})
