@@ -3,7 +3,8 @@
 The fuzzer stress-tests `reconcile_file` by generating synthetic files,
 randomly marking lines, applying edit patches, and asserting that no
 surviving review mark lands on code the user never marked (false positive).
-False unmarks (dropped marks) are acceptable; false positives are a bug.
+False unmarks (dropped marks) are acceptable; false positives cause the
+test to fail and trigger shrinking.
 
 ## Fundamental limitation
 
@@ -11,7 +12,9 @@ The reconciler uses `difflib.SequenceMatcher` to map old line positions to new o
 
 This means false positives (a mark migrating to an unreviewed line) are not just implementation bugs — some are rooted in fundamental ambiguity that no line-based diff algorithm can resolve. The reconciler's margin-K guard and context hashing mitigate this, but cannot eliminate it entirely.
 
-The fuzzer is therefore a **permanent quality floor**, not a one-time validation step. It confirms that known ambiguity cases are handled conservatively (drop rather than false-migrate) and catches regressions when the reconciler changes.
+When the fuzzer finds a false positive, the correct response is always to make the reconciler **more conservative** — tighten the guard so it drops the ambiguous case rather than migrating it. Trying to correctly resolve the ambiguity is a dead end; there is no information to resolve it with.
+
+The fuzzer is therefore a **permanent quality floor**, not a one-time validation step. It continuously confirms that the reconciler's guards are conservative enough, and catches regressions when the reconciler changes.
 
 ## Quick start
 
@@ -78,7 +81,8 @@ When a false positive is found:
 3. The test fails and prints the seed(s).
 
 Files under `saved_seeds/` committed to the repo are regression fixtures —
-they represent bugs found in past runs and must keep passing.
+they represent cases where the reconciler was not conservative enough, and
+must continue to pass (i.e. no FP) after any reconciler change.
 
 To replay a saved seed manually:
 
