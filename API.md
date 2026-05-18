@@ -213,7 +213,7 @@ silently written.
 ```
 - `updated`: number of rows inserted (when `reviewed=true`) or deleted (when `reviewed=false`)
 - `accepted` / `rejected`: per-line breakdown; `reason` explains why a line was skipped
-- When marking (`reviewed=true`), a stale hash/context/line_no triple is rejected. When unmarking, validation against current content is skipped (the row is deleted by hash regardless).
+- When marking (`reviewed=true`), a stale hash/context/line_no triple is rejected. When unmarking, validation against current content is skipped; the matching `(line_hash, context_hash, line_no)` row is deleted. Each visible line is its own row, so two lines that happen to share the same `(line_hash, context_hash)` (e.g. consecutive identical lines or repeating blocks) can be marked and unmarked independently.
 - When `reviewed=true` and at least one line was accepted, the file's checkpoint snapshot is refreshed.
 
 **Errors**

@@ -56,14 +56,15 @@ async def _reconcile_reviewed(conn, rows, new_lines, new_line_hashes, line_map):
             elif new_ln != row["line_no"]:
                 updates.append((new_ln, row["line_hash"], row["context_hash"], row["id"]))
 
-    # An edit can collapse two previously distinct reviewed lines into the
-    # same (line_hash, context_hash). UNIQUE(session_id, file_path, line_hash,
-    # context_hash) would then reject the second UPDATE and roll back the
-    # whole reconcile. Keep the first survivor per key, drop the rest.
+    # UNIQUE is (session_id, file_path, line_hash, context_hash, line_no), so
+    # rows with the same (lh, ch) at different line_no coexist. Collisions only
+    # happen when two old rows map to the same new_ln (e.g. an edit deletes the
+    # unmarked sibling so the marked row slides next to another identical line).
+    # Keep the first survivor per (lh, ch, new_ln), drop the rest.
     deduped_updates = []
     seen_keys = set()
     for new_ln, lh, ch, row_id in updates:
-        key = (lh, ch)
+        key = (lh, ch, new_ln)
         if key in seen_keys:
             delete_ids.append(row_id)
         else:

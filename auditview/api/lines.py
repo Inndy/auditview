@@ -80,8 +80,8 @@ async def mark_lines(session_id):
                 else:
                     await conn.execute(
                         "DELETE FROM reviewed_lines "
-                        "WHERE session_id = ? AND file_path = ? AND line_hash = ? AND context_hash = ?",
-                        (session_id, file_path, lh, ch),
+                        "WHERE session_id = ? AND file_path = ? AND line_hash = ? AND context_hash = ? AND line_no = ?",
+                        (session_id, file_path, lh, ch, ln),
                     )
                 accepted.append({"line_hash": lh, "context_hash": ch, "line_no": ln})
             await conn.execute("COMMIT")

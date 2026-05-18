@@ -235,10 +235,10 @@ async def get_file(session_id, fpath):
         lines = await read_file_lines(full_path)
 
         cur = await conn.execute(
-            "SELECT line_hash, context_hash FROM reviewed_lines WHERE session_id = ? AND file_path = ?",
+            "SELECT line_hash, context_hash, line_no FROM reviewed_lines WHERE session_id = ? AND file_path = ?",
             (session_id, fpath),
         )
-        reviewed_set = {(r["line_hash"], r["context_hash"]) for r in await cur.fetchall()}
+        reviewed_set = {(r["line_hash"], r["context_hash"], r["line_no"]) for r in await cur.fetchall()}
 
         result_lines = []
         for i, line_content in enumerate(lines):
@@ -251,7 +251,7 @@ async def get_file(session_id, fpath):
                 "content": line_content,
                 "line_hash": lh,
                 "context_hash": ch,
-                "is_reviewed": (lh, ch) in reviewed_set,
+                "is_reviewed": (lh, ch, i + 1) in reviewed_set,
                 "is_countable": is_countable_line(line_content, ext),
             })
 

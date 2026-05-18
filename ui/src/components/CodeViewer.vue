@@ -467,11 +467,11 @@ export default {
           reviewed,
         })
         const acceptedKeys = new Set(
-          (resp.accepted || []).map((a) => `${a.line_hash}|${a.context_hash}`),
+          (resp.accepted || []).map((a) => `${a.line_hash}|${a.context_hash}|${a.line_no}`),
         )
         const useResp = resp.accepted !== undefined
         for (const l of rangeLines) {
-          if (!useResp || acceptedKeys.has(`${l.line_hash}|${l.context_hash}`)) {
+          if (!useResp || acceptedKeys.has(`${l.line_hash}|${l.context_hash}|${l.line_no}`)) {
             l.is_reviewed = reviewed
           }
         }
