@@ -119,6 +119,13 @@ export default {
     openFile(path) {
       this.currentFile = path
       this.currentNotes = []
+      const q = this.$route.query
+      if (q.file !== path || q.line != null || q.endLine != null) {
+        const next = { ...q, file: path }
+        delete next.line
+        delete next.endLine
+        this.$router.replace({ query: next })
+      }
     },
     onNotesUpdated(notes) {
       this.currentNotes = notes
