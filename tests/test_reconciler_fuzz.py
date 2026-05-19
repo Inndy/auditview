@@ -26,6 +26,7 @@ def _fuzz_worker(args: tuple) -> Outcome:
     return run_one_sync(seed, use_repetitive=use_repetitive)
 
 
+@pytest.mark.fuzz
 @pytest.mark.asyncio
 async def test_fuzz_no_false_positives(pytestconfig):
     base_seed = pytestconfig.getoption("--fuzz-seed")
