@@ -7,6 +7,11 @@ The server is bound to a single `root_path` and `db_path` chosen at startup
 (see `GET /api/config`). Session creation does **not** accept `root_path` from
 the request — it is always taken from the running process configuration.
 
+**Security model**: auditview is designed for single-user, single-instance use on
+a trusted local machine. There is no authentication layer — all endpoints are
+open to any client that can reach the bound address. Do not expose the server
+port to untrusted networks.
+
 ---
 
 ## Sessions
