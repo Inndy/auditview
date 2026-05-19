@@ -6,7 +6,7 @@
     <div v-else-if="fileBlocked" class="no-file file-blocked">
       <span v-if="fileBlocked.reason === 'binary'">Binary file — not renderable as text.</span>
       <span v-else>File is large ({{ Math.round(fileBlocked.size / 1024) }} KB) and may be slow to load.</span>
-      <button class="load-anyway-btn" @click="loadFile(filePath, { force: true })">Load anyway</button>
+      <button class="load-anyway-btn" @click="loadFile(filePath, { force: true })"><span><u>L</u>oad anyway</span></button>
     </div>
     <template v-else>
       <table class="code-table" @mouseleave="onTableMouseLeave">
@@ -528,6 +528,12 @@ export default {
       if (key === 'L') {
         e.preventDefault()
         this.cursorToViewportEdge('bottom')
+        return
+      }
+
+      if (key === 'l' && this.fileBlocked) {
+        e.preventDefault()
+        this.loadFile(this.filePath, { force: true })
         return
       }
 
