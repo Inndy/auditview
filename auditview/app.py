@@ -57,7 +57,7 @@ def create_app(db_path, root_path):
         # Catch shutdown before uvicorn's drain: by the time after_serving
         # runs, SSE connections are already gone and clients miss the goodbye.
         def on_shutdown(sig, uv):
-            watcher.broadcast({"type": "shutdown"})
+            watcher.broadcast_all({"type": "shutdown"}, drain_first=True)
             if callable(uv):
                 uv(sig, None)
 

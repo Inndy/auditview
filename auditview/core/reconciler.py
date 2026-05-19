@@ -1,9 +1,12 @@
 import difflib
+import logging
 import os
 
 from auditview.core.hashing import line_hash, context_hash
 from auditview.core.coverage import is_countable_line
 from auditview.core.io_utils import read_file_lines
+
+logger = logging.getLogger("auditview")
 
 
 def build_line_map(old_lines, new_lines):
@@ -172,7 +175,7 @@ async def _reconcile_reviewed(
         )
 
 
-async def _reconcile_notes(conn, session_id, file_path, new_lines, new_line_hashes, line_map):
+async def _reconcile_notes(conn, session_id, file_path, new_lines, new_line_hashes, line_map, block_margins, old_line_hashes):
     cur = await conn.execute(
         "SELECT id, start_line, end_line, start_hash, end_hash FROM notes "
         "WHERE session_id = ? AND file_path = ? AND is_orphaned = 0",
@@ -206,13 +209,25 @@ async def _reconcile_notes(conn, session_id, file_path, new_lines, new_line_hash
                 await conn.execute("UPDATE notes SET is_orphaned = 1 WHERE id = ?", (note_id,))
                 continue
 
-            if new_start_idx > new_end_idx:
-                await conn.execute("UPDATE notes SET is_orphaned = 1 WHERE id = ?", (note_id,))
-            elif new_start_idx != start_orig_idx or new_end_idx != end_orig_idx:
-                await conn.execute(
-                    "UPDATE notes SET start_line = ?, end_line = ? WHERE id = ?",
-                    (new_start_idx + 1, new_end_idx + 1, note_id),
-                )
+            # Apply the same block_margins guard as _reconcile_reviewed: both
+            # anchor endpoints must sit deep enough inside their matched block
+            # to rule out a coincidental short-run mapping.
+            for orig_idx in (start_orig_idx, end_orig_idx):
+                m_before, m_after = block_margins.get(orig_idx, (0, 0))
+                k_before = min(_BLOCK_MARGIN_K, orig_idx)
+                k_after = min(_BLOCK_MARGIN_K, len(old_line_hashes) - 1 - orig_idx)
+                if m_before < k_before or m_after < k_after:
+                    await conn.execute("UPDATE notes SET is_orphaned = 1 WHERE id = ?", (note_id,))
+                    break
+            else:
+                if new_start_idx > new_end_idx:
+                    await conn.execute("UPDATE notes SET is_orphaned = 1 WHERE id = ?", (note_id,))
+                elif new_start_idx != start_orig_idx or new_end_idx != end_orig_idx:
+                    await conn.execute(
+                        "UPDATE notes SET start_line = ?, end_line = ? WHERE id = ?",
+                        (new_start_idx + 1, new_end_idx + 1, note_id),
+                    )
+            continue
         else:
             if (start_orig_idx >= len(new_lines) or
                     new_line_hashes[start_orig_idx] != start_hash or
@@ -290,68 +305,80 @@ async def reconcile_file(conn, session_id, file_path, root_path):
         except Exception:
             await conn.execute("ROLLBACK")
         return
+    except OSError:
+        logger.warning("reconcile_file: cannot read %s", full_path, exc_info=True)
+        return
 
     ext = os.path.splitext(file_path)[1].lower()
     mtime = os.path.getmtime(full_path)
     countable = sum(1 for l in new_lines if is_countable_line(l, ext))
 
-    has_state = await _has_migration_state(conn, session_id, file_path)
-
-    if not has_state:
-        # No reviewed lines or live notes to migrate. Skip per-line hashing,
-        # SequenceMatcher, and the snapshot write — those exist solely to
-        # support migration. Just refresh mtime/countable and drop any stale
-        # snapshot from a prior version of this file.
-        await conn.execute(
-            "INSERT INTO files (session_id, rel_path, last_mtime, prev_line_hashes, countable_lines) "
-            "VALUES (?, ?, ?, NULL, ?) "
-            "ON CONFLICT(session_id, rel_path) DO UPDATE SET "
-            "last_mtime=excluded.last_mtime, prev_line_hashes=NULL, "
-            "countable_lines=excluded.countable_lines",
-            (session_id, file_path, mtime, countable),
-        )
-        return
-
-    new_line_hashes = [line_hash(l) for l in new_lines]
-
-    cur = await conn.execute(
-        "SELECT prev_line_hashes FROM files WHERE session_id = ? AND rel_path = ?",
-        (session_id, file_path),
-    )
-    file_row = await cur.fetchone()
-
-    if file_row is None:
-        old_line_hashes = None
-    else:
-        stored_phashes = file_row["prev_line_hashes"]
-        old_line_hashes = stored_phashes.split("\n") if stored_phashes else None
-
-    if old_line_hashes and new_line_hashes == old_line_hashes:
-        await conn.execute(
-            "UPDATE files SET last_mtime = ?, countable_lines = ? "
-            "WHERE session_id = ? AND rel_path = ?",
-            (mtime, countable, session_id, file_path),
-        )
-        return
-
-    if old_line_hashes:
-        line_map, block_margins = build_line_map(old_line_hashes, new_line_hashes)
-    else:
-        line_map, block_margins = None, {}
-
-    cur = await conn.execute(
-        "SELECT id, line_no, line_hash, context_hash FROM reviewed_lines "
-        "WHERE session_id = ? AND file_path = ? ORDER BY line_no",
-        (session_id, file_path),
-    )
-    rows = await cur.fetchall()
-
+    # BEGIN here so that _has_migration_state, prev_line_hashes, and
+    # reviewed_lines are all read inside the same snapshot. Without this a
+    # concurrent /mark POST can insert a row between our reads and our writes,
+    # causing the new row to be migrated based on stale snapshot data.
     await conn.execute("BEGIN")
     try:
+        has_state = await _has_migration_state(conn, session_id, file_path)
+
+        if not has_state:
+            # No reviewed lines or live notes to migrate. Skip per-line hashing,
+            # SequenceMatcher, and the snapshot write — those exist solely to
+            # support migration. Just refresh mtime/countable and drop any stale
+            # snapshot from a prior version of this file.
+            await conn.execute(
+                "INSERT INTO files (session_id, rel_path, last_mtime, prev_line_hashes, countable_lines) "
+                "VALUES (?, ?, ?, NULL, ?) "
+                "ON CONFLICT(session_id, rel_path) DO UPDATE SET "
+                "last_mtime=excluded.last_mtime, prev_line_hashes=NULL, "
+                "countable_lines=excluded.countable_lines",
+                (session_id, file_path, mtime, countable),
+            )
+            await conn.execute("COMMIT")
+            return
+
+        new_line_hashes = [line_hash(l) for l in new_lines]
+
+        cur = await conn.execute(
+            "SELECT prev_line_hashes FROM files WHERE session_id = ? AND rel_path = ?",
+            (session_id, file_path),
+        )
+        file_row = await cur.fetchone()
+
+        if file_row is None:
+            old_line_hashes = None
+        else:
+            stored_phashes = file_row["prev_line_hashes"]
+            old_line_hashes = stored_phashes.split("\n") if stored_phashes else None
+
+        if old_line_hashes and new_line_hashes == old_line_hashes:
+            await conn.execute(
+                "UPDATE files SET last_mtime = ?, countable_lines = ? "
+                "WHERE session_id = ? AND rel_path = ?",
+                (mtime, countable, session_id, file_path),
+            )
+            await conn.execute("COMMIT")
+            return
+
+        if old_line_hashes:
+            line_map, block_margins = build_line_map(old_line_hashes, new_line_hashes)
+        else:
+            line_map, block_margins = None, {}
+
+        cur = await conn.execute(
+            "SELECT id, line_no, line_hash, context_hash FROM reviewed_lines "
+            "WHERE session_id = ? AND file_path = ? ORDER BY line_no",
+            (session_id, file_path),
+        )
+        rows = await cur.fetchall()
+
         await _reconcile_reviewed(
             conn, rows, new_lines, new_line_hashes, line_map, block_margins, old_line_hashes
         )
-        await _reconcile_notes(conn, session_id, file_path, new_lines, new_line_hashes, line_map)
+        await _reconcile_notes(
+            conn, session_id, file_path, new_lines, new_line_hashes,
+            line_map, block_margins, old_line_hashes or [],
+        )
 
         new_phashes = "\n".join(new_line_hashes)
         await conn.execute(

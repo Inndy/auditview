@@ -91,10 +91,16 @@ class WatcherService:
                 except ValueError:
                     pass
 
-    def broadcast(self, event):
+    def broadcast_all(self, event, *, drain_first=False):
         with self._lock:
             for clients in self._clients.values():
                 for q in list(clients):
+                    if drain_first:
+                        while not q.empty():
+                            try:
+                                q.get_nowait()
+                            except asyncio.QueueEmpty:
+                                break
                     try:
                         q.put_nowait(event)
                     except asyncio.QueueFull:
@@ -111,16 +117,38 @@ class WatcherService:
     async def get_scan(self, session_id, root_path, exclusion_patterns):
         patterns_str = exclusion_patterns or ""
         spec = _base_spec(patterns_str)
+        loop = asyncio.get_running_loop()
+
         with self._lock:
             self._session_specs[session_id] = (root_path, spec)
             cached = self._scan_cache.get(session_id)
-        if cached is not None:
+            if cached is None:
+                # We win the race: plant a Future so concurrent callers wait on us.
+                fut = loop.create_future()
+                self._scan_cache[session_id] = fut
+                owner = True
+            else:
+                fut = None
+                owner = False
+
+        if not owner:
+            if isinstance(cached, asyncio.Future):
+                return await asyncio.shield(cached)
             return cached
-        result = await asyncio.get_running_loop().run_in_executor(
-            None, scan_folder, root_path, exclusion_patterns
-        )
-        with self._lock:
-            self._scan_cache[session_id] = result
+
+        try:
+            result = await loop.run_in_executor(
+                None, scan_folder, root_path, exclusion_patterns
+            )
+            with self._lock:
+                self._scan_cache[session_id] = result
+            fut.set_result(result)
+        except Exception as exc:
+            with self._lock:
+                if self._scan_cache.get(session_id) is fut:
+                    self._scan_cache[session_id] = None
+            fut.set_exception(exc)
+            raise
         return result
 
     def _handle_change(self, abs_path):
@@ -239,6 +267,7 @@ class WatcherService:
                             "watcher: reconcile_file failed for %s (session %s)",
                             rel_path, sid,
                         )
+                        continue
 
                 with self._lock:
                     self._scan_cache[sid] = None
