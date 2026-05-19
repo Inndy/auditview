@@ -43,6 +43,7 @@ vim.api.nvim_create_user_command("AuditviewPrevUnreviewed",
 
 vim.api.nvim_create_user_command("AuditviewRefresh", auditview.refresh, {})
 vim.api.nvim_create_user_command("AuditviewSessionReset", auditview.session_reset, {})
+vim.api.nvim_create_user_command("AuditviewSession", auditview.session_select, {})
 
 vim.api.nvim_create_user_command("AuditviewNote", function(opts)
   local content = opts.args ~= "" and opts.args or nil

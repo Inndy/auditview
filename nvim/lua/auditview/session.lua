@@ -37,19 +37,79 @@ local function pick_for_path(sessions, target)
   return matches
 end
 
-local function choose_interactive(sessions, cb)
-  vim.ui.select(sessions, {
-    prompt = "auditview: pick session",
-    format_item = function(s)
-      return string.format("[%d] %s  (%s)", s.id, s.label, s.root_path)
-    end,
-  }, function(picked)
+local function has_ui_select_override()
+  local info = debug.getinfo(vim.ui.select, "S")
+  return info and info.source and not info.source:find("/lua/vim/ui%.lua$")
+end
+
+local function float_select(sessions, cb)
+  local lines = {}
+  for _, s in ipairs(sessions) do
+    table.insert(lines, string.format("  [%d] %-24s %s", s.id, s.label, s.root_path))
+  end
+
+  local width = 0
+  for _, l in ipairs(lines) do width = math.max(width, #l) end
+  width = math.min(width + 2, vim.o.columns - 4)
+
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].modifiable = false
+
+  local row = math.floor((vim.o.lines - #lines) / 2) - 1
+  local col = math.floor((vim.o.columns - width) / 2)
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "editor",
+    row = row, col = col,
+    width = width, height = #lines,
+    style = "minimal",
+    border = "rounded",
+    title = " auditview: pick session ",
+    title_pos = "center",
+  })
+  vim.wo[win].cursorline = true
+
+  local function close(idx)
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+    local picked = idx and sessions[idx] or nil
     if picked then
       state.session = picked
       state.files_listed = false
     end
     cb(picked)
-  end)
+  end
+
+  local ko = { nowait = true, noremap = true, silent = true, buffer = buf }
+  vim.keymap.set("n", "<CR>", function()
+    close(vim.api.nvim_win_get_cursor(win)[1])
+  end, ko)
+  vim.keymap.set("n", "q",     function() close(nil) end, ko)
+  vim.keymap.set("n", "<Esc>", function() close(nil) end, ko)
+  vim.api.nvim_create_autocmd("BufLeave", {
+    buffer = buf, once = true,
+    callback = function() close(nil) end,
+  })
+end
+
+local function choose_interactive(sessions, cb)
+  if has_ui_select_override() then
+    vim.ui.select(sessions, {
+      prompt = "auditview: pick session",
+      format_item = function(s)
+        return string.format("[%d] %-24s %s", s.id, s.label, s.root_path)
+      end,
+    }, function(picked)
+      if picked then
+        state.session = picked
+        state.files_listed = false
+      end
+      cb(picked)
+    end)
+  else
+    float_select(sessions, cb)
+  end
 end
 
 function M.current()

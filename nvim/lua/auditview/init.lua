@@ -164,4 +164,15 @@ function M.session_reset()
   vim.notify("auditview: session cache cleared")
 end
 
+function M.session_select()
+  session.reset()
+  session.resolve(function(sess)
+    if not sess then return end
+    vim.notify(string.format("auditview: session [%d] %s", sess.id, sess.label))
+    local bufnr = vim.api.nvim_get_current_buf()
+    buffer.invalidate(bufnr)
+    M.on_buf_read(bufnr)
+  end)
+end
+
 return M
