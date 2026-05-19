@@ -125,6 +125,9 @@ Get full line state + notes for a single file.
 If the file's on-disk mtime has changed since the last scan, reconciliation
 runs before the response is built.
 
+**Query parameters**
+- `force=1` — bypass the large-file and binary guards described below
+
 **Response 200**
 ```json
 {
@@ -165,6 +168,11 @@ runs before the response is built.
 **Errors**
 - `400` — invalid path (escapes session root)
 - `404` — session not found, file not on disk, or file not tracked in this session (caller should hit `GET /files` or `POST /rescan` first)
+- `422` — file exceeds 1 MB or contains binary content; retry with `?force=1` to override
+  ```json
+  { "error": "File is too large", "reason": "large", "size": 2097152 }
+  { "error": "Binary file detected", "reason": "binary" }
+  ```
 
 ---
 

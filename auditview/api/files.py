@@ -5,7 +5,7 @@ from auditview.db.connection import open_db
 from auditview.core.hashing import line_hash, context_hash
 from auditview.core.coverage import is_countable_line
 from auditview.core.reconciler import reconcile_file
-from auditview.core.io_utils import read_file_lines
+from auditview.core.io_utils import read_file_lines, is_binary_file, file_is_large
 from auditview.api.util import safe_path
 
 bp = Blueprint("files", __name__)
@@ -216,6 +216,14 @@ async def get_file(session_id, fpath):
             return jsonify({"error": "Invalid path"}), 400
         if not os.path.isfile(full_path):
             return jsonify({"error": "File not found"}), 404
+
+        force = request.args.get("force", "").lower() in ("1", "true", "yes")
+        if not force:
+            if file_is_large(full_path):
+                size = os.path.getsize(full_path)
+                return jsonify({"error": "File is too large", "reason": "large", "size": size}), 422
+            if is_binary_file(full_path):
+                return jsonify({"error": "Binary file detected", "reason": "binary"}), 422
 
         cur = await conn.execute(
             "SELECT last_mtime FROM files WHERE session_id = ? AND rel_path = ?",

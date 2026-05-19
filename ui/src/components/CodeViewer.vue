@@ -3,6 +3,11 @@
     <div v-if="!filePath" class="no-file">Select a file from the tree.</div>
     <div v-else-if="loading" class="no-file">Loading…</div>
     <div v-else-if="error" class="no-file error-text">{{ error }}</div>
+    <div v-else-if="fileBlocked" class="no-file file-blocked">
+      <span v-if="fileBlocked.reason === 'binary'">Binary file — not renderable as text.</span>
+      <span v-else>File is large ({{ Math.round(fileBlocked.size / 1024) }} KB) and may be slow to load.</span>
+      <button class="load-anyway-btn" @click="loadFile(filePath, { force: true })">Load anyway</button>
+    </div>
     <template v-else>
       <table class="code-table" @mouseleave="onTableMouseLeave">
         <tbody>
@@ -119,6 +124,7 @@ export default {
       pendingNote: null,
       loading: false,
       error: null,
+      fileBlocked: null,
     }
   },
   computed: {
@@ -211,12 +217,13 @@ export default {
     this._sseAnnoUnsub?.()
   },
   methods: {
-    async loadFile(path) {
+    async loadFile(path, { force = false } = {}) {
       const token = ++this._loadToken
       this.loading = true
       this.error = null
+      this.fileBlocked = null
       try {
-        const data = await getFile(this.sessionId, path)
+        const data = await getFile(this.sessionId, path, { force })
         if (token !== this._loadToken) return
         const hljs = this.$hljs
         const highlightedLines = hljs
@@ -230,7 +237,11 @@ export default {
         this.$emit('notes-updated', this.notes)
       } catch (e) {
         if (token !== this._loadToken) return
-        this.error = e.message
+        if (e.blocked) {
+          this.fileBlocked = { reason: e.reason, size: e.size }
+        } else {
+          this.error = e.message
+        }
       } finally {
         if (token === this._loadToken) this.loading = false
       }
@@ -689,5 +700,26 @@ export default {
 
 .error-text {
   color: var(--badge-orphan-text);
+}
+
+.file-blocked {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.load-anyway-btn {
+  padding: 4px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--bg-elevated, #2a2a2a);
+  color: var(--text-base, #ccc);
+  border: 1px solid var(--border, #555);
+  border-radius: 4px;
+}
+
+.load-anyway-btn:hover {
+  background: var(--bg-hover, #3a3a3a);
 }
 </style>

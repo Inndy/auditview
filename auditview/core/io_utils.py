@@ -1,4 +1,16 @@
 import asyncio
+import os
+
+_LARGE_FILE_BYTES = 1 << 20  # 1 MB
+
+
+def is_binary_file(path: str, sample: int = 8192) -> bool:
+    with open(path, "rb") as f:
+        return b"\x00" in f.read(sample)
+
+
+def file_is_large(path: str) -> bool:
+    return os.path.getsize(path) > _LARGE_FILE_BYTES
 
 
 def _read_lines_sync(path):
