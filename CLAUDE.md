@@ -1,5 +1,27 @@
 # CLAUDE.md
 
+> This file is also symlinked as `AGENTS.md` for compatibility with other coding agents.
+
+## Documentation map
+
+| You want to know about … | Read |
+|---|---|
+| Project purpose and use cases | README.md |
+| Architecture, core concepts, design philosophy | CLAUDE.md (here) |
+| HTTP API routes, shapes, status codes | API.md |
+| Neovim plugin | nvim/README.md |
+| Future plans | ROADMAP.md |
+
+### Where to add new information
+
+| Type of change | Update this file |
+|---|---|
+| New route or changed response shape | `API.md` — in the same commit as the code change |
+| New architectural decision or constraint | `CLAUDE.md` §Architecture |
+| Design philosophy note | `CLAUDE.md` §Design philosophy |
+| New planned feature | `ROADMAP.md` |
+| Project-level vision or use case | `README.md` |
+
 ## Development Commands
 
 **Backend** (Python, managed with `uv`):
@@ -48,6 +70,12 @@ Auditview is a line-level code review/audit tool: a Quart (async) JSON API backe
 
 **MCP endpoint** - `/mcp` serves JSON-RPC 2.0. Tool handlers call existing REST endpoints internally via Quart's async test client.
 
+### Design philosophy
+
+- **Composability over convenience, repairability over foolproofing.** The system should be transparent enough that a power user can understand and manually fix any state. No sealed black boxes.
+- **Escape hatches over hard failures.** Corner cases should be handleable with minimal intervention. The checkpoint system exists so that a reconciler bug does not permanently destroy review history — the user can revert at the DB level without the app.
+- **Thin abstractions, not speculative ones.** Do not add abstraction layers without a concrete reason present in the current codebase.
+- **Target: power user.** The tool assumes the user understands the system's concepts. Guardrails should not obscure behaviour or hide state.
 
 ### Tests
 

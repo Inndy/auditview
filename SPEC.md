@@ -1,5 +1,11 @@
 # auditview — Specification
 
+> **Deprecated.** This was an early design spec written before the current implementation.
+> It references stale technologies (Flask → Quart, apsw → aiosqlite) and some details no longer
+> match the codebase. Authoritative sources: `README.md` (purpose/use cases), `CLAUDE.md`
+> (architecture + design philosophy), `API.md` (API contract). A rewrite is planned.
+> This file is kept for historical context.
+
 ## Purpose
 
 A line-level code review tool targeting **security audit and vibe coding review**.
