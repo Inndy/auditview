@@ -159,7 +159,9 @@ async def _reconcile_reviewed(
                     delete_ids.append(row_id)
                     continue
             m_before, m_after = block_margins.get(old_idx, (0, 0))
-            if m_before < _BLOCK_MARGIN_K or m_after < _BLOCK_MARGIN_K:
+            k_before = min(_BLOCK_MARGIN_K, old_idx)
+            k_after = min(_BLOCK_MARGIN_K, len(old_line_hashes) - 1 - old_idx)
+            if m_before < k_before or m_after < k_after:
                 delete_ids.append(row_id)
                 continue
             new_ln = new_idx + 1
@@ -359,6 +361,14 @@ async def reconcile_file(conn, session_id, file_path, root_path):
     else:
         stored_phashes = file_row["prev_line_hashes"]
         old_line_hashes = stored_phashes.split("\n") if stored_phashes else None
+
+    if old_line_hashes and new_line_hashes == old_line_hashes:
+        await conn.execute(
+            "UPDATE files SET last_mtime = ?, countable_lines = ? "
+            "WHERE session_id = ? AND rel_path = ?",
+            (mtime, countable, session_id, file_path),
+        )
+        return
 
     if old_line_hashes:
         line_map, block_margins = build_line_map(old_line_hashes, new_line_hashes)
