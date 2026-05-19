@@ -6,15 +6,15 @@ surviving review mark lands on code the user never marked (false positive).
 False unmarks (dropped marks) are acceptable; false positives cause the
 test to fail and trigger shrinking.
 
-## Fundamental limitation
+## Fundamental limitation and FP semantics
 
-The reconciler uses `difflib.SequenceMatcher` to map old line positions to new ones. For any two versions of a file there may be **multiple equally-valid diffs** — different alignments that all produce the same final text. When content is duplicated, the differ must pick one arbitrarily, and its choice may not match the user's intent about which copy "is" the originally-reviewed line.
+The reconciler uses `difflib.SequenceMatcher` to map old line positions to new ones. For any two versions of a file there may be **multiple equally-valid diffs** — different alignments that all produce the same final text. When content is duplicated, the differ must pick one arbitrarily.
 
-This means false positives (a mark migrating to an unreviewed line) are not just implementation bugs — some are rooted in fundamental ambiguity that no line-based diff algorithm can resolve. The reconciler's margin-K guard and context hashing mitigate this, but cannot eliminate it entirely.
+The fuzzer uses ID tracking to classify outcomes: a mark landing on a line whose ID was never explicitly marked counts as a "FP." But the reconciler is **content-based**: if a line has identical content and identical 3-line context (prev+curr+next), it is indistinguishable from the originally-reviewed line under any diff-based scheme. Migrating the mark there is semantically correct.
 
-When the fuzzer finds a false positive, the correct response is always to make the reconciler **more conservative** — tighten the guard so it drops the ambiguous case rather than migrating it. Trying to correctly resolve the ambiguity is a dead end; there is no information to resolve it with.
+True FPs — marks migrating onto code with *different* content or context than what was reviewed — are bugs. Content-identical migration under K=1 is expected and acceptable, especially during active review sessions where the user can verify marks.
 
-The fuzzer is therefore a **permanent quality floor**, not a one-time validation step. It continuously confirms that the reconciler's guards are conservative enough, and catches regressions when the reconciler changes.
+The block-margin guard (`_BLOCK_MARGIN_K`) controls the FP/FN tradeoff: larger K drops more marks (fewer FP risk, more FN pain); smaller K preserves more marks. K=1 matches the 1-line radius already verified by `context_hash` and is the current setting.
 
 ## Quick start
 

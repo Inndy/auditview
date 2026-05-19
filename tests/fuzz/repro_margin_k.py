@@ -39,7 +39,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from tests.fuzz.generators import Insert
 from tests.fuzz.harness import run_with_inputs
 
-K = 5   # must equal auditview.core.reconciler._BLOCK_MARGIN_K
+K = 1   # must equal auditview.core.reconciler._BLOCK_MARGIN_K
 
 P = "CTX_PREV"
 M = "MARKED_LINE"

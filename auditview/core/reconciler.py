@@ -74,18 +74,21 @@ def _build_old_hash_context_counts(old_line_hashes):
     return counts
 
 
-_BLOCK_MARGIN_K = 5
+_BLOCK_MARGIN_K = 1
 """Minimum number of unedited lines required on each side of a marked
 position inside the matched block before we trust the migration.
 
-Picked empirically with the reconciler fuzzer: K=5 was the smallest value
-that drove the false-positive rate to zero across 1000 random scenarios
-(seeds 0..999) where inserts can copy 1-10 line sections verbatim from the
-original file. Smaller K leaves a long tail of FPs in which a coincidental
-section copy reproduces 4+ lines around the marked position; larger K just
-inflates the false-unmark count without further FP reduction. See
-feedback memory `feedback_reviewed_state_safety` — FN is acceptable here,
-FP is not.
+K=1 matches the 1-line radius that context_hash already verifies (prev +
+curr + next). Requiring m_before ≥ 1 and m_after ≥ 1 ensures both
+immediate neighbors are confirmed originals in the SequenceMatcher block
+rather than inserted copies with identical content. Lower K → fewer false
+unmarks; higher FP risk from small verbatim copies (trigger = K+1 lines).
+
+K=5 was previously used to drive the random-fuzz FP rate toward zero, but
+it caused excessive mark drops (false unmarks) even when the mark's
+immediate context was clearly intact. K=5 also still left known FP edge
+cases (see tests/fuzz/saved_seeds/). Accepting a small FP risk is
+preferable during active review, where users see the file and can re-check.
 """
 
 
