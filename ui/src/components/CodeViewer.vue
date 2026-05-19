@@ -27,6 +27,8 @@
       </table>
     </template>
 
+    <div v-if="actionError" class="action-error" @click="actionError = null">{{ actionError }}</div>
+
     <CreateNoteModal
       :visible="showModal"
       :isTodo="modalIsTodo"
@@ -125,6 +127,7 @@ export default {
       loading: false,
       error: null,
       fileBlocked: null,
+      actionError: null,
     }
   },
   computed: {
@@ -634,7 +637,7 @@ export default {
           reviewed: reviewedCount,
         })
       } catch (e) {
-        console.error('markLines error:', e.message)
+        this.actionError = `Failed to mark lines: ${e.message}`
       }
     },
 
@@ -652,7 +655,7 @@ export default {
         this.$emit('notes-updated', this.notes)
         this.anchorLine = null
       } catch (e) {
-        console.error('createNote error:', e.message)
+        this.actionError = `Failed to create note: ${e.message}`
       }
     },
 
@@ -679,7 +682,7 @@ export default {
         this.$emit('notes-updated', this.notes)
         this.anchorLine = null
       } catch (e) {
-        console.error('createNote error:', e.message)
+        this.actionError = `Failed to create note: ${e.message}`
       }
     },
 
@@ -727,5 +730,21 @@ export default {
 
 .load-anyway-btn:hover {
   background: var(--bg-hover, #3a3a3a);
+}
+
+.action-error {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--badge-orphan-bg);
+  color: var(--badge-orphan-text);
+  border: 1px solid var(--danger);
+  border-radius: 4px;
+  padding: 6px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  z-index: 10;
+  white-space: nowrap;
 }
 </style>

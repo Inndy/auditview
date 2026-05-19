@@ -1,6 +1,10 @@
 <template>
   <div class="issues-view">
     <div v-if="loadingIssues" class="loading">Loading issues…</div>
+    <div v-else-if="loadError" class="load-error">
+      Failed to load issues: {{ loadError }}
+      <button class="btn-link" @click="load">Retry</button>
+    </div>
     <Splitpanes v-else class="issues-content" @resized="onResized">
       <Pane :size="sizes[0]" :min-size="12">
         <div class="issues-panel">
@@ -55,6 +59,10 @@
           This issue was deleted in another tab.
           <button class="btn-link" @click="dismissDeletedBanner">Dismiss</button>
         </div>
+        <div v-if="editError" class="edit-error-banner">
+          {{ editError }}
+          <button class="btn-link" @click="editError = null">Dismiss</button>
+        </div>
         <div v-if="selectedIssue" class="issue-details">
           <div class="detail-row">
             <label>Title</label>
@@ -67,7 +75,7 @@
           </div>
           <div class="detail-row">
             <label>Severity</label>
-            <select v-model="selectedIssue.severity" @change="updateField('severity')">
+            <select v-model="selectedIssue.severity" @focus="rememberSeverity" @change="updateField('severity')">
               <option value="P0">P0</option>
               <option value="P1">P1</option>
               <option value="P2">P2</option>
@@ -241,11 +249,14 @@ export default {
       orphanNotes: [],
       issueNotes: [],
       loadingIssues: true,
+      loadError: null,
+      editError: null,
       selectedNoteIds: [],
       attaching: false,
       showCreateIssueModal: false,
       filterOptions: FILTER_OPTIONS,
       titleBeforeEdit: '',
+      severityBeforeEdit: '',
       editingDescription: false,
       descriptionDraft: '',
       descriptionBeforeEdit: '',
@@ -283,11 +294,13 @@ export default {
   watch: {
     selectedIssueId(id) {
       this.titleBeforeEdit = ''
+      this.severityBeforeEdit = ''
       this.editingDescription = false
       this.descriptionDraft = ''
       this.descriptionBeforeEdit = ''
       this.editTargetDeleted = false
       this.selectedIssueStale = false
+      this.editError = null
       if (id) {
         this.loadIssueNotes(id)
       } else {
@@ -298,6 +311,7 @@ export default {
   methods: {
     async load() {
       this.loadingIssues = true
+      this.loadError = null
       try {
         const [issues, notes] = await Promise.all([
           listIssues(this.session.id),
@@ -309,7 +323,7 @@ export default {
           this.loadIssueNotes(this.selectedIssueId)
         }
       } catch (e) {
-        console.error('Failed to load:', e.message)
+        this.loadError = e.message
       } finally {
         this.loadingIssues = false
       }
@@ -410,6 +424,9 @@ export default {
     rememberTitle() {
       this.titleBeforeEdit = this.selectedIssue?.title || ''
     },
+    rememberSeverity() {
+      this.severityBeforeEdit = this.selectedIssue?.severity || ''
+    },
     startEditDescription() {
       if (!this.selectedIssue) return
       this.descriptionBeforeEdit = this.selectedIssue.description || ''
@@ -435,7 +452,8 @@ export default {
         const idx = this.issues.findIndex((i) => i.id === this.selectedIssueId)
         if (idx !== -1) this.issues.splice(idx, 1, updated)
       } catch (e) {
-        console.error('Failed to update description:', e.message)
+        if (this.selectedIssue) this.selectedIssue.description = this.descriptionBeforeEdit
+        this.editError = `Failed to save description: ${e.message}`
       }
     },
     async updateField(field) {
@@ -445,6 +463,7 @@ export default {
         this.selectedIssue.title = this.titleBeforeEdit
         return
       }
+      const before = field === 'title' ? this.titleBeforeEdit : this.severityBeforeEdit
       try {
         const updates = {}
         updates[field] = value
@@ -452,17 +471,20 @@ export default {
         const idx = this.issues.findIndex((i) => i.id === this.selectedIssueId)
         if (idx !== -1) this.issues.splice(idx, 1, updated)
       } catch (e) {
-        console.error('Failed to update:', e.message)
+        if (this.selectedIssue) this.selectedIssue[field] = before
+        this.editError = `Failed to update ${field}: ${e.message}`
       }
     },
     async setStatus(newStatus) {
       if (!this.selectedIssue) return
+      const prevStatus = this.selectedIssue.status
       try {
         const updated = await apiUpdateIssue(this.session.id, this.selectedIssueId, { status: newStatus })
         const idx = this.issues.findIndex((i) => i.id === this.selectedIssueId)
         if (idx !== -1) this.issues.splice(idx, 1, updated)
       } catch (e) {
-        console.error('Failed to update status:', e.message)
+        if (this.selectedIssue) this.selectedIssue.status = prevStatus
+        this.editError = `Failed to update status: ${e.message}`
       }
     },
     async onDeleteIssue() {
@@ -532,6 +554,16 @@ export default {
   justify-content: center;
   flex: 1;
   color: var(--text-muted);
+}
+
+.load-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1;
+  color: var(--badge-orphan-text);
+  font-size: 13px;
 }
 
 .issues-content {
@@ -913,6 +945,20 @@ export default {
   border-radius: 4px;
   background: var(--badge-todo-bg, #4a3a10);
   color: var(--badge-todo-text, #ffc857);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.edit-error-banner {
+  margin: 8px 12px 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--danger);
+  border-radius: 4px;
+  background: var(--badge-orphan-bg);
+  color: var(--badge-orphan-text);
   font-size: 12px;
   display: flex;
   align-items: center;

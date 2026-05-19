@@ -240,7 +240,10 @@ async def get_file(session_id, fpath):
 
         ext = os.path.splitext(fpath)[1].lower()
 
-        lines = await read_file_lines(full_path)
+        try:
+            lines = await read_file_lines(full_path)
+        except OSError:
+            return jsonify({"error": "Could not read file"}), 500
 
         cur = await conn.execute(
             "SELECT line_hash, context_hash, line_no FROM reviewed_lines WHERE session_id = ? AND file_path = ?",

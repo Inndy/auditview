@@ -46,6 +46,10 @@ async def _broadcast_notes_by_issue(conn, session_id, issue_id):
 async def list_issues(session_id):
     status_filter = request.args.get("status")
     async with open_db(current_app.config["DB_PATH"]) as conn:
+        cur = await conn.execute("SELECT id FROM sessions WHERE id = ?", (session_id,))
+        if await cur.fetchone() is None:
+            return jsonify({"error": "session not found"}), 404
+
         if status_filter:
             cur = await conn.execute(
                 f"SELECT {_ISSUE_COLUMNS} "
@@ -165,6 +169,10 @@ async def update_issue(session_id, issue_id):
         return jsonify({"error": "description must be a string"}), 400
 
     async with open_db(current_app.config["DB_PATH"]) as conn:
+        cur = await conn.execute("SELECT id FROM sessions WHERE id = ?", (session_id,))
+        if await cur.fetchone() is None:
+            return jsonify({"error": "session not found"}), 404
+
         updates = []
         params = []
         if title is not None:
@@ -247,6 +255,10 @@ async def delete_issue(session_id, issue_id):
 @bp.route("/sessions/<int:session_id>/issues/<int:issue_id>/notes", methods=["GET"])
 async def list_issue_notes(session_id, issue_id):
     async with open_db(current_app.config["DB_PATH"]) as conn:
+        cur = await conn.execute("SELECT id FROM sessions WHERE id = ?", (session_id,))
+        if await cur.fetchone() is None:
+            return jsonify({"error": "session not found"}), 404
+
         cur = await conn.execute(
             f"SELECT {NOTE_SELECT_COLUMNS} FROM {NOTE_SELECT_FROM} "
             "WHERE n.session_id = ? AND n.issue_id = ? ORDER BY n.created_at",

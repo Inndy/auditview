@@ -8,6 +8,7 @@ export class SSEClient {
     this.status = ref('disconnected');
     this._retryDelay = 1000;
     this._retryTimer = null;
+    this._shutdownAt = null;
   }
 
   on(event, cb) {
@@ -61,16 +62,15 @@ export class SSEClient {
     }
 
     es.addEventListener('shutdown', () => {
-      // Server is intentionally going down and asking us to leave. Treat this as a
-      // deliberate disconnect — do not auto-retry. The follow-up `onerror` from the
-      // closed socket bails out on the 'shutdown' status check below.
       this._dispatch('shutdown', {});
       this._close();
       this._setStatus('shutdown');
+      this._shutdownAt = Date.now();
     });
 
     es.onerror = () => {
-      if (this.status.value === 'shutdown') return;
+      if (this.status.value === 'shutdown' && this._shutdownAt !== null && Date.now() - this._shutdownAt < 10000) return;
+      this._shutdownAt = null;
       this._scheduleRetry(this._retryDelay, 'disconnected');
       this._retryDelay = Math.min(this._retryDelay * 2, 30000);
     };

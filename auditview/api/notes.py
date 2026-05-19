@@ -84,7 +84,10 @@ async def create_note(session_id):
         if not os.path.isfile(full_path):
             return jsonify({"error": "File not found"}), 404
 
-        file_lines = await read_file_lines(full_path)
+        try:
+            file_lines = await read_file_lines(full_path)
+        except OSError:
+            return jsonify({"error": "Could not read file"}), 500
 
         if start_line > len(file_lines) or end_line > len(file_lines):
             return jsonify({"error": "line range out of bounds"}), 400
@@ -102,13 +105,19 @@ async def create_note(session_id):
         end_hash = line_hash(file_lines[end_idx])
         snapshot_text = "\n".join(file_lines[start_idx:end_idx + 1])
 
-        cur = await conn.execute(
-            "INSERT INTO notes (session_id, file_path, start_line, end_line, start_hash, end_hash, snapshot_text, content, is_todo, issue_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (session_id, file_path, start_line, end_line, start_hash, end_hash, snapshot_text, content, int(is_todo), issue_id),
-        )
-        row_id = cur.lastrowid
-        await ensure_snapshot(conn, session_id, file_path, root_path)
+        await conn.execute("BEGIN")
+        try:
+            cur = await conn.execute(
+                "INSERT INTO notes (session_id, file_path, start_line, end_line, start_hash, end_hash, snapshot_text, content, is_todo, issue_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (session_id, file_path, start_line, end_line, start_hash, end_hash, snapshot_text, content, int(is_todo), issue_id),
+            )
+            row_id = cur.lastrowid
+            await ensure_snapshot(conn, session_id, file_path, root_path)
+            await conn.execute("COMMIT")
+        except Exception:
+            await conn.execute("ROLLBACK")
+            raise
         cur = await conn.execute(
             f"SELECT {NOTE_SELECT_COLUMNS} FROM {NOTE_SELECT_FROM} WHERE n.id = ?",
             (row_id,),

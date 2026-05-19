@@ -84,13 +84,12 @@ async def mark_lines(session_id):
                         (session_id, file_path, lh, ch, ln),
                     )
                 accepted.append({"line_hash": lh, "context_hash": ch, "line_no": ln})
+            if reviewed and accepted:
+                await ensure_snapshot(conn, session_id, file_path, root_path)
             await conn.execute("COMMIT")
         except Exception:
             await conn.execute("ROLLBACK")
             raise
-
-        if reviewed and accepted:
-            await ensure_snapshot(conn, session_id, file_path, root_path)
 
     return jsonify({
         "updated": len(accepted),

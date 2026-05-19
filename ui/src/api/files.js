@@ -10,7 +10,8 @@ export function rescanSession(sid) {
 
 export async function getFile(sid, path, { force = false } = {}) {
   const qs = force ? '?force=1' : '';
-  const res = await fetch(`/api/sessions/${sid}/files/${encodeURIComponent(path)}${qs}`);
+  const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+  const res = await fetch(`/api/sessions/${sid}/files/${encodedPath}${qs}`);
   if (res.status === 422) {
     const body = await res.json().catch(() => ({}));
     const err = new Error(body.error || 'File blocked');
