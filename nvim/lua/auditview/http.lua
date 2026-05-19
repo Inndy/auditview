@@ -21,15 +21,30 @@ local function run(args)
   if result.code ~= 0 then
     return nil, string.format("curl failed (%d): %s", result.code, result.stderr or "")
   end
-  local ok, decoded = pcall(vim.json.decode, result.stdout)
+  local raw = result.stdout or ""
+  local last_nl = raw:find("\n[^\n]*$")
+  local body_str, status_str
+  if last_nl then
+    body_str = raw:sub(1, last_nl - 1)
+    status_str = raw:sub(last_nl + 1)
+  else
+    body_str = raw
+    status_str = ""
+  end
+  local status = tonumber(status_str) or 0
+  local ok, decoded = pcall(vim.json.decode, body_str)
   if not ok then
-    return nil, "invalid JSON from server: " .. (result.stdout or ""):sub(1, 200)
+    return nil, string.format("invalid JSON from server (HTTP %d): %s", status, body_str:sub(1, 200))
+  end
+  if status < 200 or status >= 300 then
+    local msg = (type(decoded) == "table" and decoded.error) or body_str:sub(1, 200)
+    return nil, string.format("HTTP %d: %s", status, msg)
   end
   return decoded, nil
 end
 
 function M.get(path)
-  return run({ "curl", "-sS", "-X", "GET", M.url(path) })
+  return run({ "curl", "-sS", "-X", "GET", "-w", "\n%{http_code}", M.url(path) })
 end
 
 function M.post(path, body)
@@ -37,12 +52,13 @@ function M.post(path, body)
     "curl", "-sS", "-X", "POST",
     "-H", "Content-Type: application/json",
     "--data", vim.json.encode(body),
+    "-w", "\n%{http_code}",
     M.url(path),
   })
 end
 
 function M.delete(path)
-  return run({ "curl", "-sS", "-X", "DELETE", M.url(path) })
+  return run({ "curl", "-sS", "-X", "DELETE", "-w", "\n%{http_code}", M.url(path) })
 end
 
 return M

@@ -2,23 +2,9 @@ local config = require("auditview.config")
 local http = require("auditview.http")
 local session = require("auditview.session")
 local buffer = require("auditview.buffer")
+local utils = require("auditview.utils")
 
 local M = {}
-
-local function visual_range()
-  local mode = vim.fn.mode()
-  if mode == "v" or mode == "V" or mode == "\22" then
-    vim.cmd('normal! \27')
-  end
-  local s = vim.fn.getpos("'<")[2]
-  local e = vim.fn.getpos("'>")[2]
-  if s == 0 or e == 0 then
-    local cur = vim.api.nvim_win_get_cursor(0)[1]
-    return cur, cur
-  end
-  if s > e then s, e = e, s end
-  return s, e
-end
 
 local function ensure_ready(bufnr, cb)
   if vim.bo[bufnr].modified then
@@ -60,6 +46,10 @@ local function submit(bufnr, start_line, end_line, content, is_todo)
 end
 
 local function ask_and_submit(bufnr, start_line, end_line, is_todo, preset)
+  if vim.bo[bufnr].modified then
+    vim.notify("auditview: buffer has unsaved changes — :w first", vim.log.levels.WARN)
+    return
+  end
   if preset and preset ~= "" then
     submit(bufnr, start_line, end_line, preset, is_todo)
     return
@@ -84,7 +74,7 @@ end
 
 function M.add_visual(is_todo, content)
   local bufnr = vim.api.nvim_get_current_buf()
-  local s, e = visual_range()
+  local s, e = utils.visual_range()
   ask_and_submit(bufnr, s, e, is_todo, content)
 end
 

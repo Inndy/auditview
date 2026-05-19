@@ -7,6 +7,10 @@ local state = {
   files_listed = false,
   project_root = nil,
   project_root_searched = false,
+  resolving = false,
+  resolve_pending = {},
+  files_listing = false,
+  files_listing_pending = {},
 }
 
 local function normalize(path)
@@ -135,23 +139,40 @@ function M.resolve(cb, opts)
     return
   end
 
+  if state.resolving then
+    table.insert(state.resolve_pending, cb)
+    return
+  end
+
   local root = M.project_root()
   if not root and not interactive then
     cb(nil)
     return
   end
 
+  state.resolving = true
+
+  local function finish(sess)
+    state.resolving = false
+    local pending = state.resolve_pending
+    state.resolve_pending = {}
+    cb(sess)
+    for _, pcb in ipairs(pending) do
+      pcb(sess)
+    end
+  end
+
   local sessions, err = http.get("/api/sessions")
   if err then
     if interactive then vim.notify("auditview: " .. err, vim.log.levels.ERROR) end
-    cb(nil)
+    finish(nil)
     return
   end
   if not sessions or #sessions == 0 then
     if interactive then
       vim.notify("auditview: no sessions on server — create one in the web UI", vim.log.levels.WARN)
     end
-    cb(nil)
+    finish(nil)
     return
   end
 
@@ -159,12 +180,12 @@ function M.resolve(cb, opts)
   if #matches == 1 then
     state.session = matches[1]
     state.files_listed = false
-    cb(state.session)
+    finish(state.session)
     return
   end
 
   if not interactive then
-    cb(nil)
+    finish(nil)
     return
   end
 
@@ -174,7 +195,10 @@ function M.resolve(cb, opts)
       vim.log.levels.WARN
     )
   end
-  choose_interactive(#matches > 1 and matches or sessions, cb)
+  -- choose_interactive is async (UI picker); wrap its callback through finish
+  choose_interactive(#matches > 1 and matches or sessions, function(picked)
+    finish(picked)
+  end)
 end
 
 ---@param cb fun(ok: boolean)
@@ -184,9 +208,27 @@ function M.ensure_files_listed(cb, opts)
     cb(true)
     return
   end
+
+  if state.files_listing then
+    table.insert(state.files_listing_pending, cb)
+    return
+  end
+
+  state.files_listing = true
+
+  local function finish(ok)
+    state.files_listing = false
+    local pending = state.files_listing_pending
+    state.files_listing_pending = {}
+    cb(ok)
+    for _, pcb in ipairs(pending) do
+      pcb(ok)
+    end
+  end
+
   M.resolve(function(session)
     if not session then
-      cb(false)
+      finish(false)
       return
     end
     local _, err = http.get("/api/sessions/" .. session.id .. "/files")
@@ -194,11 +236,11 @@ function M.ensure_files_listed(cb, opts)
       if (opts or {}).interactive ~= false then
         vim.notify("auditview: " .. err, vim.log.levels.ERROR)
       end
-      cb(false)
+      finish(false)
       return
     end
     state.files_listed = true
-    cb(true)
+    finish(true)
   end, opts)
 end
 
@@ -221,6 +263,10 @@ function M.reset()
   state.files_listed = false
   state.project_root = nil
   state.project_root_searched = false
+  state.resolving = false
+  state.resolve_pending = {}
+  state.files_listing = false
+  state.files_listing_pending = {}
 end
 
 return M

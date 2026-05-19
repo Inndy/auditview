@@ -1,23 +1,9 @@
 local http = require("auditview.http")
 local session = require("auditview.session")
 local buffer = require("auditview.buffer")
+local utils = require("auditview.utils")
 
 local M = {}
-
-local function visual_range()
-  local mode = vim.fn.mode()
-  if mode == "v" or mode == "V" or mode == "\22" then
-    vim.cmd('normal! \27')
-  end
-  local s = vim.fn.getpos("'<")[2]
-  local e = vim.fn.getpos("'>")[2]
-  if s == 0 or e == 0 then
-    local cur = vim.api.nvim_win_get_cursor(0)[1]
-    return cur, cur
-  end
-  if s > e then s, e = e, s end
-  return s, e
-end
 
 local function send(bufnr, start_line, end_line, reviewed)
   if vim.bo[bufnr].modified then
@@ -85,13 +71,13 @@ end
 
 function M.mark_visual()
   local bufnr = vim.api.nvim_get_current_buf()
-  local s, e = visual_range()
+  local s, e = utils.visual_range()
   send(bufnr, s, e, true)
 end
 
 function M.unmark_visual()
   local bufnr = vim.api.nvim_get_current_buf()
-  local s, e = visual_range()
+  local s, e = utils.visual_range()
   send(bufnr, s, e, false)
 end
 
