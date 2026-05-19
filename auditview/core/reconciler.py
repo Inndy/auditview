@@ -54,25 +54,6 @@ def _build_context_index(new_lines, new_line_hashes):
     return index, counts
 
 
-def _build_old_hash_context_counts(old_line_hashes):
-    """Count, for each old line, how many other old lines share the same
-    (line_hash, prev_line_hash, next_line_hash) signature.
-
-    Only line hashes are persisted in the snapshot, so we can't recover the
-    raw content needed to recompute the user-facing context_hash. The
-    hash-of-hashes triple is just as discriminating in practice (SHA-256
-    collisions are negligible) and is the strongest uniqueness signal we
-    can produce from the snapshot alone.
-    """
-    counts = {}
-    n = len(old_line_hashes)
-    for i in range(n):
-        prev_h = old_line_hashes[i - 1] if i > 0 else ""
-        next_h = old_line_hashes[i + 1] if i < n - 1 else ""
-        k = (old_line_hashes[i], prev_h, next_h)
-        counts[k] = counts.get(k, 0) + 1
-    return counts
-
 
 _BLOCK_MARGIN_K = 1
 """Minimum number of unedited lines required on each side of a marked
@@ -102,9 +83,6 @@ async def _reconcile_reviewed(
     delete_ids = []
 
     context_index, ctx_counts = _build_context_index(new_lines, new_line_hashes)
-    old_hash_counts = (
-        _build_old_hash_context_counts(old_line_hashes) if old_line_hashes else None
-    )
 
     if line_map is not None:
         for row in rows:
@@ -119,45 +97,21 @@ async def _reconcile_reviewed(
             next_content = new_lines[new_idx + 1] if new_idx < len(new_lines) - 1 else ""
             new_ch = context_hash(prev_content, curr_content, next_content)
             new_lh = line_hash(curr_content)
-            # Safety: SequenceMatcher matches on line_hash alone, so with
-            # duplicate content it can align the marked line's old position
-            # to a *sibling* occurrence in the new file. Four guards:
-            #   (1) the row's stored context_hash (prev/curr/next from the
-            #       user's review-time view) must equal the new context at
-            #       the proposed position — otherwise the surroundings
-            #       changed and we cannot claim it's the same line.
-            #   (2) the (lh, ch) pair must be UNIQUE in the new file —
-            #       otherwise multiple equally-valid candidates exist and
-            #       the matcher's choice is arbitrary.
-            #   (3) the row's old (line_hash, prev_lh, next_lh) signature
-            #       must also be UNIQUE in the old file — if the user had
-            #       siblings of this line back at mark time, we don't know
-            #       which of them the snapshot row referred to and can't
-            #       safely pick a survivor.
-            #   (4) the matched block must extend at least K lines on each
-            #       side of the marked position. A short matched run is
-            #       the shape of a coincidental insert anchor — a long run
-            #       of intact context centered on the mark is what real
-            #       preservation looks like.
-            # In any failure case, drop the row. False-unmark is acceptable;
-            # false-positive on unreviewed code is not.
+            # Safety: SequenceMatcher gives us old_idx → new_idx directly, so
+            # content-uniqueness guards (were #2/#3) are not needed — if the
+            # matcher mapped to the wrong sibling, guard #1 catches it because
+            # a different sibling has a different context. Guard #4 then
+            # ensures the matched block is long enough that the mapping isn't
+            # a coincidental short-run anchor.
+            #   (1) context_hash at the proposed new position must match what
+            #       was stored at review time — catches wrong-sibling mapping
+            #       and any change to the immediate surroundings.
+            #   (2) the matched block must extend at least K lines on each
+            #       side of the marked position (capped at the file edge so
+            #       the first/last line are not unfairly penalised).
             if new_ch != row["context_hash"]:
                 delete_ids.append(row_id)
                 continue
-            if ctx_counts.get((new_lh, new_ch), 0) > 1:
-                delete_ids.append(row_id)
-                continue
-            if old_hash_counts is not None and old_idx < len(old_line_hashes):
-                prev_old_h = old_line_hashes[old_idx - 1] if old_idx > 0 else ""
-                next_old_h = (
-                    old_line_hashes[old_idx + 1]
-                    if old_idx < len(old_line_hashes) - 1
-                    else ""
-                )
-                old_key = (old_line_hashes[old_idx], prev_old_h, next_old_h)
-                if old_hash_counts.get(old_key, 0) > 1:
-                    delete_ids.append(row_id)
-                    continue
             m_before, m_after = block_margins.get(old_idx, (0, 0))
             k_before = min(_BLOCK_MARGIN_K, old_idx)
             k_after = min(_BLOCK_MARGIN_K, len(old_line_hashes) - 1 - old_idx)
@@ -198,14 +152,24 @@ async def _reconcile_reviewed(
             seen_keys.add(key)
             deduped_updates.append((new_ln, lh, ch, row_id))
 
+    # Deletes first: a deleted row may sit at a position that a surviving row
+    # is migrating to; removing it before the updates avoids UNIQUE conflicts.
+    if delete_ids:
+        placeholders = ",".join("?" * len(delete_ids))
+        await conn.execute(f"DELETE FROM reviewed_lines WHERE id IN ({placeholders})", delete_ids)
     if deduped_updates:
+        # Two-phase update avoids UNIQUE constraint violations when two marks
+        # with the same (lh, ch) effectively swap positions: first move all
+        # migrating rows to guaranteed-safe negative line_nos, then to their
+        # real destinations. Negative line_nos never exist outside this window.
+        await conn.executemany(
+            "UPDATE reviewed_lines SET line_no = -? WHERE id = ?",
+            [(new_ln, row_id) for new_ln, lh, ch, row_id in deduped_updates],
+        )
         await conn.executemany(
             "UPDATE reviewed_lines SET line_no = ?, line_hash = ?, context_hash = ? WHERE id = ?",
             deduped_updates,
         )
-    if delete_ids:
-        placeholders = ",".join("?" * len(delete_ids))
-        await conn.execute(f"DELETE FROM reviewed_lines WHERE id IN ({placeholders})", delete_ids)
 
 
 async def _reconcile_notes(conn, session_id, file_path, new_lines, new_line_hashes, line_map):
