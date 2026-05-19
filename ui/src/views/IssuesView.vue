@@ -510,16 +510,19 @@ export default {
       const noteIds = [...this.selectedNoteIds]
       this.attaching = true
       try {
-        await Promise.all(
+        const results = await Promise.allSettled(
           noteIds.map((nid) => attachNoteToIssue(this.session.id, nid, targetIssueId)),
         )
-        this.orphanNotes = this.orphanNotes.filter((n) => !noteIds.includes(n.id))
-        this.selectedNoteIds = []
-        if (this.selectedIssueId === targetIssueId) {
+        const failed = results.filter((r) => r.status === 'rejected')
+        if (failed.length > 0) {
+          this.editError = `Failed to attach ${failed.length} of ${noteIds.length} note(s): ${failed[0].reason?.message || 'Unknown error'}`
+        }
+        const reloadNotes = this.selectedIssueId === targetIssueId
+        await this.load()
+        if (reloadNotes) {
           await this.loadIssueNotes(targetIssueId)
         }
-      } catch (e) {
-        console.error('Failed to attach notes:', e.message)
+        this.selectedNoteIds = []
       } finally {
         this.attaching = false
       }
