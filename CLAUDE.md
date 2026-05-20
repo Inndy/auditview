@@ -58,7 +58,7 @@ Auditview is a line-level code review/audit tool: a Quart (async) JSON API backe
 
 ### Key Design Decisions
 
-**Content-based line identity** - reviewed state is never tied to line numbers. Each `reviewed_lines` row stores `line_hash` (SHA-256 of content) + `context_hash` (SHA-256 of prev+curr+next) as a tiebreaker for duplicate lines. When a file changes, `reconciler.py` uses `difflib.SequenceMatcher` to map old line positions to new ones, migrating or deleting rows accordingly.
+**Content-based line identity** - reviewed state is never tied to line numbers. Each `reviewed_lines` row stores `line_hash` (SHA-256 of content) + `context_hash` (SHA-256 of prev+curr+next) as a tiebreaker for duplicate lines. When a file changes, `reconciler.py` uses `difflib.SequenceMatcher` to map old line positions to new ones, migrating or deleting rows accordingly. The hard safety invariant: **never migrate a mark onto a line with different content or context**. Content-identical migrations are always acceptable — diff output is not unique, and the same edit can produce multiple valid patches that land a mark on a different physical instance of the same line; that is correct behaviour, not a bug.
 
 **aiosqlite with autocommit** - `open_db()` opens a connection with `isolation_level=None` (autocommit). Code that needs atomic writes uses explicit `await conn.execute("BEGIN")` / `await conn.commit()` / `await conn.rollback()`. All rows are `aiosqlite.Row` (dict-accessible by column name).
 
@@ -73,7 +73,7 @@ Auditview is a line-level code review/audit tool: a Quart (async) JSON API backe
 ### Design philosophy
 
 - **Composability over convenience, repairability over foolproofing.** The system should be transparent enough that a power user can understand and manually fix any state. No sealed black boxes.
-- **Escape hatches over hard failures.** Corner cases should be handleable with minimal intervention. The checkpoint system exists so that a reconciler bug does not permanently destroy review history — the user can revert at the DB level without the app.
+- **Escape hatches over hard failures.** Corner cases should be handleable with minimal intervention. (A changeset-based undo system existed under the old apsw backend and was dropped during the Quart migration; this goal is currently unmet at the DB layer.)
 - **Thin abstractions, not speculative ones.** Do not add abstraction layers without a concrete reason present in the current codebase.
 - **Target: power user.** The tool assumes the user understands the system's concepts. Guardrails should not obscure behaviour or hide state.
 
@@ -84,3 +84,16 @@ Pytest + pytest-asyncio (strict mode) live under `tests/`. Install dev deps with
 The first test is a **reconciler fuzzer** (`tests/test_reconciler_fuzz.py`): it generates synthetic files + random edit patches with ID-tracked ground truth, runs the real `reconcile_file`, and reports migration outcomes. The reconciler is content-based: migrating a mark to a line with identical content and identical context (prev+curr+next) is semantically correct even if the line was freshly inserted — the fuzzer reports these as informational "FP" counts but does not fail on them. False unmarks (dropped marks) are counted and acceptable. When an ID-based FP is found, the harness shrinks the case and writes a minimal repro to `tests/fuzz/saved_seeds/fp_<sha8>.json`. **Treat anything committed under `tests/fuzz/saved_seeds/` as a documentation fixture** — examples of known content-identical migration patterns.
 
 Flags: `--fuzz-iters=N` (default 100), `--fuzz-seed=N` (default 0), `--fuzz-save-fn` (also save a capped sample of false-unmark cases for later classification).
+
+When writing a test or fuzzer harness that spins up a temporary SQLite DB per iteration, probe for `/dev/shm` and use it as the temp dir base when present — this keeps the DB on tmpfs and avoids fsync/journal I/O overhead:
+
+```python
+import os, tempfile
+def _tmp_root():
+    return "/dev/shm" if os.path.isdir("/dev/shm") else None
+
+with tempfile.TemporaryDirectory(dir=_tmp_root()) as tmp:
+    ...
+```
+
+Fall back to the system default (`None`) when `/dev/shm` is absent (macOS, some containers).

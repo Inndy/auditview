@@ -29,6 +29,9 @@ Symbol-aware navigation within the review UI — jump to definition, find refere
 ### Snapshot diff comparison
 Follows naturally from trusted snapshots. Compare any two tagged versions, not just "trusted vs HEAD". Useful for auditing a dependency update or a large refactor without starting from zero.
 
+### Reconciliation undo / changeset log
+The original apsw-based backend wrapped every reconciliation in a changeset (apsw session extension) and stored it in a `checkpoints` table, allowing revert at the DB level without the app. This was dropped during the Flask→Quart migration because apsw's synchronous driver doesn't compose cleanly with asyncio. The design goal — protecting review history from a reconciler bug — is still valid; a re-implementation would need to work without apsw (e.g. manual before/after snapshots or a WAL-based approach).
+
 ## Explicitly out of scope
 
 - **Attestation artifacts** — generating signed audit certificates. Useful in enterprise contexts but not the core use case.
