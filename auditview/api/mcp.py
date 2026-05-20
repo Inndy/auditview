@@ -116,13 +116,13 @@ async def check_context() -> str:
     )
 
 
-async def _fetch_file_lines(api: _SessionAPI, file_path: str) -> dict[int, str]:
-    """Return {line_no: content} for a file, empty dict on failure."""
+async def _fetch_file_lines(api: _SessionAPI, file_path: str) -> tuple[dict[int, str], Optional[str]]:
+    """Return ({line_no: content}, error_msg). error_msg is None on success."""
     try:
         data = await api.get(f"/files/{file_path}")
-        return {l["line_no"]: l["content"] for l in data["lines"]}
-    except Exception:
-        return {}
+        return {l["line_no"]: l["content"] for l in data["lines"]}, None
+    except Exception as exc:
+        return {}, str(exc)
 
 
 def _code_block(lines: list[str], indent: str = "  ") -> list[str]:
@@ -147,10 +147,13 @@ async def list_notes(file_path: Optional[str] = None, include_context: bool = Fa
         return "No notes found."
 
     file_cache: dict[str, dict[int, str]] = {}
+    file_errors: dict[str, str] = {}
     if include_context:
         unique_files = {n["file_path"] for n in notes if not n["is_orphaned"]}
         for fp in unique_files:
-            file_cache[fp] = await _fetch_file_lines(api, fp)
+            file_cache[fp], err = await _fetch_file_lines(api, fp)
+            if err:
+                file_errors[fp] = err
 
     lines = []
     for n in notes:
@@ -166,10 +169,14 @@ async def list_notes(file_path: Optional[str] = None, include_context: bool = Fa
                     lines.append("  [original snapshot]")
                     lines.extend(_code_block(snapshot.splitlines()))
             else:
-                file_lines = file_cache.get(n["file_path"], {})
-                snippet = [file_lines[ln] for ln in range(n["start_line"], n["end_line"] + 1) if ln in file_lines]
-                if snippet:
-                    lines.extend(_code_block(snippet))
+                err = file_errors.get(n["file_path"])
+                if err:
+                    lines.append(f"  [context unavailable: {err}]")
+                else:
+                    file_lines = file_cache.get(n["file_path"], {})
+                    snippet = [file_lines[ln] for ln in range(n["start_line"], n["end_line"] + 1) if ln in file_lines]
+                    if snippet:
+                        lines.extend(_code_block(snippet))
 
         lines.append("")
     return "\n".join(lines)
@@ -269,10 +276,13 @@ async def get_issue(issue_id: int, include_context: bool = False) -> str:
         return "\n".join(lines)
 
     file_cache: dict[str, dict[int, str]] = {}
+    file_errors: dict[str, str] = {}
     if include_context:
         unique_files = {n["file_path"] for n in notes if not n["is_orphaned"]}
         for fp in unique_files:
-            file_cache[fp] = await _fetch_file_lines(api, fp)
+            file_cache[fp], err = await _fetch_file_lines(api, fp)
+            if err:
+                file_errors[fp] = err
 
     lines.append("")
     lines.append(f"Attached notes ({len(notes)}):")
@@ -289,10 +299,14 @@ async def get_issue(issue_id: int, include_context: bool = False) -> str:
                     lines.append("    [original snapshot]")
                     lines.extend(_code_block(snapshot.splitlines(), indent="    "))
             else:
-                file_lines = file_cache.get(n["file_path"], {})
-                snippet = [file_lines[ln] for ln in range(n["start_line"], n["end_line"] + 1) if ln in file_lines]
-                if snippet:
-                    lines.extend(_code_block(snippet, indent="    "))
+                err = file_errors.get(n["file_path"])
+                if err:
+                    lines.append(f"    [context unavailable: {err}]")
+                else:
+                    file_lines = file_cache.get(n["file_path"], {})
+                    snippet = [file_lines[ln] for ln in range(n["start_line"], n["end_line"] + 1) if ln in file_lines]
+                    if snippet:
+                        lines.extend(_code_block(snippet, indent="    "))
 
     return "\n".join(lines)
 

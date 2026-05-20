@@ -93,7 +93,7 @@ class WatcherService:
 
     def broadcast_all(self, event, *, drain_first=False):
         with self._lock:
-            for clients in self._clients.values():
+            for sid, clients in self._clients.items():
                 for q in list(clients):
                     if drain_first:
                         while not q.empty():
@@ -104,7 +104,10 @@ class WatcherService:
                     try:
                         q.put_nowait(event)
                     except asyncio.QueueFull:
-                        pass
+                        logger.warning(
+                            "watcher: dropping broadcast_all event for session %s (queue full, type=%s)",
+                            sid, event.get("type"),
+                        )
 
     def broadcast_to_session(self, session_id, event):
         with self._lock:
@@ -112,7 +115,10 @@ class WatcherService:
                 try:
                     q.put_nowait(event)
                 except asyncio.QueueFull:
-                    pass
+                    logger.warning(
+                        "watcher: dropping event for session %s (queue full, type=%s)",
+                        session_id, event.get("type"),
+                    )
 
     async def get_scan(self, session_id, root_path, exclusion_patterns):
         patterns_str = exclusion_patterns or ""
@@ -143,11 +149,14 @@ class WatcherService:
             with self._lock:
                 self._scan_cache[session_id] = result
             fut.set_result(result)
-        except Exception as exc:
+        except BaseException as exc:
+            # BaseException so CancelledError doesn't leave a pending Future
+            # cached forever — later callers would await it indefinitely.
             with self._lock:
                 if self._scan_cache.get(session_id) is fut:
                     self._scan_cache[session_id] = None
-            fut.set_exception(exc)
+            if not fut.done():
+                fut.set_exception(exc if isinstance(exc, Exception) else asyncio.CancelledError())
             raise
         return result
 
@@ -183,7 +192,12 @@ class WatcherService:
         loop = self._loop
         if loop is None:
             return
-        loop.call_soon_threadsafe(self._enqueue_path, abs_path)
+        try:
+            loop.call_soon_threadsafe(self._enqueue_path, abs_path)
+        except RuntimeError:
+            # Loop closed between our check and the call — happens during
+            # shutdown when watchdog threads still hold pending events.
+            pass
 
     def _enqueue_path(self, abs_path):
         # Runs on the asyncio loop. Coalesce repeated events for the same path

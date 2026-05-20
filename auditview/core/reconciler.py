@@ -304,13 +304,21 @@ async def reconcile_file(conn, session_id, file_path, root_path):
             await conn.execute("COMMIT")
         except Exception:
             await conn.execute("ROLLBACK")
+            logger.exception(
+                "reconcile_file: cleanup failed for deleted file %s (session %s)",
+                file_path, session_id,
+            )
         return
     except OSError:
         logger.warning("reconcile_file: cannot read %s", full_path, exc_info=True)
         return
 
     ext = os.path.splitext(file_path)[1].lower()
-    mtime = os.path.getmtime(full_path)
+    try:
+        mtime = os.path.getmtime(full_path)
+    except OSError:
+        logger.warning("reconcile_file: cannot stat %s", full_path, exc_info=True)
+        return
     countable = sum(1 for l in new_lines if is_countable_line(l, ext))
 
     # BEGIN here so that _has_migration_state, prev_line_hashes, and

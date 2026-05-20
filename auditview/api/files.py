@@ -218,12 +218,15 @@ async def get_file(session_id, fpath):
             return jsonify({"error": "File not found"}), 404
 
         force = request.args.get("force", "").lower() in ("1", "true", "yes")
-        if not force:
-            if file_is_large(full_path):
-                size = os.path.getsize(full_path)
-                return jsonify({"error": "File is too large", "reason": "large", "size": size}), 422
-            if is_binary_file(full_path):
-                return jsonify({"error": "Binary file detected", "reason": "binary"}), 422
+        try:
+            if not force:
+                if file_is_large(full_path):
+                    size = os.path.getsize(full_path)
+                    return jsonify({"error": "File is too large", "reason": "large", "size": size}), 422
+                if is_binary_file(full_path):
+                    return jsonify({"error": "Binary file detected", "reason": "binary"}), 422
+        except OSError:
+            return jsonify({"error": "Could not read file"}), 500
 
         cur = await conn.execute(
             "SELECT last_mtime FROM files WHERE session_id = ? AND rel_path = ?",
@@ -233,7 +236,10 @@ async def get_file(session_id, fpath):
         if file_row is None:
             return jsonify({"error": "File not tracked in this session — call list_files first"}), 404
 
-        current_mtime = os.path.getmtime(full_path)
+        try:
+            current_mtime = os.path.getmtime(full_path)
+        except OSError:
+            return jsonify({"error": "Could not read file"}), 500
         stored_mtime = file_row["last_mtime"]
         if stored_mtime is None or abs(stored_mtime - current_mtime) > 1e-6:
             await reconcile_file(conn, session_id, fpath, root_path)

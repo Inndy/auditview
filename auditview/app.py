@@ -107,9 +107,14 @@ def create_app(db_path, root_path):
         if path.startswith("api/"):
             abort(404)
         static = app.static_folder
-        full = os.path.join(static, path)
-        if path and os.path.isfile(full):
-            return await send_from_directory(static, path)
+        static_real = os.path.realpath(static)
+        # Resolve before probing so traversal candidates ("../etc/passwd") can
+        # never reach os.path.isfile against arbitrary filesystem paths.
+        if path:
+            candidate = os.path.realpath(os.path.join(static, path))
+            inside = candidate == static_real or candidate.startswith(static_real + os.sep)
+            if inside and os.path.isfile(candidate):
+                return await send_from_directory(static, path)
         return await send_from_directory(static, "index.html")
 
     async def asgi_app(scope, receive, send):

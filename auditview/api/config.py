@@ -72,15 +72,12 @@ async def resolve_path():
     root = Path(mcp_session["root_path"]).resolve()
     p = Path(path)
     if p.is_absolute():
-        try:
-            rel = p.resolve().relative_to(root)
-        except ValueError:
-            return jsonify({"error": "path escapes session root"}), 400
+        resolved = p.resolve()
     else:
-        rel = Path(path)
-        try:
-            (root / rel).resolve().relative_to(root)
-        except ValueError:
-            return jsonify({"error": "path escapes session root"}), 400
+        resolved = (root / p).resolve()
+    try:
+        rel = resolved.relative_to(root)
+    except ValueError:
+        return jsonify({"error": "path escapes session root"}), 400
 
-    return jsonify({"rel_path": str(rel), "abs_path": str(root / rel)})
+    return jsonify({"rel_path": str(rel), "abs_path": str(resolved)})
