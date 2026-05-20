@@ -8,14 +8,18 @@ export function listIssues(sessionId, status = null) {
 export function createIssue(sessionId, title, severity = 'P2', noteIds = [], description = '') {
   return apiFetch(`/api/sessions/${sessionId}/issues`, {
     method: 'POST',
-    body: JSON.stringify({ title, severity, note_ids: noteIds, description }),
+    body: JSON.stringify({ title, severity, note_ids: noteIds, description, source: 'webui' }),
   })
 }
 
 export function updateIssue(sessionId, issueId, updates) {
+  const body = { ...updates }
+  if (updates.status === 'resolved' || updates.status === 'dismissed') {
+    body.actor = 'webui'
+  }
   return apiFetch(`/api/sessions/${sessionId}/issues/${issueId}`, {
     method: 'PATCH',
-    body: JSON.stringify(updates),
+    body: JSON.stringify(body),
   })
 }
 

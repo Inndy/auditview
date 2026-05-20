@@ -4,7 +4,7 @@ from auditview.api.notes import NOTE_SELECT_COLUMNS, NOTE_SELECT_FROM, note_row
 
 bp = Blueprint("issues", __name__)
 
-_ISSUE_COLUMNS = "id, session_id, title, description, severity, status, created_at"
+_ISSUE_COLUMNS = "id, session_id, title, description, severity, status, source, closed_by, created_at"
 
 
 async def _broadcast_notes_by_ids(conn, session_id, note_ids):
@@ -45,23 +45,34 @@ async def _broadcast_notes_by_issue(conn, session_id, issue_id):
 @bp.route("/sessions/<int:session_id>/issues", methods=["GET"])
 async def list_issues(session_id):
     status_filter = request.args.get("status")
+    file_path_filter = request.args.get("file_path")
     async with open_db(current_app.config["DB_PATH"]) as conn:
         cur = await conn.execute("SELECT id FROM sessions WHERE id = ?", (session_id,))
         if await cur.fetchone() is None:
             return jsonify({"error": "session not found"}), 404
 
+        conditions = ["i.session_id = ?"]
+        params = [session_id]
+        from_clause = "issues i"
+
+        if file_path_filter:
+            from_clause = (
+                "issues i JOIN notes n ON n.issue_id = i.id AND n.is_orphaned = 0"
+            )
+            conditions.append("n.file_path = ?")
+            params.append(file_path_filter)
+
         if status_filter:
-            cur = await conn.execute(
-                f"SELECT {_ISSUE_COLUMNS} "
-                "FROM issues WHERE session_id = ? AND status = ? ORDER BY created_at DESC",
-                (session_id, status_filter),
-            )
-        else:
-            cur = await conn.execute(
-                f"SELECT {_ISSUE_COLUMNS} "
-                "FROM issues WHERE session_id = ? ORDER BY created_at DESC",
-                (session_id,),
-            )
+            conditions.append("i.status = ?")
+            params.append(status_filter)
+
+        cols = ", ".join(f"i.{c}" for c in _ISSUE_COLUMNS.split(", "))
+        distinct = "DISTINCT " if file_path_filter else ""
+        cur = await conn.execute(
+            f"SELECT {distinct}{cols} FROM {from_clause} "
+            f"WHERE {' AND '.join(conditions)} ORDER BY i.created_at DESC",
+            params,
+        )
         rows = await cur.fetchall()
     return jsonify([dict(r) for r in rows])
 
@@ -87,6 +98,7 @@ async def create_issue(session_id):
     severity = data.get("severity", "P2")
     description = data.get("description", "")
     note_ids = data.get("note_ids", [])
+    source = data.get("source") or None
 
     if not title:
         return jsonify({"error": "title is required"}), 400
@@ -119,8 +131,8 @@ async def create_issue(session_id):
         await conn.execute("BEGIN")
         try:
             cur = await conn.execute(
-                "INSERT INTO issues (session_id, title, description, severity) VALUES (?, ?, ?, ?)",
-                (session_id, title, description, severity),
+                "INSERT INTO issues (session_id, title, description, severity, source) VALUES (?, ?, ?, ?, ?)",
+                (session_id, title, description, severity, source),
             )
             row_id = cur.lastrowid
             if note_ids:
@@ -156,6 +168,7 @@ async def update_issue(session_id, issue_id):
     severity = data.get("severity")
     status = data.get("status")
     description = data.get("description")
+    actor = data.get("actor") or None
 
     if title is not None:
         title = title.strip()
@@ -184,6 +197,12 @@ async def update_issue(session_id, issue_id):
         if status is not None:
             updates.append("status = ?")
             params.append(status)
+            if status in ("resolved", "dismissed"):
+                updates.append("closed_by = ?")
+                params.append(actor)
+            elif status == "open":
+                updates.append("closed_by = ?")
+                params.append(None)
         if description is not None:
             updates.append("description = ?")
             params.append(description)

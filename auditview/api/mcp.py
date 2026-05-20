@@ -214,7 +214,7 @@ _VALID_ISSUE_STATUSES = ("open", "resolved", "dismissed")
 
 
 @mcp.tool()
-async def list_issues(status: Optional[str] = None) -> str:
+async def list_issues(status: Optional[str] = None, file_path: Optional[str] = None) -> str:
     """List issues in the active audit session.
 
     When you are actively fixing issues, pass status="open" — this hides
@@ -222,21 +222,43 @@ async def list_issues(status: Optional[str] = None) -> str:
     Omit status only when you need the full history (e.g. auditing past
     decisions or rediscovering a dismissed report).
 
+    Pass file_path to restrict results to issues that have at least one live
+    note in that file. Useful before creating a new issue to check for
+    duplicates scoped to the file you are reviewing.
+
     Args:
         status: Filter by status — 'open', 'resolved', or 'dismissed'.
             Omit for all. Recommended: 'open' when iterating on fixes.
+        file_path: Relative path within the session root (e.g. 'src/main.py').
+            When provided, only issues with a live note in that file are returned.
     """
     if status is not None and status not in _VALID_ISSUE_STATUSES:
         raise ValueError(
             f"status must be one of {_VALID_ISSUE_STATUSES} or omitted"
         )
     api = await _session_api()
-    path = "/issues" + (f"?status={status}" if status else "")
+    qs_parts = []
+    if status:
+        qs_parts.append(f"status={status}")
+    if file_path:
+        from urllib.parse import quote
+        qs_parts.append(f"file_path={quote(file_path, safe='/')}")
+    path = "/issues" + (f"?{'&'.join(qs_parts)}" if qs_parts else "")
     issues = await api.get(path)
     if not issues:
-        scope = f" with status={status}" if status else ""
+        scope_parts = []
+        if status:
+            scope_parts.append(f"status={status}")
+        if file_path:
+            scope_parts.append(f"file={file_path}")
+        scope = (" (" + ", ".join(scope_parts) + ")") if scope_parts else ""
         return f"No issues found{scope}."
-    header = f"Showing issues with status={status}" if status else "Showing all issues (any status)"
+    header_parts = []
+    if status:
+        header_parts.append(f"status={status}")
+    if file_path:
+        header_parts.append(f"file={file_path}")
+    header = ("Showing issues: " + ", ".join(header_parts)) if header_parts else "Showing all issues"
     body = "\n".join(f"[#{i['id']}] [{i['severity']}] [{i['status']}] {i['title']}" for i in issues)
     return f"{header}\n{body}"
 
@@ -312,18 +334,38 @@ async def get_issue(issue_id: int, include_context: bool = False) -> str:
 
 
 @mcp.tool()
-async def create_issue(title: str, severity: str, description: Optional[str] = None) -> str:
+async def create_issue(
+    title: str,
+    severity: str,
+    description: Optional[str] = None,
+    note_ids: Optional[list[int]] = None,
+    source: Optional[str] = None,
+) -> str:
     """Create a new issue in the active audit session.
+
+    Pass source='agents:<your-name>' to record authorship, e.g.
+    source='agents:codeview-lens-concurrency'. This lets humans filter
+    and triage issues by which lens or agent opened them.
+
+    Pass note_ids to atomically attach existing notes to the issue in a
+    single round-trip instead of calling create_note separately.
 
     Args:
         title: Issue title
         severity: P0=critical, P1=high, P2=medium
         description: Optional long-form markdown description (rendered in the UI)
+        note_ids: Optional list of existing note IDs to attach to this issue
+        source: Who is opening this issue (e.g. 'agents:codeview-lens-concurrency',
+            'webui', 'editor:neovim')
     """
     api = await _session_api()
-    payload = {"title": title, "severity": severity}
+    payload: dict = {"title": title, "severity": severity}
     if description is not None:
         payload["description"] = description
+    if note_ids:
+        payload["note_ids"] = note_ids
+    if source is not None:
+        payload["source"] = source
     data = await api.post("/issues", payload)
     return f"Created issue #{data['id']}: [{data['severity']}] {data['title']}"
 
@@ -335,8 +377,12 @@ async def update_issue(
     severity: Optional[str] = None,
     status: Optional[str] = None,
     description: Optional[str] = None,
+    actor: Optional[str] = None,
 ) -> str:
     """Update an existing issue's title, severity, status, or description.
+
+    When resolving or dismissing an issue, pass actor='agents:<your-name>'
+    to record who closed it, e.g. actor='agents:codeview-lens-concurrency'.
 
     Args:
         issue_id: The issue ID to update
@@ -344,6 +390,8 @@ async def update_issue(
         severity: New severity (P0/P1/P2)
         status: New status (open/resolved/dismissed)
         description: New markdown description (pass an empty string to clear)
+        actor: Who is making this status change (e.g. 'agents:codeview-lens-trust-boundary').
+            Only recorded when status is changing to 'resolved' or 'dismissed'.
     """
     payload = {
         k: v
@@ -355,6 +403,8 @@ async def update_issue(
         }.items()
         if v is not None
     }
+    if actor is not None and status in ("resolved", "dismissed"):
+        payload["actor"] = actor
     if not payload:
         raise ValueError("At least one field to update is required")
     api = await _session_api()

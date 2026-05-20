@@ -66,6 +66,8 @@ CREATE TABLE IF NOT EXISTS issues (
     description TEXT NOT NULL DEFAULT '',
     severity TEXT NOT NULL DEFAULT 'P2',
     status TEXT NOT NULL DEFAULT 'open',
+    source TEXT DEFAULT NULL,
+    closed_by TEXT DEFAULT NULL,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
 """
@@ -100,6 +102,8 @@ _MIGRATIONS = [
         "ALTER TABLE reviewed_lines_new RENAME TO reviewed_lines",
         "CREATE INDEX IF NOT EXISTS idx_reviewed_lines_session_file ON reviewed_lines(session_id, file_path)",
     ),
+    "ALTER TABLE issues ADD COLUMN source TEXT DEFAULT NULL",
+    "ALTER TABLE issues ADD COLUMN closed_by TEXT DEFAULT NULL",
 ]
 
 _IDEMPOTENT_ERROR_FRAGMENTS = ("duplicate column name", "already exists")

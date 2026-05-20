@@ -128,6 +128,11 @@
             </div>
           </div>
 
+          <div v-if="selectedIssue.source || selectedIssue.closed_by" class="detail-row actor-row">
+            <span v-if="selectedIssue.source" class="actor-field">Opened by <code>{{ selectedIssue.source }}</code></span>
+            <span v-if="selectedIssue.closed_by" class="actor-field">Closed by <code>{{ selectedIssue.closed_by }}</code></span>
+          </div>
+
           <div class="notes-section">
             <h4>Attached Notes</h4>
             <div v-if="issueNotes.length === 0" class="empty-notes">No notes attached.</div>
@@ -813,6 +818,22 @@ export default {
   font-size: 11px;
   font-weight: 600;
   color: var(--text-muted);
+}
+
+.actor-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.actor-field {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.actor-field code {
+  font-size: 11px;
+  color: var(--text-secondary, var(--text-muted));
 }
 
 .description-editor {

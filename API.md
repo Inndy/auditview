@@ -376,6 +376,7 @@ List issues for the session, newest first.
 
 **Query params**
 - `status`: optional, one of `open` / `resolved` / `dismissed`; filters by status
+- `file_path`: optional, relative path within session root (e.g. `src/main.py`); when provided, only issues that have at least one live (non-orphaned) note in that file are returned
 
 **Response 200**
 ```json
@@ -387,11 +388,15 @@ List issues for the session, newest first.
     "description": "User input from `req.path` is joined with the upload dir without normalization…",
     "severity": "P1",
     "status": "open",
+    "source": "agents:codeview-lens-trust-boundary",
+    "closed_by": null,
     "created_at": "2026-05-14T10:15:00Z"
   }
 ]
 ```
 - `description` is a free-form markdown string (empty by default). The UI renders it as sanitized HTML.
+- `source`: free-form string identifying who opened the issue (`null` if not recorded). Convention: `"webui"`, `"editor:neovim"`, `"agents:<name>"`.
+- `closed_by`: free-form string identifying who last resolved or dismissed the issue (`null` when open or not recorded). Cleared to `null` when the issue is reopened.
 
 ---
 
@@ -423,8 +428,9 @@ Create a new issue, optionally attaching existing notes to it atomically.
 - `description`: optional string (default `""`); free-form markdown rendered as sanitized HTML in the UI
 - `severity`: one of `P0` / `P1` / `P2` (default `P2`); `P0`=critical, `P1`=high, `P2`=medium
 - `note_ids`: optional array of integers; all referenced notes must exist in this session
+- `source`: optional string; who is opening the issue (e.g. `"webui"`, `"editor:neovim"`, `"agents:codeview-lens-concurrency"`)
 
-**Response 201**: the created issue (same shape as a list entry).
+**Response 201**: the created issue (same shape as a list entry, including `source` and `closed_by`).
 
 **Errors**
 - `400` — missing/invalid `title`, invalid `severity`, non-string `description`, malformed `note_ids`, or some `note_ids` do not exist (response includes `"missing": [...]`)
@@ -446,8 +452,9 @@ Update one or more of `title`, `description`, `severity`, `status`.
 - `description`: optional string (markdown); pass `""` to clear
 - `severity`: optional, one of `P0` / `P1` / `P2`
 - `status`: optional, one of `open` / `resolved` / `dismissed`
+- `actor`: optional string; who is making this status change. Stored as `closed_by` when `status` is `"resolved"` or `"dismissed"`; ignored otherwise. Cleared to `null` automatically when `status` is `"open"`.
 
-**Response 200**: the updated issue.
+**Response 200**: the updated issue (same shape as a list entry, including `source` and `closed_by`).
 
 **Errors**
 - `400` — invalid value, empty title, non-string description, or no fields to update
