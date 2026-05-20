@@ -207,7 +207,6 @@ function M.fetch(bufnr, cb)
     rel_path = rel,
     lines = lines,
     notes = notes,
-    fetched_at = os.time(),
   }
   render_reviewed(bufnr, lines)
   render_note_signs(bufnr, notes)

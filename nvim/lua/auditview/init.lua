@@ -165,13 +165,21 @@ function M.session_reset()
 end
 
 function M.session_select()
+  -- Invalidate cache on every buffer that was tied to the old session, then
+  -- prompt for a new one. Without this, a stale buffer would still POST marks
+  -- using the previous session's file state (wrong rel_path, wrong hashes).
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if buffer.get(b) then buffer.invalidate(b) end
+  end
   session.reset()
   session.resolve(function(sess)
     if not sess then return end
     vim.notify(string.format("auditview: session [%d] %s", sess.id, sess.label))
-    local bufnr = vim.api.nvim_get_current_buf()
-    buffer.invalidate(bufnr)
-    M.on_buf_read(bufnr)
+    for _, b in ipairs(vim.api.nvim_list_bufs()) do
+      if vim.api.nvim_buf_is_loaded(b) then
+        M.on_buf_read(b)
+      end
+    end
   end)
 end
 

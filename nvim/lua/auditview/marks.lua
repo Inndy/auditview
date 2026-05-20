@@ -43,11 +43,32 @@ local function send(bufnr, start_line, end_line, reviewed)
       vim.notify("auditview: " .. resp.error, vim.log.levels.ERROR)
       return
     end
-    local n_rej = #(resp.rejected or {})
+    local rejected = resp.rejected or {}
+    local n_rej = #rejected
     if n_rej > 0 then
+      local reason_counts = {}
+      local order = {}
+      for _, r in ipairs(rejected) do
+        local reason = r.reason or "unknown"
+        if reason_counts[reason] == nil then
+          table.insert(order, reason)
+        end
+        reason_counts[reason] = (reason_counts[reason] or 0) + 1
+      end
+      local parts = {}
+      for _, reason in ipairs(order) do
+        table.insert(parts, string.format("%dx %s", reason_counts[reason], reason))
+      end
+      local detail = table.concat(parts, "; ")
+      local sample = {}
+      for i = 1, math.min(3, n_rej) do
+        table.insert(sample, tostring(rejected[i].line_no or "?"))
+      end
+      local lines_str = table.concat(sample, ",")
+      if n_rej > #sample then lines_str = lines_str .. ",…" end
       vim.notify(string.format(
-        "auditview: %d/%d rejected (%s) — refetching",
-        n_rej, #lines, resp.rejected[1].reason or "unknown"
+        "auditview: %d/%d rejected at L%s — %s — refetching",
+        n_rej, #lines, lines_str, detail
       ), vim.log.levels.WARN)
     end
     buffer.refresh(bufnr)
