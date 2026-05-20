@@ -71,7 +71,9 @@ export class SSEClient {
     es.onerror = () => {
       if (this.status.value === 'shutdown' && this._shutdownAt !== null && Date.now() - this._shutdownAt < 10000) return;
       this._shutdownAt = null;
-      this._scheduleRetry(this._retryDelay, 'disconnected');
+      // Jitter so multiple tabs/clients don't reconnect in lockstep after a server restart.
+      const jitter = Math.floor(Math.random() * this._retryDelay * 0.5);
+      this._scheduleRetry(this._retryDelay + jitter, 'disconnected');
       this._retryDelay = Math.min(this._retryDelay * 2, 30000);
     };
   }
