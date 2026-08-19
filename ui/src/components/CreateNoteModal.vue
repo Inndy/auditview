@@ -11,9 +11,9 @@
         @keydown.meta.enter.stop.prevent="submit"
       ></textarea>
       <div class="modal-actions">
-        <button @click="cancel">Cancel</button>
+        <button data-modal-cancel @click="cancel">Cancel</button>
         <button @click="pickIssue">Add to Issue Instead</button>
-        <button class="btn-primary" @click="submit" :disabled="!content.trim()">Submit</button>
+        <button class="btn-primary" data-modal-confirm @click="submit" :disabled="!content.trim()">Submit</button>
       </div>
     </div>
   </div>

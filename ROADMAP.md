@@ -18,6 +18,9 @@ Currently only the reconciler fuzz suite exists. Core business logic in `auditvi
 ### Issue lifecycle with attribution
 Notes and TODOs exist but are informal. A lightweight issue tracker — open → in progress → resolved — with `opened_by`, `resolved_by`, `verified_by` fields turns the tool into a coordination platform for mixed human/agent review workflows. Agents can open issues on suspicious lines; humans triage; other agents or humans resolve and verify.
 
+### Gamepad remapping and wider coverage
+Gamepad support ships with a fixed default binding table (standard/Xbox mapping) plus `localStorage` overrides for both the action→button map and the physical input map. Missing: a remap UI that captures a button press and assigns it to an action; bindings for the issues view, which has no keyboard handling either; expanding and collapsing directories in the file tree from the pad (`TreeNode.vue` keeps `expanded` as per-node local state, unaddressable from outside); focus for the orphan-notes panel. `IssuesView`'s delete confirmation uses a native blocking `confirm()`, which no input layer can drive.
+
 ### Neovim client
 An MVP exists. The nvim plugin is a real daily-driver client and quality here directly affects workflow. Needs sharpening: mark/unmark reliability, cache invalidation, display of notes and coverage inline.
 

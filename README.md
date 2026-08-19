@@ -17,6 +17,10 @@ LLM-generated code is fast to build but hard to trust. Subtle bugs, bad patterns
 
 When auditing an unknown or untrusted codebase, the same workflow applies: systematic line coverage ensures no file goes unseen. Notes and issues become the audit trail. The coverage percentage is an honest measure of how much ground has been covered.
 
+### Reviewing away from the desk
+
+The whole review loop — move the cursor, select a range, mark reviewed, jump to the next unreviewed line, switch files — is driven by the keyboard, and equally by a game controller. Any pad reporting the standard (Xbox) mapping works, including a Steam Controller or Steam Deck via Steam Input. Writing note text still needs a keyboard.
+
 ## Core concept: review coverage
 
 Coverage is the primary metric — reviewed lines / countable lines. Blank lines and (optionally) comment-only lines are excluded. The goal is a clear, honest percentage that means "a human has read this."

@@ -9,10 +9,11 @@
     </div>
     <div v-if="liveNotes.length === 0" class="empty-msg">No notes for this file.</div>
     <NoteCard
-      v-for="note in liveNotes"
+      v-for="(note, i) in liveNotes"
       :key="note.id"
       :note="note"
       :sessionId="sessionId"
+      :focused="i === focusedIndex"
       @updated="$emit('note-updated', $event)"
       @deleted="$emit('note-deleted', $event)"
       @jump="$emit('jump', $event)"
@@ -37,6 +38,7 @@ export default {
     return {
       editingTargets: {},
       lostEdits: [],
+      focusedIndex: -1,
     }
   },
   computed: {
@@ -45,6 +47,9 @@ export default {
     },
   },
   watch: {
+    liveNotes(list) {
+      if (this.focusedIndex >= list.length) this.focusedIndex = list.length - 1
+    },
     notes(newNotes) {
       const present = new Set(newNotes.map((n) => n.id))
       for (const id of Object.keys(this.editingTargets)) {
@@ -59,6 +64,21 @@ export default {
     },
   },
   methods: {
+    moveFocus(delta) {
+      const n = this.liveNotes.length
+      if (n === 0) return
+      const next = this.focusedIndex === -1
+        ? (delta > 0 ? 0 : n - 1)
+        : Math.max(0, Math.min(n - 1, this.focusedIndex + delta))
+      this.focusedIndex = next
+      this.$nextTick(() => {
+        this.$el.querySelectorAll('.note-card')[next]?.scrollIntoView({ block: 'nearest' })
+      })
+    },
+    activateFocused() {
+      const note = this.liveNotes[this.focusedIndex]
+      if (note) this.$emit('jump', note)
+    },
     onEditStarted({ id, startLine, endLine }) {
       this.editingTargets[id] = { startLine, endLine }
     },

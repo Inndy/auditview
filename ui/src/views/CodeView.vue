@@ -1,7 +1,7 @@
 <template>
   <div class="session-view-wrap">
     <Splitpanes class="session-layout" @resized="onResized">
-      <Pane :size="sizes[0]" :min-size="10">
+      <Pane :size="sizes[0]" :min-size="10" :class="{ 'pane-focused': padActive && focusedPane === 'tree' }">
         <FileTree
           ref="fileTree"
           :sessionId="id"
@@ -9,7 +9,7 @@
           @file-selected="openFile"
         />
       </Pane>
-      <Pane :size="sizes[1]" :min-size="30">
+      <Pane :size="sizes[1]" :min-size="30" :class="{ 'pane-focused': padActive && focusedPane === 'code' }">
         <CodeViewer
           ref="codeViewer"
           :sessionId="id"
@@ -19,12 +19,12 @@
           @lines-marked="onLinesMarked"
           @file-reloaded="onFileReloaded"
           @selection-change="onSelectionChange"
-          @show-help="$emit('show-help')"
         />
       </Pane>
-      <Pane :size="sizes[2]" :min-size="12">
+      <Pane :size="sizes[2]" :min-size="12" :class="{ 'pane-focused': padActive && focusedPane === 'notes' }">
         <div class="right-panels">
           <NotePanel
+            ref="notePanel"
             :notes="currentNotes"
             :sessionId="id"
             @note-updated="onNoteUpdated"
@@ -41,7 +41,6 @@
         </div>
       </Pane>
     </Splitpanes>
-    <KeyboardHelpModal :visible="showHelp" @close="showHelp = false" />
   </div>
 </template>
 
@@ -55,8 +54,10 @@ import FileTree from '../components/FileTree.vue'
 import CodeViewer from '../components/CodeViewer.vue'
 import NotePanel from '../components/NotePanel.vue'
 import OrphanPanel from '../components/OrphanPanel.vue'
-import KeyboardHelpModal from '../components/KeyboardHelpModal.vue'
+import { setTargets, clearTargets } from '../input/actions.js'
+import { gamepad } from '../input/gamepad.js'
 
+const PANES = ['tree', 'code', 'notes']
 const LAYOUT_STORAGE_KEY = 'auditview:layout:panes'
 const DEFAULT_SIZES = [18, 60, 22]
 
@@ -84,7 +85,6 @@ export default {
     CodeViewer,
     NotePanel,
     OrphanPanel,
-    KeyboardHelpModal,
   },
   props: {
     session: Object,
@@ -92,12 +92,17 @@ export default {
     wrapLines: Boolean,
   },
   emits: ['wrap-lines-change', 'show-help', 'coverage-refreshed'],
+  computed: {
+    padActive() {
+      return gamepad.status.value === 'connected'
+    },
+  },
   data() {
     return {
       id: this.$route.params.id,
       currentFile: null,
       currentNotes: [],
-      showHelp: false,
+      focusedPane: 'code',
       pendingJump: null,
       sizes: loadSizes(),
     }
@@ -106,13 +111,12 @@ export default {
     const { file, line, endLine } = this.$route.query
     if (file) this.currentFile = file
     if (line) this.pendingJump = { start: parseInt(line), end: parseInt(endLine || line) }
-    this._keyHandler = this.onKeyDown.bind(this)
-    document.addEventListener('keydown', this._keyHandler)
+    this.registerInputTargets()
     this._debouncedCoverage = debounce(() => this.refreshCoverage(), 250)
     this._sseUnsub = sseClient.on('file_changed', () => this._debouncedCoverage())
   },
   beforeUnmount() {
-    document.removeEventListener('keydown', this._keyHandler)
+    clearTargets()
     this._sseUnsub?.()
     this._debouncedCoverage?.cancel()
   },
@@ -193,16 +197,44 @@ export default {
         localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(next))
       } catch { /* storage full / disabled — non-critical */ }
     },
-    onKeyDown(e) {
-      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return
-      if (document.querySelector('.modal-overlay')) return
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        this.$refs.fileTree?.selectNext()
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        this.$refs.fileTree?.selectPrev()
+    registerInputTargets() {
+      setTargets({
+        viewer: this.$refs.codeViewer,
+        tree: this.$refs.fileTree,
+        view: this,
+      })
+    },
+    navFocusedPane(delta) {
+      if (this.focusedPane === 'tree') {
+        if (delta > 0) this.$refs.fileTree?.selectNext()
+        else this.$refs.fileTree?.selectPrev()
+      } else if (this.focusedPane === 'notes') {
+        this.$refs.notePanel?.moveFocus(delta)
+      } else {
+        this.$refs.codeViewer?.moveCursor(delta)
       }
+    },
+    activateFocusedPane() {
+      if (this.focusedPane === 'tree') this.focusedPane = 'code'
+      else if (this.focusedPane === 'notes') this.$refs.notePanel?.activateFocused()
+      else this.$refs.codeViewer?.markSelected()
+    },
+    cycleFocusedPane(delta) {
+      const i = PANES.indexOf(this.focusedPane)
+      this.focusedPane = PANES[(i + delta + PANES.length) % PANES.length]
+    },
+    scrollFocusedPane(px) {
+      let el
+      if (this.focusedPane === 'tree') el = this.$el.querySelector('.tree-root')
+      else if (this.focusedPane === 'notes') el = this.$el.querySelector('.right-panels')
+      else el = this.$refs.codeViewer?.scrollContainer()
+      if (el) el.scrollTop += px
+    },
+    toggleWrap() {
+      this.$emit('wrap-lines-change', !this.wrapLines)
+    },
+    requestHelp() {
+      this.$emit('show-help')
     },
   },
 }
@@ -249,6 +281,10 @@ export default {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.pane-focused {
+  box-shadow: inset 0 0 0 2px var(--status-success);
 }
 
 :deep(.splitpanes__pane) > * {

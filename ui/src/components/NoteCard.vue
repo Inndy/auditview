@@ -1,5 +1,5 @@
 <template>
-  <div class="note-card">
+  <div class="note-card" :class="{ 'note-card-focused': focused }">
     <div class="note-meta" @click="$emit('jump', note)" title="Jump to lines">
       Lines {{ note.start_line }}–{{ note.end_line }}
       <span v-if="note.is_todo" class="badge badge-todo">TODO</span>
@@ -39,6 +39,7 @@ export default {
   name: 'NoteCard',
   props: {
     note: { type: Object, required: true },
+    focused: { type: Boolean, default: false },
     sessionId: { type: [String, Number], required: true },
   },
   emits: ['updated', 'deleted', 'jump', 'edit-started', 'edit-ended'],
@@ -90,6 +91,10 @@ export default {
 </script>
 
 <style scoped>
+.note-card-focused {
+  box-shadow: inset 0 0 0 2px var(--status-success);
+}
+
 .note-meta {
   cursor: pointer;
 }

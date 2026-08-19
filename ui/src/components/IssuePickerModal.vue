@@ -42,8 +42,8 @@
       <div v-if="error" class="error-msg">{{ error }}</div>
 
       <div class="modal-actions">
-        <button @click="$emit('cancel')">Cancel</button>
-        <button class="btn-primary" @click="submit" :disabled="!canSubmit || submitting">
+        <button data-modal-cancel @click="$emit('cancel')">Cancel</button>
+        <button class="btn-primary" data-modal-confirm @click="submit" :disabled="!canSubmit || submitting">
           {{ submitting ? 'Saving…' : 'Add to Issue' }}
         </button>
       </div>

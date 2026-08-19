@@ -54,6 +54,7 @@ import { getFile } from '../api/files.js'
 import { markLines } from '../api/lines.js'
 import { createNote } from '../api/notes.js'
 import { sseClient } from '../api/events.js'
+import { gamepad } from '../input/gamepad.js'
 import LineRow from './LineRow.vue'
 import CreateNoteModal from './CreateNoteModal.vue'
 import IssuePickerModal from './IssuePickerModal.vue'
@@ -95,7 +96,7 @@ export default {
     filePath: { type: String, default: null },
     wrapLines: { type: Boolean, default: false },
   },
-  emits: ['notes-updated', 'lines-marked', 'file-reloaded', 'show-help', 'selection-change'],
+  emits: ['notes-updated', 'lines-marked', 'file-reloaded', 'selection-change'],
   data() {
     return {
       lines: [],
@@ -159,13 +160,8 @@ export default {
   },
   created() {
     this._loadToken = 0
-    this._pendingOp = null
-    this._pendingOpTimer = null
-    this._countBuffer = ''
   },
   mounted() {
-    this._keyHandler = this.onKeyDown.bind(this)
-    document.addEventListener('keydown', this._keyHandler)
     this._mouseUpHandler = this.onDocMouseUp.bind(this)
     document.addEventListener('mouseup', this._mouseUpHandler)
 
@@ -197,7 +193,6 @@ export default {
     }
   },
   beforeUnmount() {
-    document.removeEventListener('keydown', this._keyHandler)
     document.removeEventListener('mouseup', this._mouseUpHandler)
     this._sseFileUnsub?.()
     this._sseAnnoUnsub?.()
@@ -364,30 +359,6 @@ export default {
       })
     },
 
-    setPendingOp(op) {
-      this._pendingOp = op
-      if (this._pendingOpTimer) clearTimeout(this._pendingOpTimer)
-      this._pendingOpTimer = setTimeout(() => {
-        this._pendingOp = null
-        this._pendingOpTimer = null
-      }, 1000)
-    },
-
-    resetPending() {
-      this._pendingOp = null
-      if (this._pendingOpTimer) {
-        clearTimeout(this._pendingOpTimer)
-        this._pendingOpTimer = null
-      }
-      this._countBuffer = ''
-    },
-
-    consumeCount() {
-      const n = this._countBuffer ? parseInt(this._countBuffer, 10) : 1
-      this._countBuffer = ''
-      return Math.min(Math.max(n, 1), 9999)
-    },
-
     toggleAnchor() {
       if (this.cursorLine === null) {
         if (this.lines.length === 0) return
@@ -423,141 +394,18 @@ export default {
       )
     },
 
-    onKeyDown(e) {
-      if (this.showModal) return
-      if (document.querySelector('.modal-overlay')) return
-      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return
+    clearSelection() {
+      this.cursorLine = null
+      this.anchorLine = null
+    },
 
-      const key = e.key
+    openNoteModal(isTodo) {
+      this.modalIsTodo = isTodo
+      this.showModal = true
+    },
 
-      if (this._pendingOp) {
-        const op = this._pendingOp
-        let handled = false
-        if (op === 'z') {
-          if (key === 'z') { this.alignCursor('center'); handled = true }
-          else if (key === 't') { this.alignCursor('start'); handled = true }
-          else if (key === 'b') { this.alignCursor('end'); handled = true }
-        } else if (op === ']' && key === 'r') {
-          this.jumpUnreviewed(1); handled = true
-        } else if (op === '[' && key === 'r') {
-          this.jumpUnreviewed(-1); handled = true
-        }
-        this.resetPending()
-        if (handled) { e.preventDefault(); return }
-      }
-
-      if (/^[0-9]$/.test(key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        if (this._countBuffer === '' && key === '0') {
-          e.preventDefault()
-          return
-        }
-        this._countBuffer += key
-        e.preventDefault()
-        return
-      }
-
-      if (key === 'j') {
-        e.preventDefault()
-        this.moveCursor(this.consumeCount())
-        return
-      }
-
-      if (key === 'k') {
-        e.preventDefault()
-        this.moveCursor(-this.consumeCount())
-        return
-      }
-
-      this._countBuffer = ''
-
-      if (key === '?') {
-        e.preventDefault()
-        this.$emit('show-help')
-        return
-      }
-
-      if (key === 'Escape') {
-        this.cursorLine = null
-        this.anchorLine = null
-        this.resetPending()
-        return
-      }
-
-      if (e.ctrlKey && (key === 'd' || key === 'u')) {
-        e.preventDefault()
-        this.movePage(key === 'd' ? 1 : -1)
-        return
-      }
-
-      if (key === 'z') { e.preventDefault(); this.setPendingOp('z'); return }
-      if (key === ']') { e.preventDefault(); this.setPendingOp(']'); return }
-      if (key === '[') { e.preventDefault(); this.setPendingOp('['); return }
-
-      if (key === '{') {
-        e.preventDefault()
-        this.jumpEmpty(-1)
-        return
-      }
-
-      if (key === '}') {
-        e.preventDefault()
-        this.jumpEmpty(1)
-        return
-      }
-
-      if (key === 'H') {
-        e.preventDefault()
-        this.cursorToViewportEdge('top')
-        return
-      }
-
-      if (key === 'L') {
-        e.preventDefault()
-        this.cursorToViewportEdge('bottom')
-        return
-      }
-
-      if (key === 'l' && this.fileBlocked) {
-        e.preventDefault()
-        this.loadFile(this.filePath, { force: true })
-        return
-      }
-
-      if (key === 'v' || key === ' ') {
-        e.preventDefault()
-        this.toggleAnchor()
-        return
-      }
-
-      if (key === 'M') {
-        e.preventDefault()
-        this.markWholeFile()
-        return
-      }
-
-      if (key === 'U') {
-        e.preventDefault()
-        this.unmarkWholeFile()
-        return
-      }
-
-      if (this.rangeMin === null) return
-
-      if (key === 'm') {
-        e.preventDefault()
-        this.markSelected()
-      } else if (key === 'u') {
-        e.preventDefault()
-        this.unmarkSelected()
-      } else if (key === 't') {
-        e.preventDefault()
-        this.modalIsTodo = true
-        this.showModal = true
-      } else if (key === 'n') {
-        e.preventDefault()
-        this.modalIsTodo = false
-        this.showModal = true
-      }
+    scrollContainer() {
+      return this.$refs.container || null
     },
 
     async markWholeFile() {
@@ -619,6 +467,7 @@ export default {
           countable,
           reviewed: reviewedCount,
         })
+        gamepad.rumble()
       } catch (e) {
         this.actionError = `Failed to mark lines: ${e.message}`
       }

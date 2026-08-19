@@ -63,6 +63,7 @@ Auditview is a line-level code review/audit tool: a Quart (async) JSON API backe
 - auditview/db/ - aiosqlite wrapper (`open_db` async context manager)
 - auditview/cli.py - read-only query subcommands, dispatched from `__main__.py`
 - ui/src/api/ - fetch wrappers, file-per-resource mirrors backend
+- ui/src/input/ - action registry + keyboard and gamepad input sources
 
 ### Key Design Decisions
 
@@ -73,6 +74,10 @@ Auditview is a line-level code review/audit tool: a Quart (async) JSON API backe
 **SSE for real-time** - no WebSockets. `WatcherService` holds one `asyncio.Queue` per connected client; `events.py` yields from the queue with a 15-second heartbeat. Client→server is always plain HTTP (mark, note actions).
 
 **Vue Options API for components (personal preference)** - keep all new `.vue` components in Options API style. Composition API may be mixed in non-component modules (e.g. `ui/src/api/events.js` exposes `sseClient.status` as a `ref()`) when it yields a more elegant architecture — for example, a singleton service whose reactive state is consumed by components via a computed.
+
+**One action registry, two input sources** - `ui/src/input/actions.js` is the single table of user actions in the review view: label, key bindings, gamepad bindings, and a `run(targets, params)` thunk. `keyboard.js` resolves a `KeyboardEvent` to an action id (it owns the vim count buffer and the `z`/`[`/`]` prefix timeout, which have no gamepad analogue); `gamepad.js` polls the Gamepad API in `requestAnimationFrame` and resolves a button/axis to an action id. Both call `dispatch()`, which applies the shared guards (a dialog is open → only `context: 'modal'` actions; a text field has focus; `requiresSelection`). `CodeView` is the only input host: it registers the `$refs` the actions operate on via `setTargets()` and owns which pane has gamepad focus. `KeyboardHelpModal` renders its table from the registry, so documentation cannot drift from the bindings.
+
+Gamepad support targets the W3C **standard** mapping (Xbox layout) only. A Steam Controller or Steam Deck reports that mapping through Steam Input, which also consumes the touchpads before the browser sees them — pad coordinates are not readable from a browser, and the right pad arrives as ordinary mouse movement. `/gamepad` is a live input dump for checking an unfamiliar pad; both the action→button map and the physical input map are overridable from `localStorage` (`auditview:gamepad:bindings`, `auditview:gamepad:inputs`).
 
 **`WatcherService` uses asyncio.Queue for thread→async bridging** - watchdog runs file observer threads that post paths via `loop.call_soon_threadsafe`. An async worker task consumes and does all DB work. Each operation opens its own short-lived aiosqlite connection.
 

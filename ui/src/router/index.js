@@ -4,12 +4,14 @@ import SessionListView from '../views/SessionListView.vue'
 import SessionView from '../views/SessionView.vue'
 import CodeView from '../views/CodeView.vue'
 import IssuesView from '../views/IssuesView.vue'
+import GamepadTestView from '../views/GamepadTestView.vue'
 import { sseClient } from '../api/events.js'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/', component: SessionListView },
+    { path: '/gamepad', component: GamepadTestView },
     {
       path: '/sessions/:id',
       component: SessionView,

@@ -41,8 +41,8 @@
       </div>
 
       <div class="modal-footer">
-        <button @click="$emit('close')">Cancel</button>
-        <button class="btn-primary" @click="create" :disabled="!title.trim() || creating">
+        <button data-modal-cancel @click="$emit('close')">Cancel</button>
+        <button class="btn-primary" data-modal-confirm @click="create" :disabled="!title.trim() || creating">
           {{ creating ? 'Creating…' : 'Create Issue' }}
         </button>
       </div>

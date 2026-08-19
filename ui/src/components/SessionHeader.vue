@@ -12,6 +12,7 @@
       </template>
     </div>
     <SSEStatusIndicator />
+    <GamepadStatusIndicator />
     <label class="wrap-lines-toggle">
       <input type="checkbox" :checked="wrapLines" @change="$emit('wrap-lines-change', $event.target.checked)" />
       Wrap lines
@@ -26,10 +27,11 @@
 import CoverageBar from './CoverageBar.vue'
 import DarkModeToggle from './DarkModeToggle.vue'
 import SSEStatusIndicator from './SSEStatusIndicator.vue'
+import GamepadStatusIndicator from './GamepadStatusIndicator.vue'
 
 export default {
   name: 'SessionHeader',
-  components: { CoverageBar, DarkModeToggle, SSEStatusIndicator },
+  components: { CoverageBar, DarkModeToggle, SSEStatusIndicator, GamepadStatusIndicator },
   props: {
     session: { type: Object, required: true },
     coverage: { type: Object, default: null },
