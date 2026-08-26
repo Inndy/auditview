@@ -174,6 +174,49 @@ clients rescan in response to that event.
 
 ---
 
+### POST /api/sessions/:id/purge-preview
+
+Dry run for a purge: which tracked files it would hard-delete, and how much
+review progress each one carries. Mutates nothing — the candidate scan
+deliberately bypasses the watcher's scan cache so patterns that are never saved
+cannot leak into it.
+
+**Request body** — one of:
+```json
+{ "exclusion_patterns": "*.log\nbuild/" }
+```
+```json
+{ "path": "config/secrets.yaml" }
+```
+- `exclusion_patterns`: candidate pattern set. Defaults to the session's stored
+  value. Files that would fall outside it are reported.
+- `path`: single file or directory subtree, validated as for `POST .../purge`.
+
+**Response 200**
+```json
+{
+  "purge_files": [
+    {"rel_path": "config/secrets.yaml", "reviewed_lines": 12, "notes_count": 2, "todos_count": 1}
+  ],
+  "orphan_paths": ["deleted_upstream.py"],
+  "at_risk_count": 1,
+  "total_reviewed_lines": 12,
+  "total_notes": 2,
+  "total_todos": 1
+}
+```
+- `purge_files`: paths that would be hard-deleted, with what each would destroy
+- `orphan_paths`: paths that are stale only because they are missing from disk.
+  These are orphaned, never purged, so their notes stay recoverable.
+- `at_risk_count`: how many entries in `purge_files` carry any reviewed line,
+  note, or todo. `0` means the purge destroys no review progress.
+
+**Errors**
+- `400` — `exclusion_patterns` not a string or not compilable; invalid `path`
+- `404` — session not found
+
+---
+
 ### POST /api/sessions/:id/purge
 
 Permanently remove a file, or a directory subtree, from the session and keep it

@@ -26,6 +26,46 @@
         Files that are merely missing from disk are always orphaned, never purged.
       </p>
 
+      <div v-if="preview" class="preview">
+        <p v-if="!preview.purge_files.length" class="preview-none">
+          Nothing to purge — no tracked file falls outside these patterns.
+        </p>
+        <template v-else>
+          <p class="preview-lead" :class="{ 'preview-warn': preview.at_risk_count }">
+            <template v-if="preview.at_risk_count">
+              ⚠ {{ preview.at_risk_count }} of {{ preview.purge_files.length }}
+              {{ preview.purge_files.length === 1 ? 'file' : 'files' }} carry review
+              progress that will be destroyed:
+              {{ preview.total_reviewed_lines }} reviewed
+              {{ preview.total_reviewed_lines === 1 ? 'line' : 'lines' }},
+              {{ preview.total_notes }} {{ preview.total_notes === 1 ? 'note' : 'notes' }},
+              {{ preview.total_todos }} {{ preview.total_todos === 1 ? 'todo' : 'todos' }}.
+            </template>
+            <template v-else>
+              {{ preview.purge_files.length }}
+              {{ preview.purge_files.length === 1 ? 'file' : 'files' }} will be purged.
+              None carry review progress — safe to proceed.
+            </template>
+          </p>
+          <ul class="preview-list">
+            <li v-for="f in preview.purge_files" :key="f.rel_path"
+                :class="{ 'at-risk': f.reviewed_lines || f.notes_count || f.todos_count }">
+              <code>{{ f.rel_path }}</code>
+              <span v-if="f.reviewed_lines || f.notes_count || f.todos_count" class="preview-badges">
+                <span v-if="f.reviewed_lines">{{ f.reviewed_lines }} reviewed</span>
+                <span v-if="f.notes_count">{{ f.notes_count }} note{{ f.notes_count === 1 ? '' : 's' }}</span>
+                <span v-if="f.todos_count">{{ f.todos_count }} todo{{ f.todos_count === 1 ? '' : 's' }}</span>
+              </span>
+            </li>
+          </ul>
+        </template>
+        <p v-if="preview.orphan_paths.length" class="preview-note">
+          {{ preview.orphan_paths.length }}
+          {{ preview.orphan_paths.length === 1 ? 'file is' : 'files are' }} missing from
+          disk and will be orphaned, not purged — their notes stay recoverable.
+        </p>
+      </div>
+
       <div class="settings-actions">
         <button class="btn-sm" @click="reloadIgnores" :disabled="busy">
           {{ busy === 'reload' ? 'Reloading…' : 'Reload ignore rules' }}
@@ -33,7 +73,7 @@
         <span class="spacer"></span>
         <button class="btn-sm" @click="close">Cancel</button>
         <button class="btn-primary" @click="save" :disabled="busy">
-          {{ busy === 'save' ? 'Saving…' : 'Save & rescan' }}
+          {{ saveLabel }}
         </button>
       </div>
 
@@ -43,7 +83,7 @@
 </template>
 
 <script>
-import { updateSession } from '../api/sessions.js'
+import { updateSession, previewPurge } from '../api/sessions.js'
 import { rescanSession } from '../api/files.js'
 
 export default {
@@ -60,7 +100,16 @@ export default {
       busy: null,
       error: null,
       status: null,
+      preview: null,
     }
+  },
+  computed: {
+    saveLabel() {
+      if (this.busy === 'save') return 'Saving…'
+      if (this.busy === 'preview') return 'Checking…'
+      if (this.purge && this.preview === null) return 'Preview purge'
+      return 'Save & rescan'
+    },
   },
   watch: {
     // A purge appends to exclusion_patterns server-side, so the textarea is only
@@ -71,6 +120,15 @@ export default {
       this.purge = false
       this.error = null
       this.status = null
+      this.preview = null
+    },
+    // Any change to what would be purged invalidates the preview the user
+    // approved, so Save drops back to previewing rather than firing blind.
+    patterns() {
+      this.preview = null
+    },
+    purge() {
+      this.preview = null
     },
   },
   methods: {
@@ -92,10 +150,33 @@ export default {
         this.busy = null
       }
     },
+    async loadPreview() {
+      this.busy = 'preview'
+      this.error = null
+      this.status = null
+      try {
+        this.preview = await previewPurge(this.session.id, { exclusion_patterns: this.patterns })
+      } catch (e) {
+        this.error = e.message || 'Could not work out what would be purged'
+      } finally {
+        this.busy = null
+      }
+    },
     async save() {
-      if (this.purge && !window.confirm(
-        'Purge deletes the notes on every newly excluded file and cannot be undone.\n\nContinue?'
-      )) return
+      // Purge is irreversible, so it always goes through a preview first. Only a
+      // preview showing review progress at risk asks for an extra confirmation —
+      // purging files nobody has reviewed is not worth a dialog.
+      if (this.purge) {
+        if (this.preview === null) {
+          await this.loadPreview()
+          return
+        }
+        if (this.preview.at_risk_count && !window.confirm(
+          `Purge will permanently delete review progress on ${this.preview.at_risk_count} file(s): ` +
+          `${this.preview.total_reviewed_lines} reviewed line(s), ${this.preview.total_notes} note(s), ` +
+          `${this.preview.total_todos} todo(s).\n\nThis cannot be undone. Continue?`
+        )) return
+      }
 
       this.busy = 'save'
       this.error = null
@@ -180,6 +261,64 @@ export default {
 
 .settings-actions .spacer {
   flex: 1;
+}
+
+.preview {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-base, transparent);
+}
+
+.preview-lead,
+.preview-none,
+.preview-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.preview-warn {
+  color: var(--sev-p1, #c1121f);
+  font-weight: 600;
+}
+
+.preview-note {
+  margin-top: 8px;
+}
+
+.preview-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 160px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+
+.preview-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.preview-list code {
+  overflow-wrap: anywhere;
+}
+
+.preview-list li.at-risk code {
+  font-weight: 600;
+}
+
+.preview-badges {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+  color: var(--sev-p1, #c1121f);
 }
 
 .settings-status {

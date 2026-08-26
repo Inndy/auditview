@@ -7,7 +7,7 @@ from auditview.core.coverage import is_countable_line
 from auditview.core.reconciler import reconcile_file
 from auditview.core.io_utils import read_file_lines, is_binary_file, file_is_large
 from auditview.api.util import safe_path
-from auditview.core.scanner import _base_spec
+from auditview.core.scanner import _base_spec, scan_folder
 from pathspec.patterns.gitwildmatch import GitWildMatchPattern
 
 bp = Blueprint("files", __name__)
@@ -312,21 +312,129 @@ async def rescan_session(session_id):
     return jsonify(result)
 
 
-@bp.route("/sessions/<int:session_id>/purge", methods=["POST"])
-async def purge_path(session_id):
-    data = await request.get_json(force=True, silent=True) or {}
-    raw = data.get("path")
-    if not isinstance(raw, str):
-        return jsonify({"error": "path is required"}), 400
+async def _progress_for_paths(conn, session_id, rel_paths):
+    """Per-path reviewed-line / note / todo counts, for paths in rel_paths."""
+    if not rel_paths:
+        return {}
+    wanted = set(rel_paths)
+    cur = await conn.execute(
+        "SELECT file_path, COUNT(*) AS cnt FROM reviewed_lines "
+        "WHERE session_id = ? GROUP BY file_path",
+        (session_id,),
+    )
+    reviewed = {r["file_path"]: r["cnt"] for r in await cur.fetchall() if r["file_path"] in wanted}
 
+    cur = await conn.execute(
+        "SELECT file_path, "
+        "SUM(CASE WHEN is_todo=0 THEN 1 ELSE 0 END) AS notes_cnt, "
+        "SUM(CASE WHEN is_todo=1 THEN 1 ELSE 0 END) AS todos_cnt "
+        "FROM notes WHERE session_id = ? GROUP BY file_path",
+        (session_id,),
+    )
+    notes = {
+        r["file_path"]: (r["notes_cnt"] or 0, r["todos_cnt"] or 0)
+        for r in await cur.fetchall() if r["file_path"] in wanted
+    }
+
+    out = {}
+    for rel_path in rel_paths:
+        n, t = notes.get(rel_path, (0, 0))
+        out[rel_path] = {
+            "rel_path": rel_path,
+            "reviewed_lines": reviewed.get(rel_path, 0),
+            "notes_count": n,
+            "todos_count": t,
+        }
+    return out
+
+
+def _normalize_purge_path(raw):
+    """(rel_path, error). Mirrors the validation POST /purge applies."""
+    if not isinstance(raw, str):
+        return None, "path is required"
     rel_path = raw.strip("/")
     if not rel_path or rel_path in (".", ".."):
-        return jsonify({"error": "path is required"}), 400
+        return None, "path is required"
     # exclusion_patterns is newline-separated and each line is stripped before
     # being compiled, so a path carrying a newline would split into two patterns
     # and one carrying edge whitespace could not be expressed at all.
     if any(c in rel_path for c in "\n\r") or rel_path != rel_path.strip():
-        return jsonify({"error": "path may not contain newlines or leading/trailing whitespace"}), 400
+        return None, "path may not contain newlines or leading/trailing whitespace"
+    return rel_path, None
+
+
+@bp.route("/sessions/<int:session_id>/purge-preview", methods=["POST"])
+async def purge_preview(session_id):
+    """Dry run: what a purge would hard-delete, and what it would merely orphan.
+
+    Purge is irreversible, so the UI needs to show the damage before asking.
+    Nothing here mutates: the candidate scan deliberately bypasses the watcher
+    cache rather than seeding it with patterns that may never be saved.
+    """
+    data = await request.get_json(force=True, silent=True) or {}
+
+    async with open_db(current_app.config["DB_PATH"]) as conn:
+        cur = await conn.execute(
+            "SELECT id, root_path, exclusion_patterns FROM sessions WHERE id = ?",
+            (session_id,),
+        )
+        session = await cur.fetchone()
+        if session is None:
+            return jsonify({"error": "Session not found"}), 404
+        root_path = session["root_path"]
+
+        cur = await conn.execute(
+            "SELECT rel_path FROM files WHERE session_id = ?", (session_id,)
+        )
+        tracked = {r["rel_path"] for r in await cur.fetchall()}
+
+        if "path" in data:
+            rel_path, err = _normalize_purge_path(data.get("path"))
+            if err:
+                return jsonify({"error": err}), 400
+            if safe_path(root_path, rel_path) is None:
+                return jsonify({"error": "Invalid path"}), 400
+            prefix = rel_path + "/"
+            purged = sorted(p for p in tracked if p == rel_path or p.startswith(prefix))
+            orphaned = []
+        else:
+            patterns = data.get("exclusion_patterns", session["exclusion_patterns"])
+            if not isinstance(patterns, str):
+                return jsonify({"error": "exclusion_patterns must be a string"}), 400
+            try:
+                spec = _base_spec(patterns)
+            except Exception as exc:
+                return jsonify({"error": f"invalid exclusion pattern: {exc}"}), 400
+
+            loop = asyncio.get_running_loop()
+            rel_paths = await loop.run_in_executor(None, scan_folder, root_path, patterns)
+            stale = tracked - set(rel_paths)
+            purged = sorted(p for p in stale if spec.match_file(p))
+            orphaned = sorted(stale - set(purged))
+
+        progress = await _progress_for_paths(conn, session_id, purged)
+
+    files = [progress[p] for p in purged]
+    at_risk = [
+        f for f in files
+        if f["reviewed_lines"] or f["notes_count"] or f["todos_count"]
+    ]
+    return jsonify({
+        "purge_files": files,
+        "orphan_paths": orphaned,
+        "at_risk_count": len(at_risk),
+        "total_reviewed_lines": sum(f["reviewed_lines"] for f in files),
+        "total_notes": sum(f["notes_count"] for f in files),
+        "total_todos": sum(f["todos_count"] for f in files),
+    })
+
+
+@bp.route("/sessions/<int:session_id>/purge", methods=["POST"])
+async def purge_path(session_id):
+    data = await request.get_json(force=True, silent=True) or {}
+    rel_path, err = _normalize_purge_path(data.get("path"))
+    if err:
+        return jsonify({"error": err}), 400
 
     async with open_db(current_app.config["DB_PATH"]) as conn:
         cur = await conn.execute(

@@ -412,3 +412,106 @@ async def test_create_session_rejects_unparseable_pattern():
             resp = await client.post("/api/sessions", json={"label": "s", "exclusion_patterns": "oops\\"})
             assert resp.status_code == 400
             assert (await client.get("/api/sessions")).status_code == 200
+
+
+# =============================================================================
+# POST /api/sessions/:id/purge-preview
+# =============================================================================
+
+@pytest.mark.asyncio
+async def test_preview_reports_progress_at_risk_and_does_not_mutate():
+    async with _test_app() as (app, tmpdir, db_path):
+        _write(tmpdir, "secrets.env", "token = x\npad\n")
+        _write(tmpdir, "junk.log", "noise\n")
+        _write(tmpdir, "keep.py", "a = 1\n")
+        async with app.test_client() as client:
+            sid = await _mk_session(client)
+            await client.post(f"/api/sessions/{sid}/rescan")
+            await client.post(f"/api/sessions/{sid}/notes", json={
+                "file_path": "secrets.env", "start_line": 1, "end_line": 1, "content": "cred",
+            })
+            await client.post(f"/api/sessions/{sid}/notes", json={
+                "file_path": "secrets.env", "start_line": 2, "end_line": 2,
+                "content": "check", "is_todo": True,
+            })
+
+            resp = await client.post(f"/api/sessions/{sid}/purge-preview",
+                                     json={"exclusion_patterns": "/secrets.env\n*.log"})
+            assert resp.status_code == 200
+            body = await resp.get_json()
+            by_path = {f["rel_path"]: f for f in body["purge_files"]}
+            assert set(by_path) == {"secrets.env", "junk.log"}
+            assert by_path["secrets.env"]["notes_count"] == 1
+            assert by_path["secrets.env"]["todos_count"] == 1
+            assert by_path["junk.log"]["notes_count"] == 0
+            assert body["at_risk_count"] == 1
+            assert body["total_notes"] == 1 and body["total_todos"] == 1
+
+            # nothing was applied
+            resp = await client.get("/api/sessions")
+            assert (await resp.get_json())[0]["exclusion_patterns"] == ""
+            files = await (await client.post(f"/api/sessions/{sid}/rescan")).get_json()
+            assert {f["rel_path"] for f in files} >= {"secrets.env", "junk.log", "keep.py"}
+
+
+@pytest.mark.asyncio
+async def test_preview_separates_missing_from_excluded():
+    """A file gone from disk is orphaned, not purged — it must not read as at risk."""
+    async with _test_app() as (app, tmpdir, _):
+        _write(tmpdir, "gone.py", "a = 1\n")
+        _write(tmpdir, "junk.log", "noise\n")
+        async with app.test_client() as client:
+            sid = await _mk_session(client)
+            await client.post(f"/api/sessions/{sid}/rescan")
+            os.remove(os.path.join(tmpdir, "gone.py"))
+
+            body = await (await client.post(f"/api/sessions/{sid}/purge-preview",
+                                            json={"exclusion_patterns": "*.log"})).get_json()
+            assert [f["rel_path"] for f in body["purge_files"]] == ["junk.log"]
+            assert body["orphan_paths"] == ["gone.py"]
+
+
+@pytest.mark.asyncio
+async def test_preview_by_path_and_clean_purge_reports_nothing_at_risk():
+    async with _test_app() as (app, tmpdir, _):
+        _write(tmpdir, "vendor/a.js", "1\n")
+        _write(tmpdir, "vendor/b.js", "2\n")
+        async with app.test_client() as client:
+            sid = await _mk_session(client)
+            await client.post(f"/api/sessions/{sid}/rescan")
+            body = await (await client.post(f"/api/sessions/{sid}/purge-preview",
+                                            json={"path": "vendor"})).get_json()
+            assert [f["rel_path"] for f in body["purge_files"]] == ["vendor/a.js", "vendor/b.js"]
+            assert body["at_risk_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_preview_matches_what_purge_actually_removes():
+    async with _test_app() as (app, tmpdir, _):
+        for name in ("a.log", "b.log", "keep.py"):
+            _write(tmpdir, name, "x\n")
+        async with app.test_client() as client:
+            sid = await _mk_session(client)
+            await client.post(f"/api/sessions/{sid}/rescan")
+            preview = await (await client.post(f"/api/sessions/{sid}/purge-preview",
+                                               json={"exclusion_patterns": "*.log"})).get_json()
+            predicted = [f["rel_path"] for f in preview["purge_files"]]
+
+            await client.patch(f"/api/sessions/{sid}", json={"exclusion_patterns": "*.log"})
+            before = {f["rel_path"] for f in await (await client.get(f"/api/sessions/{sid}/files")).get_json()}
+            after = {f["rel_path"] for f in await (await client.post(f"/api/sessions/{sid}/rescan?purge=1")).get_json()}
+            assert sorted(before - after) == predicted
+
+
+@pytest.mark.asyncio
+async def test_preview_validation():
+    async with _test_app() as (app, tmpdir, _):
+        async with app.test_client() as client:
+            sid = await _mk_session(client)
+            resp = await client.post(f"/api/sessions/{sid}/purge-preview",
+                                     json={"exclusion_patterns": "oops\\"})
+            assert resp.status_code == 400
+            resp = await client.post(f"/api/sessions/{sid}/purge-preview", json={"path": "a\nb"})
+            assert resp.status_code == 400
+            resp = await client.post("/api/sessions/999/purge-preview", json={})
+            assert resp.status_code == 404

@@ -24,3 +24,10 @@ export function purgePath(sid, path) {
     body: JSON.stringify({ path }),
   });
 }
+
+export function previewPurge(sid, body) {
+  return apiFetch(`/api/sessions/${sid}/purge-preview`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
