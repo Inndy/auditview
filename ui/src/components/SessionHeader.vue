@@ -16,6 +16,7 @@
       Wrap lines
     </label>
     <DarkModeToggle style="font-size: 16px" />
+    <button class="help-btn" title="Session settings" @click="$emit('show-settings')">&#9881;</button>
     <button class="help-btn" title="Keyboard shortcuts (?)" @click="$emit('show-help')">?</button>
   </div>
 </template>
@@ -32,7 +33,7 @@ export default {
     coverage: { type: Object, default: null },
     wrapLines: { type: Boolean, default: false },
   },
-  emits: ['wrap-lines-change', 'show-help'],
+  emits: ['wrap-lines-change', 'show-help', 'show-settings'],
   computed: {
     coveragePct() {
       if (!this.coverage) return 0

@@ -4,8 +4,12 @@ export function listFiles(sid) {
   return apiFetch(`/api/sessions/${sid}/files`);
 }
 
-export function rescanSession(sid) {
-  return apiFetch(`/api/sessions/${sid}/rescan`, { method: 'POST' });
+export function rescanSession(sid, { force = false, purge = false } = {}) {
+  const params = [];
+  if (force) params.push('force=1');
+  if (purge) params.push('purge=1');
+  const qs = params.length ? `?${params.join('&')}` : '';
+  return apiFetch(`/api/sessions/${sid}/rescan${qs}`, { method: 'POST' });
 }
 
 export async function getFile(sid, path, { force = false } = {}) {

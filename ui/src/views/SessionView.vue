@@ -9,6 +9,7 @@
         :wrapLines="wrapLines"
         @wrap-lines-change="setWrapLines($event)"
         @show-help="showHelp = true"
+        @show-settings="showSettings = true"
       />
       <div class="nav-tabs">
         <router-link :to="`/sessions/${id}/code`" class="nav-tab" active-class="active">Code</router-link>
@@ -23,6 +24,12 @@
         @coverage-refreshed="coverage = $event"
       />
       <KeyboardHelpModal :visible="showHelp" @close="showHelp = false" />
+      <SessionSettings
+        :visible="showSettings"
+        :session="session"
+        @close="showSettings = false"
+        @changed="onSettingsChanged"
+      />
     </template>
   </div>
 </template>
@@ -32,6 +39,7 @@ import { listSessions } from '../api/sessions.js'
 import { getCoverage } from '../api/coverage.js'
 import SessionHeader from '../components/SessionHeader.vue'
 import KeyboardHelpModal from '../components/KeyboardHelpModal.vue'
+import SessionSettings from '../components/SessionSettings.vue'
 import { getBoolPref, setBoolPref } from '../prefs.js'
 
 export default {
@@ -39,6 +47,7 @@ export default {
   components: {
     SessionHeader,
     KeyboardHelpModal,
+    SessionSettings,
   },
   data() {
     return {
@@ -49,6 +58,7 @@ export default {
       sessionError: null,
       wrapLines: getBoolPref('wrapLines'),
       showHelp: false,
+      showSettings: false,
     }
   },
   mounted() {
@@ -75,6 +85,14 @@ export default {
         this.sessionError = e.message
       } finally {
         this.loadingSession = false
+      }
+    },
+    async onSettingsChanged(updated) {
+      if (updated) this.session = updated
+      try {
+        this.coverage = await getCoverage(this.id)
+      } catch (e) {
+        this.sessionError = e.message
       }
     },
   },
