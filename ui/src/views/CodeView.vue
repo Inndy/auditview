@@ -118,11 +118,11 @@ export default {
   },
   watch: {
     '$route.query'({ file, line, endLine }) {
-      if (file) this.currentFile = file
       if (this._writingFromCursor) {
         this._writingFromCursor = false
         return
       }
+      if (file) this.currentFile = file
       this.pendingJump = line ? { start: parseInt(line), end: parseInt(endLine || line) } : null
     },
   },
@@ -147,11 +147,16 @@ export default {
       }
     },
     onSelectionChange({ start, end }) {
+      if (!this.currentFile) return
       const q = this.$route.query
       const wantLine = start != null ? String(start) : undefined
       const wantEnd = end != null && end !== start ? String(end) : undefined
-      if ((q.line ?? undefined) === wantLine && (q.endLine ?? undefined) === wantEnd) return
-      const next = { ...q }
+      if (
+        q.file === this.currentFile &&
+        (q.line ?? undefined) === wantLine &&
+        (q.endLine ?? undefined) === wantEnd
+      ) return
+      const next = { ...q, file: this.currentFile }
       if (wantLine == null) delete next.line; else next.line = wantLine
       if (wantEnd == null) delete next.endLine; else next.endLine = wantEnd
       this._writingFromCursor = true
