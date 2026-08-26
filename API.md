@@ -57,7 +57,38 @@ clients cannot override it.
 ```
 
 **Errors**
-- `400` — missing/invalid fields
+- `400` — missing/invalid fields, or an `exclusion_patterns` value that does not
+  compile (validated before storing, for the reason given under `PATCH`)
+
+---
+
+### PATCH /api/sessions/:id
+
+Update a session's `label` and/or `exclusion_patterns`. At least one field must
+be present. This is the supported way to change what a session tracks after the
+review has started.
+
+Changing `exclusion_patterns` alone does not remove already-tracked files — call
+`POST /api/sessions/:id/rescan?force=1` afterwards.
+
+**Request body**
+```json
+{
+  "label": "Second pass",
+  "exclusion_patterns": "*.log\nbuild/"
+}
+```
+- `label`: optional, non-empty string
+- `exclusion_patterns`: optional, gitignore-syntax patterns separated by newlines
+
+**Response 200**: the updated session row, same shape as `GET /api/sessions`.
+
+**Errors**
+- `400` — no updatable field, empty `label`, non-string `exclusion_patterns`, or
+  an `exclusion_patterns` value that does not compile. Patterns are validated
+  before they are stored: an unparseable pattern would otherwise raise on every
+  subsequent scan with no way to correct it through the API.
+- `404` — session not found
 
 ---
 
@@ -110,10 +141,94 @@ and backfill `countable_lines` for any new entries. Returns the same shape as
 
 **Request body**: empty (`{}` or no body)
 
-**Response 200**: same shape as `GET /api/sessions/:id/files`.
+**Query parameters**
+
+| Param | Effect |
+|---|---|
+| `force=1` | Bypass the cached scan and re-walk the tree from disk. Required to pick up edits to `exclusion_patterns` or to any nested `.gitignore`. |
+| `purge=1` | Hard-delete the notes of files dropped **because they are now excluded**. Implies `force`. |
+
+Without `force`, the result is served from a per-session scan cache. The cache
+exists because clients rescan on every SSE event; an unforced rescan will not
+see filesystem or pattern changes.
+
+`purge=1` distinguishes the two reasons a tracked file can go stale:
+
+- **newly excluded** — its notes are deleted outright and the database is
+  `VACUUM`ed, so the stored line snapshots are no longer recoverable from the file
+- **merely missing from disk** (a `git checkout`, a cleaned build directory) —
+  its notes are orphaned as usual and stay recoverable
+
+That distinction is deliberate: `purge=1` must not destroy review state for a
+file that is only temporarily absent.
+
+**Response 200**: same shape as `GET /api/sessions/:id/files` — always a bare
+array, regardless of query parameters.
+
+A forced rescan that actually changed the tracked set broadcasts one
+`file_changed` with `rel_path: null`. Unforced rescans never broadcast, since
+clients rescan in response to that event.
 
 **Errors**
 - `404` — session not found
+
+---
+
+### POST /api/sessions/:id/purge
+
+Permanently remove a file, or a directory subtree, from the session and keep it
+out of future scans.
+
+Unlike a stale-path drop, this **hard-deletes the notes** rather than orphaning
+them, then `VACUUM`s. That matters because `notes.snapshot_text` stores raw line
+content: for a file holding credentials, orphaning leaves the secret in the
+database. `reviewed_lines` and `files.prev_line_hashes` hold only hashes.
+
+The path is appended to the session's `exclusion_patterns` as an anchored,
+escaped gitignore pattern, in the same transaction as the deletes. Purging a path
+that is not currently tracked still records the pattern.
+
+Issues are **not** deleted. An issue is a finding, not a file, and survives with
+zero attached notes. Note that `issues.title` and `issues.description` are
+free-form text this endpoint does not touch — if a credential was pasted there,
+delete the issue separately.
+
+**Request body**
+```json
+{ "path": "config/secrets.yaml" }
+```
+- `path`: required, relative to the session root. Matches that exact file plus
+  everything beneath it if it is a directory.
+
+**Response 200**
+```json
+{
+  "purged_paths": ["config/secrets.yaml"],
+  "purged_files": 1,
+  "purged_notes": 3,
+  "purged_reviewed_lines": 12,
+  "exclusion_patterns": "*.log\n/config/secrets.yaml",
+  "vacuumed": true,
+  "files": []
+}
+```
+- `files`: the rebuilt file list, same shape as `GET /api/sessions/:id/files`
+- `vacuumed`: `false` if the reclaim was skipped or contended. The rows are gone
+  either way, but the freed pages may still hold the old content on disk.
+
+Broadcasts one `file_changed` with the purged root path. No `annotation_changed`
+is sent — that event carries a per-note `kind`/`action`/`id` payload a bulk purge
+cannot supply, and clients refresh off `file_changed`.
+
+**Errors**
+- `400` — missing `path`; a path that escapes the session root; or a path
+  containing a newline, carriage return, or leading/trailing whitespace.
+  `exclusion_patterns` is newline-separated and each line is stripped before
+  being compiled, so such a path cannot be expressed as a pattern.
+- `404` — session not found
+
+**Not exposed over MCP.** Every MCP tool is additive; purge is irreversible, so
+it stays human-only.
 
 ---
 
@@ -227,6 +342,9 @@ silently written.
 **Errors**
 - `400` — missing `file_path`/`lines`/`reviewed`, invalid path, or `lines` not an array
 - `404` — session not found or file not on disk
+- `409` — the file is excluded by the session's `exclusion_patterns`. The file
+  still exists on disk, so this guard is what stops a stale client from
+  resurrecting a purged file (both write paths upsert a `files` row).
 - `500` — could not read file from disk
 
 ---
@@ -308,6 +426,9 @@ file content at creation time and refreshes the file's checkpoint snapshot.
 **Errors**
 - `400` — missing/invalid fields, line range out of bounds, invalid path
 - `404` — session not found, file not on disk, or referenced issue not found
+- `409` — the file is excluded by the session's `exclusion_patterns`. The file
+  still exists on disk, so this guard is what stops a stale client from
+  resurrecting a purged file (both write paths upsert a `files` row).
 
 ---
 

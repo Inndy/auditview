@@ -207,6 +207,13 @@ Buffer indicators (linked to sensible defaults — override with `:hi`):
   the label on every note's start line, or `"none"` to disable. Orphaned
   notes (anchor lines changed) are not rendered in the buffer; they still
   show up in `:AuditviewNotes` / `:AuditviewNotes!` for triage.
+- **Purged files go stale here.** The plugin has no SSE connection, and it
+  lists a session's files exactly once per session. If someone purges a file
+  from the web UI (session settings → "Purge newly excluded files") while
+  nvim is attached, an open buffer on that file keeps its cached highlights,
+  and marking or annotating it returns
+  `File is excluded from this session` — that error is the guard doing its
+  job, not a bug. Run `:AuditviewSessionReset` to drop the cached session and re-list.
 
 ## nvim-tree integration (optional)
 

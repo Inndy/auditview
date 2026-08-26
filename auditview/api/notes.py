@@ -4,7 +4,7 @@ from auditview.db.connection import open_db
 from auditview.core.hashing import line_hash
 from auditview.core.io_utils import read_file_lines
 from auditview.core.reconciler import ensure_snapshot
-from auditview.api.util import safe_path
+from auditview.api.util import safe_path, is_excluded
 
 bp = Blueprint("notes", __name__)
 
@@ -52,7 +52,7 @@ async def list_notes(session_id):
 async def create_note(session_id):
     async with open_db(current_app.config["DB_PATH"]) as conn:
         cur = await conn.execute(
-            "SELECT id, root_path FROM sessions WHERE id = ?", (session_id,)
+            "SELECT id, root_path, exclusion_patterns FROM sessions WHERE id = ?", (session_id,)
         )
         session_row = await cur.fetchone()
         if session_row is None:
@@ -83,6 +83,8 @@ async def create_note(session_id):
             return jsonify({"error": "Invalid path"}), 400
         if not os.path.isfile(full_path):
             return jsonify({"error": "File not found"}), 404
+        if is_excluded(session_row["exclusion_patterns"], file_path):
+            return jsonify({"error": "File is excluded from this session"}), 409
 
         try:
             file_lines = await read_file_lines(full_path)
