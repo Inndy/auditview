@@ -34,6 +34,12 @@ class _StubWatcher:
     def broadcast_to_session(self, session_id, event):
         self.events.append((session_id, event))
 
+    async def get_scan(self, *a):
+        return []
+
+    def invalidate_scan(self, *a, **kw):
+        pass
+
     def by_session(self, session_id):
         return [e for sid, e in self.events if sid == session_id]
 

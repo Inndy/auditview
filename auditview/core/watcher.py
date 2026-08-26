@@ -17,6 +17,10 @@ _DEBOUNCE_DELAY = 0.3
 _DEFAULT_FILTER_SPEC = _base_spec("")
 
 
+class _ScanSuperseded(Exception):
+    """Raised into waiters whose scan was invalidated mid-flight; they retry."""
+
+
 class _Handler(FileSystemEventHandler):
     def __init__(self, watcher_service):
         self._svc = watcher_service
@@ -43,6 +47,7 @@ class WatcherService:
         self._lock = threading.Lock()
         self._clients = {}
         self._scan_cache = {}
+        self._scan_gen = {}
         self._session_specs = {}
         self._pending_paths = set()
         self._debounce_handle = None
@@ -125,40 +130,75 @@ class WatcherService:
         spec = _base_spec(patterns_str)
         loop = asyncio.get_running_loop()
 
-        with self._lock:
-            self._session_specs[session_id] = (root_path, spec)
-            cached = self._scan_cache.get(session_id)
-            if cached is None:
-                # We win the race: plant a Future so concurrent callers wait on us.
-                fut = loop.create_future()
-                self._scan_cache[session_id] = fut
-                owner = True
-            else:
-                fut = None
-                owner = False
-
-        if not owner:
-            if isinstance(cached, asyncio.Future):
-                return await asyncio.shield(cached)
-            return cached
-
-        try:
-            result = await loop.run_in_executor(
-                None, scan_folder, root_path, exclusion_patterns
-            )
+        while True:
             with self._lock:
-                self._scan_cache[session_id] = result
-            fut.set_result(result)
-        except BaseException as exc:
-            # BaseException so CancelledError doesn't leave a pending Future
-            # cached forever — later callers would await it indefinitely.
+                self._session_specs[session_id] = (root_path, spec)
+                gen = self._scan_gen.get(session_id, 0)
+                cached = self._scan_cache.get(session_id)
+                if cached is None:
+                    # We win the race: plant a Future so concurrent callers wait on us.
+                    fut = loop.create_future()
+                    self._scan_cache[session_id] = fut
+                    owner = True
+                else:
+                    fut = None
+                    owner = False
+
+            if not owner:
+                if isinstance(cached, asyncio.Future):
+                    try:
+                        return await asyncio.shield(cached)
+                    except _ScanSuperseded:
+                        continue
+                return cached
+
+            try:
+                result = await loop.run_in_executor(
+                    None, scan_folder, root_path, patterns_str
+                )
+            except BaseException as exc:
+                # BaseException so CancelledError doesn't leave a pending Future
+                # cached forever — later callers would await it indefinitely.
+                with self._lock:
+                    if self._scan_cache.get(session_id) is fut:
+                        self._scan_cache[session_id] = None
+                if not fut.done():
+                    fut.set_exception(exc if isinstance(exc, Exception) else asyncio.CancelledError())
+                raise
+
+            # A scan that straddled an invalidate_scan() saw pre-invalidation
+            # state. Publishing it would undo the invalidation, and every caller
+            # awaiting our Future would act on the stale list — which for a purge
+            # means re-inserting the file that was just removed. Rescan instead.
             with self._lock:
-                if self._scan_cache.get(session_id) is fut:
+                superseded = self._scan_gen.get(session_id, 0) != gen
+                if not superseded:
+                    self._scan_cache[session_id] = result
+                elif self._scan_cache.get(session_id) is fut:
                     self._scan_cache[session_id] = None
+            if not superseded:
+                fut.set_result(result)
+                return result
             if not fut.done():
-                fut.set_exception(exc if isinstance(exc, Exception) else asyncio.CancelledError())
-            raise
-        return result
+                fut.set_exception(_ScanSuperseded())
+
+    def invalidate_scan(self, session_id, spec=None):
+        """Drop the cached scan for a session and retire any in-flight one.
+
+        `spec` re-registers the session's filter for the watchdog thread; pass it
+        whenever exclusion_patterns just changed, so _handle_change stops matching
+        against the superseded one before the next scan lands.
+        """
+        with self._lock:
+            self._bump_scan_gen(session_id)
+            if spec is not None:
+                root, _old = self._session_specs.get(session_id, (self._root_path, None))
+                self._session_specs[session_id] = (root, spec)
+
+    def _bump_scan_gen(self, session_id):
+        """Invalidate a session's scan. Caller must hold _lock."""
+        self._scan_cache[session_id] = None
+        self._scan_gen[session_id] = self._scan_gen.get(session_id, 0) + 1
 
     def _handle_change(self, abs_path):
         # Runs on a watchdog observer thread. Filter against default excludes
@@ -233,6 +273,8 @@ class WatcherService:
             if not rows:
                 cur2 = await conn.execute("SELECT id, root_path FROM sessions")
                 session_rows = await cur2.fetchall()
+                # Under one lock hold: _lock is not reentrant, so this uses the
+                # caller-locked _bump_scan_gen rather than invalidate_scan().
                 with self._lock:
                     for r in session_rows:
                         sess_root = r["root_path"]
@@ -244,7 +286,7 @@ class WatcherService:
                             sess_rel = os.path.relpath(abs_path, spec_root).replace(os.sep, "/")
                             if spec.match_file(sess_rel):
                                 continue
-                        self._scan_cache[r["id"]] = None
+                        self._bump_scan_gen(r["id"])
                 return
 
             file_deleted = not os.path.isfile(abs_path)
@@ -283,6 +325,5 @@ class WatcherService:
                         )
                         continue
 
-                with self._lock:
-                    self._scan_cache[sid] = None
+                self.invalidate_scan(sid)
                 self.broadcast_to_session(sid, {"type": "file_changed", "rel_path": rel_path})

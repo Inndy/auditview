@@ -30,6 +30,7 @@ class _StubWatcher:
     def broadcast_to_session(self, *a): pass
     def broadcast_all(self, *a, **kw): pass
     async def get_scan(self, *a): return []
+    def invalidate_scan(self, *a, **kw): pass
 
 
 @asynccontextmanager
@@ -253,6 +254,7 @@ async def test_get_scan_concurrent_calls_scan_once():
         svc = object.__new__(WatcherService)
         svc._lock = threading.Lock()
         svc._scan_cache = {}
+        svc._scan_gen = {}
         svc._session_specs = {}
 
         call_count = 0

@@ -21,6 +21,7 @@ class _StubWatcher:
     def broadcast_to_session(self, *a): pass
     def broadcast_all(self, *a, **kw): pass
     async def get_scan(self, *a): return []
+    def invalidate_scan(self, *a, **kw): pass
 
 
 @asynccontextmanager
