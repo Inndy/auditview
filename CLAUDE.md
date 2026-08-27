@@ -29,6 +29,13 @@
 uv run auditview [--debug] <path> # run server against a directory
 ```
 
+**Read-only CLI** (queries `.auditview.db` directly; no server required):
+```bash
+auditview context                                  # active session + repository root
+auditview stats                                    # session-wide coverage, issue counts
+auditview files --status not_viewed --sort size --json
+```
+
 **Frontend** (Vue 3, use `pnpm`):
 ```bash
 cd ui
@@ -54,6 +61,7 @@ Auditview is a line-level code review/audit tool: a Quart (async) JSON API backe
 - auditview/core/ - business logic - no Quart imports here
 - auditview/api/ - one Quart blueprint per resource (sessions, files, lines, …)
 - auditview/db/ - aiosqlite wrapper (`open_db` async context manager)
+- auditview/cli.py - read-only query subcommands, dispatched from `__main__.py`
 - ui/src/api/ - fetch wrappers, file-per-resource mirrors backend
 
 ### Key Design Decisions
@@ -67,6 +75,34 @@ Auditview is a line-level code review/audit tool: a Quart (async) JSON API backe
 **Vue Options API for components (personal preference)** - keep all new `.vue` components in Options API style. Composition API may be mixed in non-component modules (e.g. `ui/src/api/events.js` exposes `sseClient.status` as a `ref()`) when it yields a more elegant architecture — for example, a singleton service whose reactive state is consumed by components via a computed.
 
 **`WatcherService` uses asyncio.Queue for thread→async bridging** - watchdog runs file observer threads that post paths via `loop.call_soon_threadsafe`. An async worker task consumes and does all DB work. Each operation opens its own short-lived aiosqlite connection.
+
+**`core/progress.py` is the single source for coverage queries** - `file_progress()`,
+`session_coverage()`, `issue_counts()` and `active_session()` take a bare connection and are
+called by `api/files.py`, `api/coverage.py`, `api/config.py` and `cli.py` alike. Adding a fourth
+consumer means calling these, never re-writing the SQL. Response shapes in `API.md` are these
+functions' return values verbatim.
+
+**The CLI is read-only, and reads to agents / writes through MCP** - `auditview context|stats|files`
+resolve the DB (`--db` → `$AUDITVIEW_DB` → search upward for `.auditview.db`) and the session
+(`--session` → `app_config.mcp_session_id` → sole session), then query. Agents read coverage this
+way because it needs no running server and no port discovery; they write via the MCP tools, which
+handle reconciliation and SSE broadcast. `__main__.main()` routes to the CLI when any argument is
+exactly a subcommand name; `auditview serve <path>` is the escape hatch for a directory that
+shares one of those names.
+
+**Coverage is the human's ledger; agents must never mark lines reviewed** - a reviewed line means
+a person read it. If an agent writes `reviewed_lines`, the metric stops meaning anything and every
+recommendation built on it becomes circular. The CLI exposes no marking subcommand, and the
+`audit-triage` / `audit-explain` skills state the prohibition explicitly. Agents record what they
+find as notes and issues instead.
+
+**Walkthrough issues use a `source` convention, not a schema flag** - an issue whose `source`
+starts with `agents:explain` is a code walkthrough rather than a defect: `IssuesView.vue` shows a
+`flow` badge and dims the severity, and its notes render `snapshot_text` inline via
+`NoteSnippet.vue`. `GET /issues/:id/notes` orders by `created_at, id`, so an agent creating notes in
+flow order produces the reading order for free — there is no explicit step column. The `id`
+tiebreak is load-bearing: `created_at` is second-granular, so a burst of inserts would otherwise
+fall back to index order (by `file_path`) and scramble the walkthrough.
 
 **MCP endpoint** - `/mcp` serves JSON-RPC 2.0. Tool handlers call existing REST endpoints internally via Quart's async test client.
 
