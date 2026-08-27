@@ -43,6 +43,7 @@
           <tr>
             <th>ID</th>
             <th>Label</th>
+            <th>Progress</th>
             <th>Created</th>
             <th>MCP</th>
             <th></th>
@@ -52,6 +53,15 @@
           <tr v-for="s in sessions" :key="s.id" :class="{ 'mcp-active-row': s.id === mcpSessionId }">
             <td>{{ s.id }}</td>
             <td>{{ s.label }}</td>
+            <td>
+              <div class="progress-cell">
+                <template v-if="coverageById[s.id]">
+                  <CoverageBar class="list-coverage-bar" :coverage="coverageById[s.id].coverage" />
+                  <span class="progress-pct">{{ pctFor(s.id) }}%</span>
+                </template>
+                <span v-else class="progress-none">&mdash;</span>
+              </div>
+            </td>
             <td>{{ s.created_at }}</td>
             <td>
               <button
@@ -75,14 +85,17 @@
 <script>
 import { listSessions, createSession } from '../api/sessions.js'
 import { getConfig, setMcpSession, clearMcpSession } from '../api/config.js'
+import { getCoverage } from '../api/coverage.js'
+import CoverageBar from '../components/CoverageBar.vue'
 import DarkModeToggle from '../components/DarkModeToggle.vue'
 
 export default {
   name: 'SessionListView',
-  components: { DarkModeToggle },
+  components: { CoverageBar, DarkModeToggle },
   data() {
     return {
       sessions: [],
+      coverageById: {},
       config: null,
       mcpSessionId: null,
       loading: true,
@@ -115,11 +128,26 @@ export default {
         this.sessions = sessions
         this.config = config
         this.mcpSessionId = config.mcp_session ? config.mcp_session.id : null
+        await this.loadCoverage(sessions)
       } catch (e) {
         this.error = e.message
       } finally {
         this.loading = false
       }
+    },
+    async loadCoverage(sessions) {
+      const results = await Promise.all(
+        sessions.map((s) => getCoverage(s.id).catch(() => null)),
+      )
+      const map = {}
+      sessions.forEach((s, i) => {
+        if (results[i]) map[s.id] = results[i]
+      })
+      this.coverageById = map
+    },
+    pctFor(sid) {
+      const c = this.coverageById[sid]
+      return c ? Math.round((c.coverage || 0) * 100) : 0
     },
     async submitCreate() {
       if (!this.form.label) {
@@ -134,6 +162,11 @@ export default {
           exclusion_patterns: this.form.exclusion_patterns,
         })
         this.sessions.push(s)
+        this.coverageById[s.id] = {
+          total_reviewed_lines: 0,
+          total_countable_lines: 0,
+          coverage: 0,
+        }
         this.form = { label: '', exclusion_patterns: '' }
       } catch (e) {
         this.error = e.message
@@ -256,6 +289,28 @@ th {
 td {
   padding: 8px;
   border-bottom: 1px solid var(--border-light);
+}
+
+.progress-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.list-coverage-bar {
+  width: 80px;
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+.progress-pct {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+.progress-none {
+  color: var(--text-faint);
 }
 
 .error-msg {

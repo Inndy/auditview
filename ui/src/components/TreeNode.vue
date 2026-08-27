@@ -16,12 +16,14 @@
         >{{ node.fileData.max_severity }}</span>
         <span v-if="node.fileData.todos_count" class="badge-todo-count" title="TODOs">{{ node.fileData.todos_count }}</span>
         <span v-if="node.fileData.notes_count" class="badge-note-count" title="Notes">{{ node.fileData.notes_count }}</span>
+        <span v-if="node.fileData.status !== 'empty'" class="pct" :title="pctTitle">{{ filePct }}%</span>
         <span
           class="status-dot"
           :class="'status-' + node.fileData.status"
           :title="statusTitle"
         ></span>
       </template>
+      <span v-else-if="!node.isFile && node.rollup" class="pct" :title="dirPctTitle">{{ dirPct }}%</span>
     </div>
     <div v-if="!node.isFile && expanded" class="tree-children">
       <TreeNode
@@ -57,6 +59,23 @@ export default {
       if (s === 'not_viewed') return 'Not viewed'
       if (s === 'empty') return 'Empty file'
       return 'No countable lines'
+    },
+    filePct() {
+      return Math.round((this.node.fileData?.coverage || 0) * 100)
+    },
+    pctTitle() {
+      const d = this.node.fileData
+      if (!d) return ''
+      return `${d.reviewed_lines}/${d.countable_lines} lines reviewed`
+    },
+    dirPct() {
+      const r = this.node.rollup
+      return r && r.countable > 0 ? Math.round((r.reviewed / r.countable) * 100) : 0
+    },
+    dirPctTitle() {
+      const r = this.node.rollup
+      if (!r) return ''
+      return `${r.reviewed}/${r.countable} lines \u00b7 ${r.reviewedFiles}/${r.files} files reviewed`
     },
     severityTitle() {
       const sev = this.node.fileData?.max_severity
@@ -108,6 +127,13 @@ export default {
 
 .tree-icon {
   font-size: 12px;
+  flex-shrink: 0;
+}
+
+.pct {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
 

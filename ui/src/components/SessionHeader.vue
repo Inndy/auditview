@@ -6,9 +6,10 @@
       <span class="session-path">{{ session.root_path }}</span>
     </div>
     <div class="session-coverage">
-      <span v-if="coverage">
-        {{ coveragePct }}% ({{ coverage.total_reviewed_lines }}/{{ coverage.total_countable_lines }} lines)
-      </span>
+      <template v-if="coverage">
+        <CoverageBar class="header-coverage-bar" :coverage="coverage.coverage" />
+        <span>{{ coveragePct }}% ({{ coverage.total_reviewed_lines }}/{{ coverage.total_countable_lines }} lines)</span>
+      </template>
     </div>
     <SSEStatusIndicator />
     <label class="wrap-lines-toggle">
@@ -22,12 +23,13 @@
 </template>
 
 <script>
+import CoverageBar from './CoverageBar.vue'
 import DarkModeToggle from './DarkModeToggle.vue'
 import SSEStatusIndicator from './SSEStatusIndicator.vue'
 
 export default {
   name: 'SessionHeader',
-  components: { DarkModeToggle, SSEStatusIndicator },
+  components: { CoverageBar, DarkModeToggle, SSEStatusIndicator },
   props: {
     session: { type: Object, required: true },
     coverage: { type: Object, default: null },
@@ -79,6 +81,15 @@ export default {
 .session-coverage {
   margin-left: auto;
   color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-coverage-bar {
+  width: 90px;
+  margin-top: 0;
+  flex-shrink: 0;
 }
 
 .help-btn {

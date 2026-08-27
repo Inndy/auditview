@@ -21,6 +21,7 @@
     >{{ file.max_severity }}</span>
     <span v-if="file.todos_count" class="badge-todo-count" title="TODOs">{{ file.todos_count }}</span>
     <span v-if="file.notes_count" class="badge-note-count" title="Notes">{{ file.notes_count }}</span>
+    <span v-if="file.status !== 'empty'" class="pct" :title="pctTitle">{{ pct }}%</span>
     <span
       class="status-dot"
       :class="'status-' + file.status"
@@ -46,6 +47,12 @@ export default {
       const parts = this.file.rel_path.split('/')
       if (parts.length <= 1) return ''
       return parts.slice(0, -1).join('/') + '/'
+    },
+    pct() {
+      return Math.round((this.file.coverage || 0) * 100)
+    },
+    pctTitle() {
+      return `${this.file.reviewed_lines}/${this.file.countable_lines} lines reviewed`
     },
     statusTitle() {
       const s = this.file.status
@@ -106,6 +113,13 @@ export default {
 .flat-spacer {
   flex: 1;
   min-width: 4px;
+}
+
+.pct {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
 }
 
 .issue-count {

@@ -81,6 +81,37 @@ function buildTree(files) {
   return root
 }
 
+function buildRollupMap(files) {
+  const map = new Map()
+  for (const f of files) {
+    const parts = f.rel_path.split('/')
+    const reviewed = f.reviewed_lines || 0
+    const countable = f.countable_lines || 0
+    const isDone = f.status === 'reviewed' || f.status === 'empty'
+    for (let i = 0; i < parts.length - 1; i++) {
+      const dir = parts.slice(0, i + 1).join('/')
+      let agg = map.get(dir)
+      if (!agg) {
+        agg = { reviewed: 0, countable: 0, files: 0, reviewedFiles: 0 }
+        map.set(dir, agg)
+      }
+      agg.reviewed += reviewed
+      agg.countable += countable
+      agg.files += 1
+      if (isDone) agg.reviewedFiles += 1
+    }
+  }
+  return map
+}
+
+function attachRollups(nodes, map) {
+  for (const n of nodes) {
+    if (n.isFile) continue
+    n.rollup = map.get(n.path) || null
+    if (n.children) attachRollups(n.children, map)
+  }
+}
+
 const SEV_RANK = { P0: 0, P1: 1, P2: 2 }
 
 export default {
@@ -120,8 +151,16 @@ export default {
       if (!this.hideReviewed) return this.files
       return this.files.filter((f) => f.status !== 'reviewed' && f.status !== 'empty')
     },
+    rollupMap() {
+      // Rolled up from the unfiltered list: `filteredFiles` drops reviewed/empty
+      // files when "Hide done" is on, which would pull them out of the
+      // denominator and make every folder read lower than it is.
+      return buildRollupMap(this.files)
+    },
     tree() {
-      return buildTree(this.filteredFiles)
+      const nodes = buildTree(this.filteredFiles)
+      attachRollups(nodes, this.rollupMap)
+      return nodes
     },
     flatList() {
       const arr = [...this.filteredFiles]
