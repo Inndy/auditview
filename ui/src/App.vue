@@ -306,7 +306,7 @@ table.code-table tr.cursor.anchor td:first-child {
 
 .coverage-bar-fill {
   height: 100%;
-  background: #4caf50;
+  background: var(--status-success);
   border-radius: 3px;
   transition: width 0.3s;
 }
