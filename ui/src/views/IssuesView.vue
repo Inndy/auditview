@@ -30,7 +30,11 @@
               :class="{ selected: selectedIssueId === issue.id }"
             >
               <div class="issue-header">
-                <span class="severity-badge" :class="'severity-' + issue.severity">{{ issue.severity }}</span>
+                <span
+                  class="severity-badge"
+                  :class="['severity-' + issue.severity, { 'severity-dim': isWalkthrough(issue) }]"
+                >{{ issue.severity }}</span>
+                <span v-if="isWalkthrough(issue)" class="flow-badge" title="Code walkthrough, not a defect">flow</span>
                 <span class="title">{{ issue.title }}</span>
               </div>
               <div class="issue-meta">
@@ -44,7 +48,14 @@
       <Pane :size="sizes[1]" :min-size="30">
         <div v-if="selectedIssueId" class="details-panel">
         <div class="panel-header">
-          <h3>Issue #{{ selectedIssueId }}</h3>
+          <h3>
+            Issue #{{ selectedIssueId }}
+            <span
+              v-if="selectedIssue && isWalkthrough(selectedIssue)"
+              class="flow-badge"
+              title="Code walkthrough, not a defect"
+            >flow</span>
+          </h3>
           <div class="panel-header-actions">
             <button
               v-if="selectedIssueStale && !editTargetDeleted"
@@ -136,16 +147,13 @@
           <div class="notes-section">
             <h4>Attached Notes</h4>
             <div v-if="issueNotes.length === 0" class="empty-notes">No notes attached.</div>
-            <div v-else class="notes-list">
-              <router-link
+            <div v-else class="snippet-list">
+              <NoteSnippet
                 v-for="note in issueNotes"
                 :key="note.id"
-                :to="`/sessions/${session.id}/code?file=${encodeURIComponent(note.file_path)}&line=${note.start_line}&endLine=${note.end_line}`"
-                class="note-item note-link"
-              >
-                <div class="note-file">{{ note.file_path }}:{{ note.start_line }}</div>
-                <div class="note-content">{{ note.content || '(no content)' }}</div>
-              </router-link>
+                :note="note"
+                :sessionId="session.id"
+              />
             </div>
           </div>
         </div>
@@ -213,6 +221,7 @@ import { Splitpanes, Pane } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import { listIssues, updateIssue as apiUpdateIssue, deleteIssue as apiDeleteIssue, getIssueNotes, attachNoteToIssue } from '../api/issues.js'
 import { listNotes } from '../api/notes.js'
+import NoteSnippet from '../components/NoteSnippet.vue'
 import { sseClient } from '../api/events.js'
 import CreateIssueModal from '../components/CreateIssueModal.vue'
 import MarkdownView from '../components/MarkdownView.vue'
@@ -244,7 +253,7 @@ function loadSizes() {
 
 export default {
   name: 'IssuesView',
-  components: { Splitpanes, Pane, CreateIssueModal, MarkdownView },
+  components: { Splitpanes, Pane, CreateIssueModal, MarkdownView, NoteSnippet },
   props: {
     session: Object,
   },
@@ -314,6 +323,10 @@ export default {
     },
   },
   methods: {
+    isWalkthrough(issue) {
+      return typeof issue?.source === 'string' && issue.source.startsWith('agents:explain')
+    },
+
     async load() {
       this.loadingIssues = true
       this.loadError = null
@@ -686,6 +699,33 @@ export default {
   padding: 2px 6px;
   border-radius: 3px;
   color: white;
+}
+
+.severity-dim {
+  opacity: 0.35;
+}
+
+.flow-badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: var(--bg-gutter);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.panel-header h3 .flow-badge {
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.snippet-list {
+  display: flex;
+  flex-direction: column;
 }
 
 .severity-P0 { background: var(--severity-p0); }

@@ -57,24 +57,7 @@ import { sseClient } from '../api/events.js'
 import LineRow from './LineRow.vue'
 import CreateNoteModal from './CreateNoteModal.vue'
 import IssuePickerModal from './IssuePickerModal.vue'
-
-const EXT_LANG = {
-  py: 'python', js: 'javascript', ts: 'typescript', jsx: 'javascript',
-  tsx: 'typescript', vue: 'xml', html: 'html', css: 'css', scss: 'scss',
-  json: 'json', md: 'markdown', sh: 'bash', bash: 'bash', go: 'go',
-  rs: 'rust', c: 'c', cpp: 'cpp', h: 'c', java: 'java', rb: 'ruby',
-  yaml: 'yaml', yml: 'yaml', toml: 'ini', sql: 'sql', xml: 'xml',
-}
-
-function highlightFile(hljs, path, lines) {
-  const ext = path.split('.').pop().toLowerCase()
-  const lang = EXT_LANG[ext]
-  const src = lines.map((l) => l.content).join('\n')
-  if (lang && hljs.getLanguage(lang)) {
-    return hljs.highlight(src, { language: lang }).value
-  }
-  return hljs.highlightAuto(src).value
-}
+import { highlightSource } from '../highlight.js'
 
 function splitHighlightedLines(html) {
   const lines = []
@@ -230,7 +213,7 @@ export default {
         if (token !== this._loadToken) return
         const hljs = this.$hljs
         const highlightedLines = hljs
-          ? splitHighlightedLines(highlightFile(hljs, path, data.lines))
+          ? splitHighlightedLines(highlightSource(hljs, path, data.lines.map((l) => l.content).join('\n')))
           : data.lines.map((l) => this.escapeHtml(l.content))
         this.lines = data.lines.map((line, i) => ({
           ...line,
