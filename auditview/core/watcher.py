@@ -37,6 +37,17 @@ class _Handler(FileSystemEventHandler):
         if not event.is_directory:
             self._svc._handle_change(event.src_path)
 
+    def on_moved(self, event):
+        # inotify pairs IN_MOVED_FROM/IN_MOVED_TO into a single move event when
+        # both ends are inside the watched tree, so an atomic save (write temp,
+        # rename over the target) never reaches on_created/on_modified. Both
+        # ends need processing: the source disappeared, the destination has new
+        # content. Directory moves come with per-child sub-move events, and the
+        # directory paths themselves resolve to no files rows, which just
+        # invalidates the scan.
+        self._svc._handle_change(event.src_path)
+        self._svc._handle_change(event.dest_path)
+
 
 class WatcherService:
     def __init__(self, db_path, root_path):

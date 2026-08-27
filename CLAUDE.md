@@ -76,6 +76,8 @@ Auditview is a line-level code review/audit tool: a Quart (async) JSON API backe
 
 **`WatcherService` uses asyncio.Queue for thread→async bridging** - watchdog runs file observer threads that post paths via `loop.call_soon_threadsafe`. An async worker task consumes and does all DB work. Each operation opens its own short-lived aiosqlite connection.
 
+The handler must implement `on_moved` alongside create/modify/delete: inotify pairs `IN_MOVED_FROM`/`IN_MOVED_TO` into a single move event whenever both ends are inside the watched tree, so an atomic save (write temp, rename over the target) — what editors, `sed -i`, and `git checkout` all do — arrives *only* as `on_moved`. Dropping it leaves `reviewed_lines` and `countable_lines` frozen at pre-edit values, so a fully reviewed file keeps reporting 100% until something else forces a reconcile.
+
 **`core/progress.py` is the single source for coverage queries** - `file_progress()`,
 `session_coverage()`, `issue_counts()` and `active_session()` take a bare connection and are
 called by `api/files.py`, `api/coverage.py`, `api/config.py` and `cli.py` alike. Adding a fourth
