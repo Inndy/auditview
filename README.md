@@ -23,6 +23,29 @@ Coverage is the primary metric — reviewed lines / countable lines. Blank lines
 
 Review state is **content-based, not line-number-based**. When files change, the reconciler migrates marks to their new positions on a best-effort basis. The invariant is strict: a line is never falsely marked as reviewed. Ambiguous cases are dropped rather than migrated.
 
+## Querying coverage from the command line
+
+The `auditview` executable also serves a read-only CLI for AI agents and scripts. It reads
+`.auditview.db` directly, so the server does not need to be running:
+
+```bash
+auditview context   # which session and repository root these commands act on
+auditview stats     # session-wide coverage and issue counts
+auditview files --status not_viewed --sort size --json
+```
+
+The database is found via `--db`, then `$AUDITVIEW_DB`, then by searching upward from the working
+directory for `.auditview.db`. The session is chosen via `--session`, then whichever session is
+active in the web UI, then the only session if there is exactly one.
+
+These commands report review state and nothing else — there is deliberately no priority score.
+Deciding which code matters is the agent's job, informed by reading the code; see the
+`audit-triage` and `audit-explain` skills under `.claude/skills/`.
+
+A bare subcommand name anywhere in the arguments routes to the CLI, so `auditview stats` queries
+rather than serves. If you need to serve a directory that happens to be named after a subcommand,
+use the explicit form: `auditview serve ./stats`.
+
 ## Roadmap direction
 
 **VCS integration** — once 100% coverage is reached, a snapshot of that state can be tagged as a trusted version. Future changes then reduce to a `git diff` against the trusted tag — only the delta needs review. Line-level reconciliation becomes unnecessary for stable, version-controlled codebases.
