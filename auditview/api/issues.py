@@ -280,7 +280,10 @@ async def list_issue_notes(session_id, issue_id):
 
         cur = await conn.execute(
             f"SELECT {NOTE_SELECT_COLUMNS} FROM {NOTE_SELECT_FROM} "
-            "WHERE n.session_id = ? AND n.issue_id = ? ORDER BY n.created_at",
+            # created_at is only second-granular, so notes inserted in the same
+            # second tie. Break by id to keep insertion order — that ordering is
+            # the reading order for walkthrough issues.
+            "WHERE n.session_id = ? AND n.issue_id = ? ORDER BY n.created_at, n.id",
             (session_id, issue_id),
         )
         rows = await cur.fetchall()

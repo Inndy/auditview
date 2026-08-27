@@ -643,7 +643,7 @@ cleared to `NULL` so they survive as standalone notes.
 
 ### GET /api/sessions/:id/issues/:issue_id/notes
 
-List all notes attached to a specific issue, ordered by `created_at` ascending.
+List all notes attached to a specific issue, ordered by `created_at` ascending, then by `id`. `created_at` is only second-granular, so the `id` tiebreak is what guarantees insertion order — clients that build ordered walkthroughs (an agent attaching one note per step) rely on it.
 
 **Response 200**: array of note objects (same shape as `GET /notes`; every entry has the issue's `issue_id` and `issue_severity` populated).
 
