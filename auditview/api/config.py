@@ -1,23 +1,9 @@
 from pathlib import Path
 from quart import Blueprint, jsonify, request, current_app
 from auditview.db.connection import open_db
+from auditview.core.progress import active_session as _get_mcp_session
 
 bp = Blueprint("config", __name__)
-
-
-async def _get_mcp_session(conn):
-    cur = await conn.execute("SELECT value FROM app_config WHERE key = 'mcp_session_id'")
-    row = await cur.fetchone()
-    if not row:
-        return None
-    session_id = int(row["value"])
-    cur = await conn.execute(
-        "SELECT id, label, root_path FROM sessions WHERE id = ?", (session_id,)
-    )
-    srow = await cur.fetchone()
-    if not srow:
-        return None
-    return {"id": srow["id"], "label": srow["label"], "root_path": srow["root_path"]}
 
 
 @bp.route("/config", methods=["GET"])
