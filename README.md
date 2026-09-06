@@ -19,7 +19,7 @@ When auditing an unknown or untrusted codebase, the same workflow applies: syste
 
 ### Reviewing away from the desk
 
-The whole review loop — move the cursor, select a range, mark reviewed, jump to the next unreviewed line, switch files — is driven by the keyboard, and equally by a game controller. Any pad reporting the standard (Xbox) mapping works, including a Steam Controller or Steam Deck via Steam Input. Writing note text still needs a keyboard.
+The whole review loop — move the cursor, select a range, mark reviewed, jump between code blocks or unreviewed lines, switch files — is driven by the keyboard, and equally by a game controller. Any pad reporting the standard (Xbox) mapping works, including a Steam Controller or Steam Deck via Steam Input. Note and TODO creation stays keyboard-only until speech input is available, so the default controller layout prioritizes navigation and marking.
 
 ## Core concept: review coverage
 

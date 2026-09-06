@@ -18,6 +18,7 @@ const SCROLL_SPEED = 2.2
  * Physical layout of the W3C "standard" gamepad mapping, which is what Steam Input
  * presents for a Steam Controller / Steam Deck and what an Xbox pad reports natively.
  * Overridable via localStorage for pads that report triggers as axes or shuffle indices.
+ * Repeat and continuous behavior intentionally live on actions, not physical inputs.
  */
 export const DEFAULT_INPUTS = {
   a: { button: 0 },
@@ -37,12 +38,12 @@ export const DEFAULT_INPUTS = {
   dpadLeft: { button: 14 },
   dpadRight: { button: 15 },
   guide: { button: 16 },
-  lstickUp: { axis: 1, dir: -1, repeat: 'fast' },
-  lstickDown: { axis: 1, dir: 1, repeat: 'fast' },
-  lstickLeft: { axis: 0, dir: -1, repeat: 'slow', deadzone: 0.5 },
-  lstickRight: { axis: 0, dir: 1, repeat: 'slow', deadzone: 0.5 },
-  rstickUp: { axis: 3, dir: -1, continuous: true },
-  rstickDown: { axis: 3, dir: 1, continuous: true },
+  lstickUp: { axis: 1, dir: -1 },
+  lstickDown: { axis: 1, dir: 1 },
+  lstickLeft: { axis: 0, dir: -1, deadzone: 0.5 },
+  lstickRight: { axis: 0, dir: 1, deadzone: 0.5 },
+  rstickUp: { axis: 3, dir: -1 },
+  rstickDown: { axis: 3, dir: 1 },
 }
 
 export const INPUT_LABELS = {
@@ -94,7 +95,7 @@ function loadJsonPref(key) {
   }
 }
 
-class GamepadService {
+export class GamepadService {
   constructor() {
     this.status = ref('absent')
     this.info = ref(null)
@@ -118,7 +119,8 @@ class GamepadService {
   /**
    * Build, from ACTIONS[*].pad plus any localStorage override, an index of
    * terminal input id -> candidate bindings, most-specific (most modifiers) first.
-   * Most-specific-wins is what keeps `back+a` from also firing plain `a`.
+   * Held-input behavior follows the action through custom remaps. Most-specific-wins
+   * is what keeps `back+a` from also firing plain `a`.
    */
   _buildBindings() {
     const override = loadJsonPref(BINDINGS_PREF) || {}
@@ -135,8 +137,20 @@ class GamepadService {
         }
         const list = (byInput[inputId] ||= [])
         const existing = list.find((c) => c.binding === binding)
-        if (existing) existing.ids.push(id)
-        else list.push({ binding, mods: parts, ids: [id] })
+        if (existing) {
+          existing.ids.push(id)
+          if (existing.repeat !== action.padRepeat || existing.continuous !== Boolean(action.padContinuous)) {
+            console.warn(`gamepad: actions sharing "${binding}" disagree on held-input behavior`)
+          }
+        } else {
+          list.push({
+            binding,
+            mods: parts,
+            ids: [id],
+            repeat: action.padRepeat,
+            continuous: Boolean(action.padContinuous),
+          })
+        }
       }
     }
     for (const list of Object.values(byInput)) {
@@ -296,7 +310,7 @@ class GamepadService {
       if (!spec || !cur) continue
       const chosen = candidates.find((c) => c.mods.every((m) => state[m]?.pressed))
 
-      if (spec.continuous) {
+      if (chosen?.continuous) {
         if (cur.pressed && chosen) {
           this._run(chosen.ids, { value: cur.value * spec.dir * SCROLL_SPEED, dt })
         }
@@ -312,10 +326,10 @@ class GamepadService {
       if (!chosen) continue
 
       if (!was) {
-        this._repeatAt[inputId] = spec.repeat ? now + REPEAT_DELAY_MS : Infinity
+        this._repeatAt[inputId] = chosen.repeat ? now + REPEAT_DELAY_MS : Infinity
         this._run(chosen.ids, {})
-      } else if (spec.repeat && now >= (this._repeatAt[inputId] ?? Infinity)) {
-        const interval = spec.repeat === 'slow'
+      } else if (chosen.repeat && now >= (this._repeatAt[inputId] ?? Infinity)) {
+        const interval = chosen.repeat === 'slow'
           ? REPEAT_SLOW_MS
           : REPEAT_FAST_MAX_MS - (REPEAT_FAST_MAX_MS - REPEAT_FAST_MIN_MS) * cur.value
         this._repeatAt[inputId] = now + interval
@@ -334,7 +348,7 @@ class GamepadService {
       // normally inside the dialog's own text field.
       if (!modal && isTextEntryFocused()) continue
       if (dispatch(id, params)) {
-        if (!action.continuous) this.lastAction.value = id
+        if (!action.padContinuous) this.lastAction.value = id
         this._emit('action', { id, params })
         return
       }

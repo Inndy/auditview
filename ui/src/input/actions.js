@@ -13,7 +13,10 @@
  *   'zz'       two-key sequence; the first char must be listed in PREFIX_KEYS
  *
  * `pad` entries are binding ids resolved against INPUTS in gamepad.js, optionally
- * prefixed with a held modifier: 'a', 'back+a', 'dpadDown', 'lstickDown'.
+ * prefixed with a held modifier: 'a', 'back+a', 'dpadDown', 'lstickDown'. Actions
+ * opt into held-input behavior with `padRepeat` or `padContinuous`; keeping that
+ * policy on the action means dpadDown can repeat line motion without also repeating
+ * the back+dpadDown pane-switch chord.
  */
 
 export const PREFIX_KEYS = ['z', '[', ']']
@@ -63,59 +66,63 @@ export const ACTIONS = {
     run: (t, { count = 1 }) => t.viewer?.moveCursor(-count),
   },
   NAV_NEXT: {
-    label: 'Next item in focused pane',
+    label: 'Next item in focused pane (hold to repeat)',
     group: 'Motion',
     keys: [],
     pad: ['dpadDown', 'lstickDown'],
+    padRepeat: 'fast',
     run: (t) => t.view?.navFocusedPane(1),
   },
   NAV_PREV: {
-    label: 'Previous item in focused pane',
+    label: 'Previous item in focused pane (hold to repeat)',
     group: 'Motion',
     keys: [],
     pad: ['dpadUp', 'lstickUp'],
+    padRepeat: 'fast',
     run: (t) => t.view?.navFocusedPane(-1),
   },
   PAGE_DOWN: {
-    label: 'Half-page down',
+    label: 'Half-page down (hold to repeat)',
     group: 'Motion',
     keys: ['Ctrl-d'],
     pad: ['rt'],
+    padRepeat: 'slow',
     run: (t) => t.viewer?.movePage(1),
   },
   PAGE_UP: {
-    label: 'Half-page up',
+    label: 'Half-page up (hold to repeat)',
     group: 'Motion',
     keys: ['Ctrl-u'],
     pad: ['lt'],
+    padRepeat: 'slow',
     run: (t) => t.viewer?.movePage(-1),
   },
   JUMP_UNREVIEWED_NEXT: {
     label: 'Next unreviewed line',
     group: 'Motion',
     keys: [']r'],
-    pad: ['rb'],
+    pad: ['back+rb'],
     run: (t) => t.viewer?.jumpUnreviewed(1),
   },
   JUMP_UNREVIEWED_PREV: {
     label: 'Previous unreviewed line',
     group: 'Motion',
     keys: ['[r'],
-    pad: ['lb'],
+    pad: ['back+lb'],
     run: (t) => t.viewer?.jumpUnreviewed(-1),
   },
   JUMP_EMPTY_NEXT: {
     label: 'Next empty line (tail if none)',
     group: 'Motion',
     keys: ['}'],
-    pad: ['back+rb'],
+    pad: ['rb'],
     run: (t) => t.viewer?.jumpEmpty(1),
   },
   JUMP_EMPTY_PREV: {
     label: 'Previous empty line (head if none)',
     group: 'Motion',
     keys: ['{'],
-    pad: ['back+lb'],
+    pad: ['lb'],
     run: (t) => t.viewer?.jumpEmpty(-1),
   },
   VIEWPORT_TOP: {
@@ -158,7 +165,7 @@ export const ACTIONS = {
     group: 'Motion',
     keys: [],
     pad: ['rstickUp', 'rstickDown'],
-    continuous: true,
+    padContinuous: true,
     run: (t, { value = 0, dt = 16 }) => t.view?.scrollFocusedPane(value * dt),
   },
 
@@ -166,7 +173,7 @@ export const ACTIONS = {
     label: 'Set / clear selection anchor at cursor',
     group: 'Selection',
     keys: ['v', ' '],
-    pad: ['lstick'],
+    pad: ['x'],
     run: (t) => t.viewer?.toggleAnchor(),
   },
   CLEAR_SELECTION: {
@@ -220,7 +227,7 @@ export const ACTIONS = {
     label: 'Add note on selection',
     group: 'Notes',
     keys: ['n'],
-    pad: ['x'],
+    pad: [],
     requiresSelection: true,
     run: (t) => t.viewer?.openNoteModal(false),
   },
@@ -228,23 +235,25 @@ export const ACTIONS = {
     label: 'Add TODO on selection',
     group: 'Notes',
     keys: ['t'],
-    pad: ['y'],
+    pad: [],
     requiresSelection: true,
     run: (t) => t.viewer?.openNoteModal(true),
   },
 
   NEXT_FILE: {
-    label: 'Next file',
+    label: 'Next file (hold to repeat)',
     group: 'Files',
     keys: ['ArrowDown'],
     pad: ['dpadRight', 'lstickRight'],
+    padRepeat: 'slow',
     run: (t) => t.tree?.selectNext(),
   },
   PREV_FILE: {
-    label: 'Previous file',
+    label: 'Previous file (hold to repeat)',
     group: 'Files',
     keys: ['ArrowUp'],
     pad: ['dpadLeft', 'lstickLeft'],
+    padRepeat: 'slow',
     run: (t) => t.tree?.selectPrev(),
   },
   LOAD_BLOCKED_FILE: {

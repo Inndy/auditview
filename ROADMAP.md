@@ -13,7 +13,7 @@ Agents reviewing and fixing code is already happening in practice. The gap is th
 ## Medium term
 
 ### Unit tests
-Currently only the reconciler fuzz suite exists. Core business logic in `auditview/core/` has no unit tests. Adding targeted tests for the reconciler, scanner, and session management would catch regressions earlier and reduce reliance on fuzzing as the only safety net.
+The frontend gamepad state machine has focused tests for bindings, modifiers, and repeat behavior, but backend coverage remains limited to the reconciler fuzz suite. Core business logic in `auditview/core/` has no unit tests. Adding targeted tests for the reconciler, scanner, and session management would catch regressions earlier and reduce reliance on fuzzing as the backend's only safety net.
 
 ### Issue lifecycle with attribution
 Notes and TODOs exist but are informal. A lightweight issue tracker — open → in progress → resolved — with `opened_by`, `resolved_by`, `verified_by` fields turns the tool into a coordination platform for mixed human/agent review workflows. Agents can open issues on suspicious lines; humans triage; other agents or humans resolve and verify.

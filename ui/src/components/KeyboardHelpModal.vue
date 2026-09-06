@@ -35,7 +35,8 @@
       </p>
       <p class="help-hint">
         Gamepad bindings assume the standard mapping (Xbox layout — a Steam Controller or Deck
-        reports this through Steam Input). Note text still needs a keyboard.
+        reports this through Steam Input). Notes and TODOs stay keyboard-only until speech input
+        is available, leaving the face buttons focused on the read–select–mark loop.
         <router-link to="/gamepad">Open the gamepad test page</router-link> to see live button
         and axis values, or to check an unusual pad.
       </p>
