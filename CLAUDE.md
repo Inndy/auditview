@@ -169,6 +169,38 @@ serves only paths a definition query in that session actually returned, because
 there is no authentication and an endpoint that read any absolute path handed to
 it would be an arbitrary-file reader.
 
+**A definition jump is a history entry; the URL is the jump list** - `?file=` +
+`?line=` already encode the whole position of the code view, so `onGotoLocation()`
+is the one navigation in that view that `push`es instead of `replace`ing. Back,
+`Ctrl-O`, and a mouse's back button then all return to the jump origin with no
+jump-stack state to keep in sync, and `Ctrl-I` goes forward again. Three things
+hold this together:
+
+- **Everything else still replaces.** Opening a file, moving the cursor and
+  clicking a note rewrite the current entry, so arrow-key file browsing cannot
+  bury the jump origin under a hundred entries — roughly the distinction vim draws
+  between a motion and a jump. A note click is the one arguable omission; it would
+  become a jump by routing `onNoteJump()` through `onGotoLocation()`.
+- **A same-file jump pushes too**, so it is recoverable; that is why the route,
+  not `jumpToRange()`, is the only way a definition target reaches the viewer.
+  Because a cursor move also writes the route, `CodeView`'s `$route.query` watcher
+  has to be *idempotent* rather than flag-guarded: it applies a jump only when the
+  viewer's range is not already there. The `_writingFromCursor` boolean it replaced
+  was order-dependent — two route writes coalescing into one watcher run left the
+  flag set and swallowed the next real jump.
+- **`CodeViewer.onSymbolClick()` moves the line cursor to the clicked line before
+  the definition request goes out.** Ctrl/Cmd+click otherwise leaves the cursor
+  alone, so the entry being left behind would record a stale cursor line, or no
+  line at all. Writing it through the cursor — which `onSelectionChange` already
+  mirrors into the query — keeps this to a single navigation: an explicit
+  `replace`-then-`push` pair races, and the loser is the origin.
+
+`JUMP_BACK` refuses to move below the `window.history.state.position` recorded when
+`CodeView` mounted, which is what keeps `Ctrl-O` from stepping out of the review
+view or off the site entirely on a deep link. It no-ops instead of declining to
+run: an action that returns false hands the key back to the browser, and Ctrl-O
+there opens a file picker over the review.
+
 **No `gd`/`gr` keybinding, deliberately** - the code cursor is line-only
 (`cursorLine`/`anchorLine`), so a keyboard chord cannot say *which* symbol on the
 line is meant, and most lines hold several. Ctrl/Cmd+click carries an exact

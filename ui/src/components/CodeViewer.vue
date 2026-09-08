@@ -519,6 +519,13 @@ export default {
       this.clearSymbolHighlight()
       const character = columnFromPoint(cell, clientX, clientY)
       if (character === null) return
+      // Put the line cursor on the clicked line before the request goes out. The
+      // cursor is what CodeView writes into the URL, so by the time a target comes
+      // back the entry being left behind already records where the jump started —
+      // one navigation, no second write racing the push. No scroll: the line was
+      // just clicked, so it is on screen.
+      this.cursorLine = lineNo
+      this.anchorLine = null
       let result
       try {
         result = await getDefinition(this.sessionId, {

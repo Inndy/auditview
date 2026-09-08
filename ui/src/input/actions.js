@@ -182,6 +182,22 @@ export const ACTIONS = {
     padContinuous: true,
     run: (t, { value = 0, dt = 16 }) => t.view?.scrollFocusedPane(value * dt),
   },
+  JUMP_BACK: {
+    label: 'Jump back to where a go-to-definition started',
+    group: 'Motion',
+    keys: ['Ctrl-o'],
+    // No pad binding: a jump can only be made by Ctrl/Cmd+clicking a symbol, so a
+    // pad-only session has nothing to jump back from.
+    pad: [],
+    run: (t) => t.view?.jumpBack(),
+  },
+  JUMP_FORWARD: {
+    label: 'Jump forward again',
+    group: 'Motion',
+    keys: ['Ctrl-i'],
+    pad: [],
+    run: (t) => t.view?.jumpForward(),
+  },
 
   TOGGLE_ANCHOR: {
     label: 'Set / clear selection anchor at cursor',

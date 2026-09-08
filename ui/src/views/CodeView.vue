@@ -58,6 +58,16 @@ import OrphanPanel from '../components/OrphanPanel.vue'
 import { setTargets, clearTargets } from '../input/actions.js'
 import { gamepad } from '../input/gamepad.js'
 
+// vue-router keeps a monotonically increasing `position` in each history entry's
+// state. Reading it live is how JUMP_BACK knows whether the entry behind this one
+// is still inside the review view: anything at or below the position CodeView
+// mounted on belongs to whatever came before — the session list, an issue, or
+// another site when the view was opened by a deep link.
+function historyPosition() {
+  const pos = window.history.state?.position
+  return typeof pos === 'number' ? pos : null
+}
+
 const PANES = ['tree', 'code', 'notes']
 const LAYOUT_STORAGE_KEY = 'auditview:layout:panes'
 const DEFAULT_SIZES = [18, 60, 22]
@@ -109,6 +119,7 @@ export default {
     }
   },
   mounted() {
+    this._historyFloor = historyPosition()
     const { file, line, endLine } = this.$route.query
     if (file) this.currentFile = file
     if (line) this.pendingJump = { start: parseInt(line), end: parseInt(endLine || line) }
@@ -122,13 +133,27 @@ export default {
     this._debouncedCoverage?.cancel()
   },
   watch: {
+    // The route is the only way a jump reaches the viewer, including one the view
+    // wrote itself — so this has to be idempotent rather than flag-guarded: a
+    // cursor move replaces the query, and re-applying that as a jump would fight
+    // the cursor (and, being ordering-dependent, would sometimes swallow the next
+    // real jump instead).
     '$route.query'({ file, line, endLine }) {
-      if (this._writingFromCursor) {
-        this._writingFromCursor = false
+      const jump = line ? { start: parseInt(line), end: parseInt(endLine || line) } : null
+      if (file && file !== this.currentFile) {
+        // A different file: the jump has to wait for the load, and lands in
+        // onNotesUpdated once the new content is on screen.
+        this.currentFile = file
+        this.pendingJump = jump
         return
       }
-      if (file) this.currentFile = file
-      this.pendingJump = line ? { start: parseInt(line), end: parseInt(endLine || line) } : null
+      this.pendingJump = null
+      const viewer = this.$refs.codeViewer
+      if (!jump || !viewer) return
+      // Already there — which is exactly the case for the route write a cursor
+      // move just caused.
+      if (viewer.rangeMin === jump.start && viewer.rangeMax === jump.end) return
+      this.$nextTick(() => viewer.jumpToRange(jump.start, jump.end))
     },
   },
   methods: {
@@ -164,7 +189,6 @@ export default {
       const next = { ...q, file: this.currentFile }
       if (wantLine == null) delete next.line; else next.line = wantLine
       if (wantEnd == null) delete next.endLine; else next.endLine = wantEnd
-      this._writingFromCursor = true
       this.$router.replace({ query: next })
     },
     onLinesMarked({ filePath, countable, reviewed }) {
@@ -186,17 +210,28 @@ export default {
     onNoteDeleted(id) {
       this.currentNotes = this.currentNotes.filter((n) => n.id !== id)
     },
-    // A definition target. Same file jumps directly; a different file goes
-    // through the route so the existing query-param machinery loads it and
-    // applies the jump once its notes arrive.
+    // A definition target, always through the route and always a push — a
+    // same-file jump too, because that is the one that throws away your place
+    // most cheaply. The entry left behind holds the line the jump started from
+    // (CodeViewer moved the cursor there before asking), so Back, Ctrl-O, and a
+    // mouse's back button all return to it. Everything else in this view —
+    // opening a file, moving the cursor — still replaces, which is what keeps
+    // arrow-key file browsing from burying the jump list under a hundred entries.
     onGotoLocation({ filePath, line }) {
-      if (filePath === this.currentFile) {
-        this.$refs.codeViewer?.jumpToRange(line, line)
-        return
-      }
       const next = { ...this.$route.query, file: filePath, line: String(line) }
       delete next.endLine
-      this.$router.replace({ query: next })
+      this.$router.push({ query: next })
+    },
+    // Ctrl-O / Ctrl-I. Both no-op rather than refuse when there is nowhere to go,
+    // so the key stays swallowed: an action that declines to run hands Ctrl-O
+    // back to the browser, which opens a file picker over the review.
+    jumpBack() {
+      const pos = historyPosition()
+      if (pos === null || this._historyFloor === null || pos <= this._historyFloor) return
+      this.$router.back()
+    },
+    jumpForward() {
+      this.$router.forward()
     },
     onNoteJump(note) {
       this.$refs.codeViewer?.jumpToRange(note.start_line, note.end_line)
