@@ -19,8 +19,11 @@ export default {
   emits: ['drag-start', 'drag-move', 'drag-end'],
   methods: {
     onMouseDown(e) {
-      this.$emit('drag-start', this.lineNo)
       e.preventDefault()
+      // Ctrl/Cmd is the go-to-definition chord; there is no symbol in the
+      // gutter, so swallow it rather than starting a drag.
+      if (e.ctrlKey || e.metaKey) return
+      this.$emit('drag-start', this.lineNo)
     },
     onMouseMove(e) {
       if (e.buttons === 1) {

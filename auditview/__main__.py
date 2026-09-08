@@ -17,6 +17,9 @@ def serve(argv):
     p.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
     p.add_argument("--port", type=int, default=5000, help="Bind port (default: 5000)")
     p.add_argument("--debug", action="store_true", help="Enable debug logging (all requests)")
+    p.add_argument("--lsp", action="store_true",
+                   help="Enable symbol navigation by spawning language servers "
+                        "found on PATH (off by default; see API.md)")
     args = p.parse_args(argv)
 
     logging.basicConfig(format="%(levelname)s:%(name)s:%(message)s", level=logging.WARNING)
@@ -26,10 +29,12 @@ def serve(argv):
     root = os.path.abspath(args.path)
     db_path = os.path.abspath(args.db) if args.db else os.path.join(root, ".auditview.db")
 
-    app = create_app(db_path, root)
+    app = create_app(db_path, root, enable_lsp=args.lsp)
     print(f"auditview  root={root}")
     print(f"           db={db_path}")
     print(f"           http://{args.host}:{args.port}")
+    if args.lsp:
+        print("           lsp=on")
     uvicorn.run(app, host=args.host, port=args.port)
 
 

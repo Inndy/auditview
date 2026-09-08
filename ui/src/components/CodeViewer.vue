@@ -22,6 +22,8 @@
             @drag-start="onDragStart"
             @drag-move="onDragMove"
             @drag-end="onDragEnd"
+            @symbol-click="onSymbolClick"
+            @symbol-hover="onSymbolHover"
           />
         </tbody>
       </table>
@@ -37,6 +39,13 @@
       @submit="onNoteSubmit"
       @pick-issue="onPickIssue"
       @cancel="showModal = false"
+    />
+    <LspPreviewModal
+      v-if="previewTarget"
+      :sessionId="sessionId"
+      :path="previewTarget.path"
+      :line="previewTarget.line"
+      @close="previewTarget = null"
     />
     <IssuePickerModal
       v-if="showIssuePicker"
@@ -58,6 +67,9 @@ import { gamepad } from '../input/gamepad.js'
 import LineRow from './LineRow.vue'
 import CreateNoteModal from './CreateNoteModal.vue'
 import IssuePickerModal from './IssuePickerModal.vue'
+import LspPreviewModal from './LspPreviewModal.vue'
+import { getDefinition } from '../api/lsp.js'
+import { columnFromPoint, wordRangeAt, rangeForColumns } from '../utils/textPosition.js'
 import { highlightSource } from '../highlight.js'
 import { lineIdentity, relocateLine } from '../utils/lineAnchor.js'
 
@@ -91,13 +103,14 @@ function splitHighlightedLines(html) {
 
 export default {
   name: 'CodeViewer',
-  components: { LineRow, CreateNoteModal, IssuePickerModal },
+  components: { LineRow, CreateNoteModal, IssuePickerModal, LspPreviewModal },
   props: {
     sessionId: [String, Number],
     filePath: { type: String, default: null },
     wrapLines: { type: Boolean, default: false },
   },
-  emits: ['notes-updated', 'lines-marked', 'file-reloaded', 'selection-change'],
+  emits: ['notes-updated', 'lines-marked', 'file-reloaded', 'selection-change',
+          'goto-location'],
   data() {
     return {
       lines: [],
@@ -113,6 +126,7 @@ export default {
       error: null,
       fileBlocked: null,
       actionError: null,
+      previewTarget: null,
     }
   },
   computed: {
@@ -202,6 +216,7 @@ export default {
     }
   },
   beforeUnmount() {
+    this.clearSymbolHighlight()
     document.removeEventListener('mouseup', this._mouseUpHandler)
     this._sseFileUnsub?.()
     this._sseAnnoUnsub?.()
@@ -404,6 +419,7 @@ export default {
     },
 
     onTableMouseLeave() {
+      this.clearSymbolHighlight()
     },
 
     selectedRangeLines() {
@@ -492,6 +508,79 @@ export default {
       const top = row.getBoundingClientRect().top - container.getBoundingClientRect().top
       container.scrollTop += top - anchor.offsetY
       container.scrollLeft = anchor.scrollLeft
+    },
+
+    // --- symbol navigation ----------------------------------------------
+    //
+    // Ctrl/Cmd+click rather than plain click, because plain click is the
+    // line-range drag. The click is also what makes this possible at all: it
+    // carries an exact column, which the line-only cursor cannot.
+    async onSymbolClick({ lineNo, clientX, clientY, cell }) {
+      this.clearSymbolHighlight()
+      const character = columnFromPoint(cell, clientX, clientY)
+      if (character === null) return
+      let result
+      try {
+        result = await getDefinition(this.sessionId, {
+          filePath: this.filePath, line: lineNo, character,
+        })
+      } catch (e) {
+        this.actionError = `Definition lookup failed: ${e.message}`
+        return
+      }
+      if (result.reason === 'disabled') {
+        this.actionError = 'Symbol navigation is off — restart with --lsp to enable it.'
+        return
+      }
+      if (result.reason === 'no_provider') {
+        this.actionError = `No language server configured for ${result.detail}`
+        return
+      }
+      const target = result.in_root[0]
+      if (target) {
+        this.$emit('goto-location', { filePath: target.file_path, line: target.line })
+        return
+      }
+      // Definitions in a dependency or a stdlib are the common case, not an
+      // edge one, so say something useful instead of nothing.
+      const external = result.out_of_root[0]
+      if (external) {
+        this.previewTarget = { path: external.path, line: external.line }
+        return
+      }
+      this.actionError = 'No definition found'
+    },
+
+    onSymbolHover(payload) {
+      if (payload === null) {
+        this.clearSymbolHighlight()
+        return
+      }
+      if (!window.CSS || !CSS.highlights) return
+      const { lineNo, clientX, clientY, cell } = payload
+      const line = this.lines.find((l) => l.line_no === lineNo)
+      const col = columnFromPoint(cell, clientX, clientY)
+      if (!line || col === null) {
+        this.clearSymbolHighlight()
+        return
+      }
+      const bounds = wordRangeAt(line.content, col)
+      if (bounds === null) {
+        this.clearSymbolHighlight()
+        return
+      }
+      const range = rangeForColumns(cell, bounds[0], bounds[1])
+      if (range === null) {
+        this.clearSymbolHighlight()
+        return
+      }
+      // The Custom Highlight API decorates a Range without inserting nodes, so
+      // the highlighted markup from hljs is left exactly as rendered.
+      CSS.highlights.set('lsp-symbol', new Highlight(range))
+    },
+
+    clearSymbolHighlight() {
+      if (window.CSS && CSS.highlights) CSS.highlights.delete('lsp-symbol')
     },
 
     async markWholeFile() {

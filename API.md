@@ -673,6 +673,135 @@ Aggregate coverage statistics for the session.
 
 ---
 
+## Symbol navigation (LSP)
+
+Off unless the server was started with `--lsp`. When enabled, auditview acts as
+an LSP *client*, spawning language servers found on `PATH` as subprocesses — one
+per (server, resolved project root). A missing binary is reported, never fatal.
+
+Positions on these routes follow the rest of this document: `line` is 1-based.
+`character` is a 0-based offset in **UTF-16 code units**, which is what a
+browser's DOM text-node offset already is — clients must not convert it to a
+byte offset.
+
+Because auditview never edits files, documents are always exactly the bytes on
+disk; there is no document-sync protocol for clients to participate in.
+
+### POST /api/sessions/:id/lsp/definition
+
+Resolve the definition of the symbol at a position.
+
+**Request body**
+```json
+{ "file_path": "ui/src/components/LineRow.vue", "line": 29, "character": 7 }
+```
+- `file_path`: relative path within the session root
+- `line`: 1-based line number
+- `character`: 0-based UTF-16 offset within that line
+
+**Response 200**
+```json
+{
+  "provider": "vtsls",
+  "reason": null,
+  "in_root": [
+    { "file_path": "ui/src/components/LineGutter.vue", "line": 1, "character": 0 }
+  ],
+  "out_of_root": [
+    { "path": "/tools/lsp/node_modules/typescript/lib/lib.es5.d.ts", "line": 1550, "character": 4 }
+  ]
+}
+```
+- `provider`: the server that answered, or `null` when none did
+- `reason`: `null` on success; `"disabled"` when the server was started without
+  `--lsp`; `"no_provider"` when no configured server matches the file, with the
+  unmatched extension in `detail`. Both are `200` with empty target lists — an
+  unsupported language is information, not an error
+- `in_root`: targets inside the session root, ordered as the server returned
+  them, with duplicates removed and paths matching the session's
+  `exclusion_patterns` dropped
+- `out_of_root`: targets outside the session root — a dependency, a stdlib, a
+  toolchain's own type definitions. Common rather than exceptional. Returning a
+  path here is what makes it readable via `/lsp/preview`; nothing else does
+- Non-`file:` URIs (a language server's virtual documents) are discarded
+
+**Errors**
+- `400` — missing/invalid `file_path`, `line` or `character`, or a path escaping the session root
+- `404` — session not found, or the file is not on disk
+- `409` — the file is excluded by the session's `exclusion_patterns`
+- `503` — the language server timed out, crashed, or returned an error. `provider` names it
+
+---
+
+### GET /api/sessions/:id/lsp/status
+
+What the LSP layer is actually doing, so a client can explain an empty result
+rather than presenting it as a failure.
+
+**Response 200**
+```json
+{
+  "enabled": true,
+  "servers": [
+    {
+      "name": "vtsls",
+      "command": "vtsls",
+      "available": true,
+      "match": ["**/*.vue", "**/*.js"],
+      "instances": [
+        { "root": "/home/user/myproject/ui", "state": "ready", "detail": null,
+          "definition_provider": true }
+      ]
+    }
+  ]
+}
+```
+- `enabled`: `false` (with `servers: []`) when started without `--lsp`
+- `available`: whether the binary was found on `PATH`
+- `instances`: currently running processes; empty until a matching file is queried
+- `state`: `spawning` | `warming` | `ready` | `missing` | `crashed` | `stopped`
+- Idle instances are shut down after ten minutes and disappear from this list
+
+**Errors**
+- `404` — session not found
+
+---
+
+### GET /api/sessions/:id/lsp/preview
+
+Read a window of a file **outside** the session root, so a definition in a
+dependency can be read without leaving the tool.
+
+Query parameters: `path` (absolute), and optionally `line` to centre the window.
+
+**Response 200**
+```json
+{
+  "path": "/tools/lsp/node_modules/typescript/lib/lib.es5.d.ts",
+  "start_line": 1510,
+  "total_lines": 4023,
+  "reviewable": false,
+  "lines": [ { "line_no": 1510, "content": "interface Array<T> {" } ]
+}
+```
+- Deliberately carries **no** `line_hash`, `context_hash`, `is_reviewed` or
+  `is_countable`, and writes nothing. An out-of-root file must not be markable,
+  or review coverage stops meaning "a human read this project"
+- `reviewable` is always `false`; it exists so a client can render the
+  distinction rather than infer it from absent fields
+- Serves **only** paths a definition query in this session already returned.
+  auditview ships no authentication, so an endpoint that read any absolute path
+  given to it would be an arbitrary-file reader for anyone who can reach the port
+
+**Errors**
+- `400` — `path` missing
+- `403` — the path is not one this session's definition results produced
+- `404` — session not found, or the file is no longer on disk
+- `422` — binary (`reason: "binary"`) or too large (`reason: "large"`, with `size`)
+- `500` — the file could not be read
+
+---
+
 ## Config
 
 The config endpoints expose process-level state shared across sessions, plus

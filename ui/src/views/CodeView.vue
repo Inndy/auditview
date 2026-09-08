@@ -19,6 +19,7 @@
           @lines-marked="onLinesMarked"
           @file-reloaded="onFileReloaded"
           @selection-change="onSelectionChange"
+          @goto-location="onGotoLocation"
         />
       </Pane>
       <Pane :size="sizes[2]" :min-size="12" :class="{ 'pane-focused': padActive && focusedPane === 'notes' }">
@@ -184,6 +185,18 @@ export default {
     },
     onNoteDeleted(id) {
       this.currentNotes = this.currentNotes.filter((n) => n.id !== id)
+    },
+    // A definition target. Same file jumps directly; a different file goes
+    // through the route so the existing query-param machinery loads it and
+    // applies the jump once its notes arrive.
+    onGotoLocation({ filePath, line }) {
+      if (filePath === this.currentFile) {
+        this.$refs.codeViewer?.jumpToRange(line, line)
+        return
+      }
+      const next = { ...this.$route.query, file: filePath, line: String(line) }
+      delete next.endLine
+      this.$router.replace({ query: next })
     },
     onNoteJump(note) {
       this.$refs.codeViewer?.jumpToRange(note.start_line, note.end_line)

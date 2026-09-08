@@ -60,6 +60,22 @@ use the explicit form: `auditview serve ./stats`.
 
 auditview is designed for single-user, single-instance use on a trusted local machine. There is no authentication layer — all endpoints are open to any client that can reach the bound address. Do not expose the server port to untrusted networks.
 
+### Language servers and untrusted code
+
+Symbol navigation (`--lsp`, off by default) spawns language servers found on
+`PATH` against the tree you are auditing. Analysing code is not the same as
+merely reading it: `tsserver` loads `tsconfig.json` plugins from
+`node_modules`, and `rust-analyzer` runs `build.rs` and proc macros. If the
+codebase under review is untrusted, that is a meaningful difference — which is
+why the flag is opt-in rather than default. `gopls` is spawned with
+`GOFLAGS=-mod=readonly` and `GOPROXY=off` so analysis cannot rewrite `go.mod`
+or fetch modules.
+
+Definitions that land outside the session root are readable through a preview
+endpoint that serves only paths a query actually returned, and that writes
+nothing — an external file can never be marked reviewed, so coverage keeps
+meaning "a human read *this* project".
+
 ## See also
 
 - [`SPEC.md`](SPEC.md) — early design specification (deprecated; kept for historical context)

@@ -26,7 +26,7 @@
 
 **Backend** (Python, managed with `uv`):
 ```bash
-uv run auditview [--debug] <path> # run server against a directory
+uv run auditview [--debug] [--lsp] <path> # run server against a directory
 ```
 
 **Read-only CLI** (queries `.auditview.db` directly; no server required):
@@ -131,6 +131,51 @@ tiebreak is load-bearing: `created_at` is second-granular, so a burst of inserts
 fall back to index order (by `file_path`) and scramble the walkthrough.
 
 **MCP endpoint** - `/mcp` serves JSON-RPC 2.0. Tool handlers call existing REST endpoints internally via Quart's async test client.
+
+**LSP is a client in `core/lsp.py`, opt-in, and never trusted about `.vue`** -
+`--lsp` spawns language servers found on `PATH` as subprocesses, keyed by
+**(server, resolved project root)** rather than by extension: a Vue project's
+`.js` and `.vue` share one `jsconfig.json`, so splitting them by glob would hand
+the halves inconsistent type views. `LspService` mirrors `WatcherService`'s
+lifecycle (inert construction, `start(loop)`, one `run_worker()`, teardown) but
+holds no DB connection - it is pure transport, and all path policy lives in
+`api/lsp.py`.
+
+Three things about this are counter-intuitive enough to be worth stating, all
+established empirically (see `scripts/lsp-spike/README.md`, which is the
+reference implementation and the record of how each was found):
+
+- **`@vue/language-server` advertises `definitionProvider: true` and cannot
+  answer it.** Only CSS and JSON stand behind it; TypeScript semantics come from
+  `vtsls` with `@vue/typescript-plugin` loaded. A capability-driven router gets
+  `[]` forever with nothing in the handshake to warn it. auditview therefore does
+  not run the Vue server at all - which also avoids its `tsserver/request`
+  bridge, whose promise has no timeout and deadlocks *every* request if the
+  client does not implement it.
+- **vtsls must be configured with `useSyntaxServer: "never"`.** It otherwise
+  runs a syntax-only tsserver beside the semantic one, and that one answers the
+  first query before the project has loaded - returning the position of the
+  import specifier itself instead of the target. A wrong answer, not an empty
+  one, and there is no readiness signal to wait on.
+- **Positions stay in UTF-16 code units end to end.** A browser DOM text-node
+  offset already is one, and so is LSP's default. Converting to a byte offset
+  anywhere breaks every line containing non-ASCII text.
+
+**Out-of-root definitions can never enter the coverage ledger** - most `gd`
+targets in real work live in a dependency, a stdlib or a toolchain's own type
+definitions. `GET /lsp/preview` reads them, and is structurally incapable of
+polluting coverage: no hashes, no `is_reviewed`, no `is_countable`, no writes. It
+serves only paths a definition query in that session actually returned, because
+there is no authentication and an endpoint that read any absolute path handed to
+it would be an arbitrary-file reader.
+
+**No `gd`/`gr` keybinding, deliberately** - the code cursor is line-only
+(`cursorLine`/`anchorLine`), so a keyboard chord cannot say *which* symbol on the
+line is meant, and most lines hold several. Ctrl/Cmd+click carries an exact
+column for free via `caretRangeFromPoint` plus a text-node walk
+(`ui/src/utils/textPosition.js`), leaving the highlight pipeline untouched. The
+`g` prefix stays free for a later keyboard pass, which would want a real column
+cursor and `w`/`b`/`e` motions with it.
 
 ### Design philosophy
 

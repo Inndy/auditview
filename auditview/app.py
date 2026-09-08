@@ -8,6 +8,7 @@ from quart import Quart, send_from_directory, abort, g, request
 from auditview.db.connection import open_db
 from auditview.db.schema import run_migrations
 from auditview.core.watcher import WatcherService
+from auditview.core.lsp import LspService
 
 from auditview.api.sessions import bp as sessions_bp
 from auditview.api.files import bp as files_bp
@@ -17,6 +18,7 @@ from auditview.api.issues import bp as issues_bp
 from auditview.api.events import bp as events_bp
 from auditview.api.coverage import bp as coverage_bp
 from auditview.api.config import bp as config_bp
+from auditview.api.lsp import bp as lsp_bp
 from auditview.api.mcp import setup_mcp, get_mcp_handler, mcp as _mcp
 
 
@@ -25,10 +27,13 @@ logger = logging.getLogger("auditview")
 _SLOW_MS = 200
 
 
-def create_app(db_path, root_path):
+def create_app(db_path, root_path, enable_lsp=False):
     app = Quart(__name__, static_folder=os.path.join(os.path.dirname(__file__), "static"))
     app.config["DB_PATH"] = db_path
     app.config["ROOT_PATH"] = root_path
+    # Always defined so routes can report "disabled" rather than 404, and so a
+    # test client that never runs before_serving still has the attribute.
+    app.lsp = None
 
     @app.before_request
     async def _start_timer():
@@ -77,6 +82,7 @@ def create_app(db_path, root_path):
     app.register_blueprint(events_bp, url_prefix="/api")
     app.register_blueprint(coverage_bp, url_prefix="/api")
     app.register_blueprint(config_bp, url_prefix="/api")
+    app.register_blueprint(lsp_bp, url_prefix="/api")
 
     setup_mcp(app)
     mcp_handler = get_mcp_handler()
@@ -98,6 +104,28 @@ def create_app(db_path, root_path):
         app._mcp_stop.set()
         try:
             await asyncio.wait_for(app._mcp_task, timeout=5.0)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            pass
+
+    # Its own hook pair rather than sharing the watcher's: subprocess teardown
+    # wants a bounded graceful wait, which is the MCP pair's shape, not the
+    # watcher's fire-and-forget cancel.
+    @app.before_serving
+    async def _start_lsp():
+        if not enable_lsp:
+            return
+        lsp = LspService(root_path)
+        lsp.start(asyncio.get_running_loop())
+        app.lsp = lsp
+        app.lsp_task = asyncio.create_task(lsp.run_worker())
+
+    @app.after_serving
+    async def _stop_lsp():
+        if app.lsp is None:
+            return
+        app.lsp_task.cancel()
+        try:
+            await asyncio.wait_for(app.lsp.aclose(), timeout=5.0)
         except (asyncio.TimeoutError, asyncio.CancelledError):
             pass
 

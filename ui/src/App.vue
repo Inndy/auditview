@@ -242,6 +242,24 @@ table.code-table tr.cursor.anchor td:first-child {
   font-size: inherit;
 }
 
+/* Hover affordance for ctrl/cmd+click go-to-definition. The Custom Highlight
+   API styles a Range with no extra elements, so the highlighter's own markup is
+   untouched. Where it is unsupported the underline is simply absent and the
+   click still works. It earns its keep here because .code-cell suppresses text
+   selection, leaving nothing else to show what is under the pointer.
+
+   The build prints "'highlight' is not recognized as a valid pseudo-element"
+   from lightningcss, which does not know this selector yet. It is cosmetic:
+   the rule is passed through to dist/ byte-exact, double colon included.
+   Verify with `grep -o '::highlight(lsp-symbol)[^}]*}' dist/assets/*.css`
+   rather than deleting the rule. */
+::highlight(lsp-symbol) {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  color: var(--primary);
+}
+
 .panel-section {
   padding: 12px;
   border-bottom: 1px solid var(--border-mid);

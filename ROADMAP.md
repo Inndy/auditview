@@ -24,10 +24,36 @@ Gamepad support ships with a fixed default binding table (standard/Xbox mapping)
 ### Neovim client
 An MVP exists. The nvim plugin is a real daily-driver client and quality here directly affects workflow. Needs sharpening: mark/unmark reliability, cache invalidation, display of notes and coverage inline.
 
-## Later
+### Symbol navigation beyond go-to-definition
+Go-to-definition ships (`--lsp`, ctrl/cmd+click). The earlier framing of this as
+"complex to build in-browser, requires an LSP-over-HTTP bridge" was wrong on both
+counts: it is a backend LSP client, and the frontend half is small — jump-to-location
+and the `g` key prefix already existed. See CLAUDE.md §Architecture for the design and
+`scripts/lsp-spike/` for the validated server configurations.
 
-### LSP integration
-Symbol-aware navigation within the review UI — jump to definition, find references, understand call graphs without leaving the tool. Complex to build in-browser (requires an LSP-over-HTTP bridge). The nvim client already gets this for free from the editor; in-browser LSP is a longer-term investment.
+What is deliberately not built yet, roughly in value order:
+
+- **Find references, with review coverage.** "This function has 7 callers, 3 unreviewed"
+  is the one thing an editor cannot tell you, and it feeds `audit-triage` directly. The
+  blocker is real: there is no per-line "is this reviewed?" lookup anywhere. Coverage is
+  read only in aggregate (`core/progress.py`), and because state is keyed on
+  `(line_hash, context_hash, line_no)` a faithful answer must read and re-hash every
+  referenced file. A `line_no`-only query would be wrong. Needs a new batch helper in
+  `core/progress.py`, plus a third panel in `.right-panels`.
+- **Plain find references**, without the coverage join — much cheaper, and a useful
+  stepping stone if the batch helper proves awkward.
+- **A column cursor, and with it `gd`/`gr`.** The cursor is line-only today, so a
+  keyboard chord cannot disambiguate which symbol on a line is meant. Doing this
+  properly means rendering a cursor inside `v-html` content and should arrive together
+  with `w`/`b`/`e` motions. The `g` prefix is being kept free for it.
+- **Document outline panel.** Works for Go and Python, but `documentSymbol` returns
+  nothing for `.vue` through vtsls, so it cannot be the uniform entry point that
+  clicking is.
+- **Semantic tokens.** Would replace highlight.js for supported files and delete
+  `splitHighlightedLines` — the hand-rolled span-reopening HTML splitter — since the
+  payload is already line-relative.
+
+## Later
 
 ### Snapshot diff comparison
 Follows naturally from trusted snapshots. Compare any two tagged versions, not just "trusted vs HEAD". Useful for auditing a dependency update or a large refactor without starting from zero.
