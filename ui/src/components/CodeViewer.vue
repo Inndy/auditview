@@ -275,6 +275,13 @@ export default {
       this.scrollCursorIntoView()
     },
 
+    gotoFileEdge(edge) {
+      if (this.lines.length === 0) return
+      const line = edge === 'first' ? this.lines[0] : this.lines[this.lines.length - 1]
+      this.cursorLine = line.line_no
+      this.scrollCursorIntoView()
+    },
+
     jumpEmpty(direction) {
       if (this.lines.length === 0) return
       const idxByLineNo = new Map()

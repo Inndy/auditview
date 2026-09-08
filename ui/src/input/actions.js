@@ -19,7 +19,7 @@
  * the back+dpadDown pane-switch chord.
  */
 
-export const PREFIX_KEYS = ['z', '[', ']']
+export const PREFIX_KEYS = ['z', '[', ']', 'g']
 
 let targets = {}
 
@@ -96,6 +96,20 @@ export const ACTIONS = {
     pad: ['lt'],
     padRepeat: 'slow',
     run: (t) => t.viewer?.movePage(-1),
+  },
+  GOTO_FIRST_LINE: {
+    label: 'Cursor to first line of file',
+    group: 'Motion',
+    keys: ['gg'],
+    pad: [],
+    run: (t) => t.viewer?.gotoFileEdge('first'),
+  },
+  GOTO_LAST_LINE: {
+    label: 'Cursor to last line of file',
+    group: 'Motion',
+    keys: ['G'],
+    pad: [],
+    run: (t) => t.viewer?.gotoFileEdge('last'),
   },
   JUMP_UNREVIEWED_NEXT: {
     label: 'Next unreviewed line',
