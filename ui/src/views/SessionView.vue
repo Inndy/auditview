@@ -14,6 +14,12 @@
       <div class="nav-tabs">
         <router-link :to="`/sessions/${id}/code`" class="nav-tab" active-class="active">Code</router-link>
         <router-link :to="`/sessions/${id}/issues`" class="nav-tab" active-class="active">Issues</router-link>
+        <div v-if="currentFile" class="nav-file" :title="currentFile">
+          <span class="nav-file-icon">👁️</span>
+          <span v-if="currentFileDir" class="nav-file-dir">{{ currentFileDir }}</span>
+          <span v-if="currentFileDir" class="nav-file-sep">/</span>
+          <span class="nav-file-name">{{ currentFileName }}</span>
+        </div>
       </div>
       <router-view
         :session="session"
@@ -60,6 +66,24 @@ export default {
       showHelp: false,
       showSettings: false,
     }
+  },
+  computed: {
+    // The route query is where CodeView records the open file, so the header
+    // stays in sync with the viewer (and with a pasted deep link) for free.
+    currentFile() {
+      return this.$route.query.file || null
+    },
+    // The trailing separator is a sibling span rather than part of this
+    // string: `.nav-file-dir` is RTL so the ellipsis lands at the start, and a
+    // trailing '/' is a bidi-neutral that would be flipped to the far left.
+    currentFileDir() {
+      const parts = (this.currentFile || '').split('/')
+      return parts.length > 1 ? parts.slice(0, -1).join('/') : ''
+    },
+    currentFileName() {
+      const parts = (this.currentFile || '').split('/')
+      return parts[parts.length - 1]
+    },
   },
   mounted() {
     this.loadSession()
@@ -115,7 +139,48 @@ export default {
   padding: 0 20px;
 }
 
+.nav-file {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  min-width: 0;
+  margin-left: 16px;
+  font-family: 'Fira Mono', 'Consolas', 'Monaco', monospace;
+  font-size: 12px;
+}
+
+.nav-file-icon {
+  flex-shrink: 0;
+  margin-right: 6px;
+  font-size: 11px;
+}
+
+/* Shrink the directory from its left so the file name stays readable. */
+.nav-file-dir {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  color: var(--text-dim);
+}
+
+.nav-file-sep {
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+
+.nav-file-name {
+  flex-shrink: 0;
+  white-space: nowrap;
+  color: var(--text);
+  font-weight: 600;
+}
+
 .nav-tab {
+  flex-shrink: 0;
   padding: 12px 16px;
   font-size: 13px;
   font-weight: 500;

@@ -4,7 +4,7 @@
     :class="{ 'flat-active': isActive }"
     @click="$emit('click')"
   >
-    <span class="flat-icon">📄</span>
+    <span class="flat-icon" :title="isActive ? 'Open in the viewer' : null">{{ isActive ? '👁️' : '📄' }}</span>
     <span class="flat-name">{{ basename }}</span>
     <span v-if="dirname" class="flat-dir">{{ dirname }}</span>
     <span class="flat-spacer"></span>
@@ -85,6 +85,8 @@ export default {
 .flat-active {
   background: var(--bg-active-file) !important;
   font-weight: 600;
+  /* inset rather than a border so the accent costs no horizontal space */
+  box-shadow: inset 3px 0 0 var(--primary);
 }
 
 .flat-icon {

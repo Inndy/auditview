@@ -5,7 +5,7 @@
       :class="{ 'tree-file': node.isFile, 'tree-dir': !node.isFile, 'tree-active': isActive }"
       @click="node.isFile ? select() : toggle()"
     >
-      <span class="tree-icon">{{ node.isFile ? '📄' : (expanded ? '📂' : '📁') }}</span>
+      <span class="tree-icon" :title="isActive ? 'Open in the viewer' : null">{{ icon }}</span>
       <span class="tree-name">{{ node.name }}</span>
       <template v-if="node.isFile && node.fileData">
         <span
@@ -51,6 +51,10 @@ export default {
   computed: {
     isActive() {
       return this.node.isFile && this.node.path === this.currentFile
+    },
+    icon() {
+      if (!this.node.isFile) return this.expanded ? '📂' : '📁'
+      return this.isActive ? '👁️' : '📄'
     },
     statusTitle() {
       const s = this.node.fileData?.status
@@ -112,6 +116,8 @@ export default {
 .tree-active {
   background: var(--bg-active-file) !important;
   font-weight: 600;
+  /* inset rather than a border so the accent costs no horizontal space */
+  box-shadow: inset 3px 0 0 var(--primary);
 }
 
 .tree-children {

@@ -149,7 +149,14 @@ export default {
   computed: {
     filteredFiles() {
       if (!this.hideReviewed) return this.files
-      return this.files.filter((f) => f.status !== 'reviewed' && f.status !== 'empty')
+      // The file open in the viewer is never filtered out: hiding the row you
+      // are looking at loses the only indicator of where you are, and marking
+      // the last line of a file would otherwise make it vanish mid-review.
+      return this.files.filter(
+        (f) =>
+          f.rel_path === this.currentFile ||
+          (f.status !== 'reviewed' && f.status !== 'empty'),
+      )
     },
     rollupMap() {
       // Rolled up from the unfiltered list: `filteredFiles` drops reviewed/empty
