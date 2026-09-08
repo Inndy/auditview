@@ -14,7 +14,11 @@ dependencies = [
   "aiosqlite>=0.20",
   "watchdog>=6.0",
   "pathspec>=0.12",
-  "mcp>=1.27.1",
+  # v1 only: api/mcp.py imports mcp.server.fastmcp.FastMCP and
+  # .server.StreamableHTTPASGIApp, both of which mcp 2.x renamed or moved.
+  # uv.lock already pins 1.27.1, so `uv sync` was unaffected -- this bound is
+  # for installs that bypass the lock (pip install -e ., or the built wheel).
+  "mcp>=1.27.1,<2",
 ]
 
 [project.scripts]
