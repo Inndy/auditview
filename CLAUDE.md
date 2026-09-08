@@ -86,7 +86,11 @@ content, nothing is restored. Two things must stay true. The reload passes `quie
 the container to zero height, and destroys the scroll offset before it can be read back. And a
 cursor that moved while the reload was in flight — a note click, `?line=` in the URL, a
 go-to-definition jump — outranks the restore, which is why `restoreViewAnchor()` bails when
-`cursorLine` no longer matches what was captured.
+`cursorLine` no longer matches what was captured. That guard keys off the cursor specifically, so it
+is blind to an interaction that moves the viewport *without* moving the cursor: a wheel or
+right-stick scroll landing inside the reload window snaps back to the captured offset. The window is
+tens of milliseconds and the result is recoverable by scrolling again, which is why there is no
+input-source plumbing here to widen the guard.
 
 **Vue Options API for components (personal preference)** - keep all new `.vue` components in Options API style. Composition API may be mixed in non-component modules (e.g. `ui/src/api/events.js` exposes `sseClient.status` as a `ref()`) when it yields a more elegant architecture — for example, a singleton service whose reactive state is consumed by components via a computed.
 
