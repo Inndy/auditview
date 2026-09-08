@@ -73,6 +73,21 @@ Auditview is a line-level code review/audit tool: a Quart (async) JSON API backe
 
 **SSE for real-time** - no WebSockets. `WatcherService` holds one `asyncio.Queue` per connected client; `events.py` yields from the queue with a 15-second heartbeat. Client→server is always plain HTTP (mark, note actions).
 
+**A watcher-driven reload holds the view still** - when `file_changed` names the open file,
+`CodeViewer.captureViewAnchor()` records the cursor line's identity plus its pixel offset from the
+top of the scroll container, and `restoreViewAnchor()` puts that line back at the same offset
+afterwards and re-selects it. Line numbers are useless here — the edit that triggered the reload is
+usually what moved them — so `ui/src/utils/lineAnchor.js` re-finds the line by content, falling back
+from (`line_hash` + `context_hash`) to `line_hash` alone, because an edit to a *neighbour* breaks
+the context hash of a line that did not itself change. With no cursor set the topmost visible row is
+the anchor instead, so a plain scroll position survives too; if the anchor line is gone from the new
+content, nothing is restored. Two things must stay true. The reload passes `quiet: true` to
+`loadFile()`, which suppresses the `Loading…` placeholder: rendering it unmounts the table, collapses
+the container to zero height, and destroys the scroll offset before it can be read back. And a
+cursor that moved while the reload was in flight — a note click, `?line=` in the URL, a
+go-to-definition jump — outranks the restore, which is why `restoreViewAnchor()` bails when
+`cursorLine` no longer matches what was captured.
+
 **Vue Options API for components (personal preference)** - keep all new `.vue` components in Options API style. Composition API may be mixed in non-component modules (e.g. `ui/src/api/events.js` exposes `sseClient.status` as a `ref()`) when it yields a more elegant architecture — for example, a singleton service whose reactive state is consumed by components via a computed.
 
 **One action registry, two input sources** - `ui/src/input/actions.js` is the single table of user actions in the review view: label, key bindings, gamepad bindings, and a `run(targets, params)` thunk. `keyboard.js` resolves a `KeyboardEvent` to an action id (it owns the vim count buffer and the `z`/`[`/`]`/`g` prefix timeout, which have no gamepad analogue); `gamepad.js` polls the Gamepad API in `requestAnimationFrame` and resolves a button/axis to an action id. Both call `dispatch()`, which applies the shared guards (a dialog is open → only `context: 'modal'` actions; a text field has focus; `requiresSelection`). Held-input behavior (`padRepeat` / `padContinuous`) belongs to the action rather than the physical input, so the same button may repeat ordinary navigation without repeating a modifier chord such as pane switching. `CodeView` is the only input host: it registers the `$refs` the actions operate on via `setTargets()` and owns which pane has gamepad focus. `KeyboardHelpModal` renders its table from the registry, so documentation cannot drift from the bindings.

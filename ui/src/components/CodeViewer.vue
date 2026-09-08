@@ -59,6 +59,7 @@ import LineRow from './LineRow.vue'
 import CreateNoteModal from './CreateNoteModal.vue'
 import IssuePickerModal from './IssuePickerModal.vue'
 import { highlightSource } from '../highlight.js'
+import { lineIdentity, relocateLine } from '../utils/lineAnchor.js'
 
 function splitHighlightedLines(html) {
   const lines = []
@@ -167,7 +168,15 @@ export default {
 
     this._sseFileUnsub = sseClient.on('file_changed', async (data) => {
       if (data.rel_path !== this.filePath) return
-      await this.loadFile(this.filePath)
+      const anchor = this.captureViewAnchor()
+      // Load quietly only when there is a rendered view worth holding still. With
+      // nothing on screen (a blocked or errored file) the placeholder is honest.
+      await this.loadFile(this.filePath, { quiet: anchor !== null })
+      // The user may have opened another file while the reload was in flight; that
+      // load wins (loadFile's token discards this one) and the anchor is moot.
+      if (data.rel_path !== this.filePath) return
+      await this.$nextTick()
+      this.restoreViewAnchor(anchor)
       this.$emit('file-reloaded')
     })
 
@@ -198,9 +207,12 @@ export default {
     this._sseAnnoUnsub?.()
   },
   methods: {
-    async loadFile(path, { force = false } = {}) {
+    async loadFile(path, { force = false, quiet = false } = {}) {
       const token = ++this._loadToken
-      this.loading = true
+      // A quiet load leaves the current rows rendered instead of swapping in the
+      // "Loading…" placeholder, so a watcher-driven reload does not collapse the
+      // scroll container to zero height and flash the view back to the top.
+      if (!quiet) this.loading = true
       this.error = null
       this.fileBlocked = null
       try {
@@ -413,6 +425,73 @@ export default {
 
     scrollContainer() {
       return this.$refs.container || null
+    },
+
+    // Snapshot enough of the current view to put it back after the content is
+    // replaced: the identity of one anchor line plus where it sat in the
+    // viewport. Must be called while the old rows are still in the DOM.
+    captureViewAnchor() {
+      const container = this.$refs.container
+      if (!container || this.lines.length === 0) return null
+      const containerTop = container.getBoundingClientRect().top
+
+      const cursorLine = this.cursorLine
+      let row = cursorLine !== null
+        ? container.querySelector(`tr[data-line-no="${cursorLine}"]`)
+        : null
+      const onCursor = row !== null
+      if (!row) {
+        // No cursor to anchor on — use the topmost row still touching the
+        // viewport so a plain scrolled-to position survives the reload too.
+        for (const tr of container.querySelectorAll('tr[data-line-no]')) {
+          if (tr.getBoundingClientRect().bottom > containerTop) { row = tr; break }
+        }
+      }
+      if (!row) return null
+
+      const ident = lineIdentity(this.lines, parseInt(row.getAttribute('data-line-no'), 10))
+      if (!ident) return null
+      return {
+        ident,
+        // Offset of the anchor row from the top of the viewport. Negative when
+        // the row is scrolled off the top edge, which is worth keeping: it is
+        // what holds the view still when the cursor is out of sight.
+        offsetY: row.getBoundingClientRect().top - containerTop,
+        scrollLeft: container.scrollLeft,
+        onCursor,
+        cursorLine,
+        selectionAnchor: onCursor && this.anchorLine !== null
+          ? lineIdentity(this.lines, this.anchorLine)
+          : null,
+      }
+    },
+
+    // Put the view back where captureViewAnchor() found it. Best-effort: if the
+    // anchor line is gone from the new content, or something moved the cursor
+    // while the reload was in flight, leave the view alone.
+    restoreViewAnchor(anchor) {
+      const container = this.$refs.container
+      if (!anchor || !container || this.lines.length === 0) return
+      // A deliberate jump — a note click, `?line=` in the URL, go-to-definition —
+      // landed during the reload. That outranks restoring where we used to be.
+      if (this.cursorLine !== anchor.cursorLine) return
+
+      const lineNo = relocateLine(this.lines, anchor.ident)
+      if (lineNo === null) return
+
+      if (anchor.onCursor) {
+        this.cursorLine = lineNo
+        this.anchorLine = relocateLine(this.lines, anchor.selectionAnchor)
+      }
+
+      const row = container.querySelector(`tr[data-line-no="${lineNo}"]`)
+      if (!row) return
+      // Nudge by the difference rather than assigning an absolute scrollTop, so
+      // container padding and any sticky chrome stay out of the arithmetic. The
+      // browser clamps at the ends of a file that has since grown or shrunk.
+      const top = row.getBoundingClientRect().top - container.getBoundingClientRect().top
+      container.scrollTop += top - anchor.offsetY
+      container.scrollLeft = anchor.scrollLeft
     },
 
     async markWholeFile() {
