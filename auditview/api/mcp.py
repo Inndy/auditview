@@ -167,7 +167,7 @@ async def list_notes(file_path: Optional[str] = None, include_context: bool = Fa
                 snapshot = (n.get("snapshot_text") or "").strip()
                 if snapshot:
                     lines.append("  [original snapshot]")
-                    lines.extend(_code_block(snapshot.splitlines()))
+                    lines.extend(_code_block(snapshot.split("\n")))
             else:
                 err = file_errors.get(n["file_path"])
                 if err:
@@ -319,7 +319,7 @@ async def get_issue(issue_id: int, include_context: bool = False) -> str:
                 snapshot = (n.get("snapshot_text") or "").strip()
                 if snapshot:
                     lines.append("    [original snapshot]")
-                    lines.extend(_code_block(snapshot.splitlines(), indent="    "))
+                    lines.extend(_code_block(snapshot.split("\n"), indent="    "))
             else:
                 err = file_errors.get(n["file_path"])
                 if err:

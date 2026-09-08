@@ -172,6 +172,103 @@ async def test_read_file_lines_empty(tmp_path):
     assert lines == []
 
 
+# --- line splitting: real terminators only -----------------------------------
+#
+# str.splitlines() also breaks on \f, \v, \x1c-\x1e, \x85, U+2028 and U+2029.
+# Nothing else that consumes these line numbers does: LSP servers, editors, git
+# and the nvim client all split on newlines alone. A form feed (a page separator
+# in real C and Python) would otherwise shift every later line number in the
+# file away from what the user sees.
+
+def _write(f, text):
+    """Write verbatim -- no newline translation, so \r survives as \r."""
+    f.write_text(text, encoding="utf-8", newline="")
+
+
+@pytest.mark.parametrize(
+    "name,char",
+    [
+        ("form_feed", "\f"),
+        ("vertical_tab", "\v"),
+        ("file_separator", "\x1c"),
+        ("group_separator", "\x1d"),
+        ("record_separator", "\x1e"),
+        ("next_line", "\x85"),
+        ("line_separator", "\u2028"),
+        ("paragraph_separator", "\u2029"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_read_file_lines_does_not_split_on_non_newline(tmp_path, name, char):
+    f = tmp_path / f"{name}.txt"
+    _write(f, f"alpha{char}beta\ngamma")
+    assert await read_file_lines(str(f)) == [f"alpha{char}beta", "gamma"]
+
+
+@pytest.mark.asyncio
+async def test_read_file_lines_form_feed_keeps_numbering_aligned(tmp_path):
+    """The regression that matters: a form feed must not shift later line numbers."""
+    f = tmp_path / "paged.c"
+    _write(f, "int a;\n\f\nint b;\n")
+    lines = await read_file_lines(str(f))
+    assert lines == ["int a;", "\f", "int b;"]
+    assert lines.index("int b;") + 1 == 3
+
+
+@pytest.mark.asyncio
+async def test_read_file_lines_crlf(tmp_path):
+    f = tmp_path / "crlf.txt"
+    _write(f, "a\r\nb\r\nc")
+    assert await read_file_lines(str(f)) == ["a", "b", "c"]
+
+
+@pytest.mark.asyncio
+async def test_read_file_lines_lone_cr(tmp_path):
+    f = tmp_path / "cr.txt"
+    _write(f, "a\rb\rc")
+    assert await read_file_lines(str(f)) == ["a", "b", "c"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("terminator", ["\n", "\r\n", "\r"])
+async def test_read_file_lines_no_phantom_trailing_line(tmp_path, terminator):
+    """A trailing terminator ends the last line; it does not begin a new empty one."""
+    f = tmp_path / "trailing.txt"
+    _write(f, f"a{terminator}b{terminator}")
+    assert await read_file_lines(str(f)) == ["a", "b"]
+
+
+@pytest.mark.asyncio
+async def test_read_file_lines_no_trailing_newline(tmp_path):
+    f = tmp_path / "bare.txt"
+    _write(f, "a\nb")
+    assert await read_file_lines(str(f)) == ["a", "b"]
+
+
+@pytest.mark.asyncio
+async def test_read_file_lines_blank_line_before_eof_is_kept(tmp_path):
+    """Only one trailing terminator is consumed -- a genuine blank line survives."""
+    f = tmp_path / "blank.txt"
+    _write(f, "a\n\n")
+    assert await read_file_lines(str(f)) == ["a", ""]
+
+
+@pytest.mark.asyncio
+async def test_read_file_lines_only_newline(tmp_path):
+    f = tmp_path / "nl.txt"
+    _write(f, "\n")
+    assert await read_file_lines(str(f)) == [""]
+
+
+@pytest.mark.asyncio
+async def test_read_file_lines_agrees_with_newline_split(tmp_path):
+    """The invariant every other consumer relies on."""
+    text = "def f():\n    return '\u2028'\n\f\nx = 1\n"
+    f = tmp_path / "mixed.py"
+    _write(f, text)
+    assert await read_file_lines(str(f)) == text[:-1].split("\n")
+
+
 # =============================================================================
 # scanner.py — scan_folder
 # =============================================================================
