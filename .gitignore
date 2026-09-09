@@ -13,3 +13,12 @@ build/
 
 # frontend build output
 auditview/static/
+
+# build artifacts
+dist/
+
+# build stamp written by setup.py (must stay untracked -- see CLAUDE.md)
+auditview/_build_info.py
+
+# sandbox worktrees
+.claude/worktrees/

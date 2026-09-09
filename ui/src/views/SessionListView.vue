@@ -4,6 +4,9 @@
       <div>
         <h1>auditview</h1>
         <div v-if="config" class="server-root" title="Audit root">{{ config.root_path }}</div>
+        <div v-if="config" class="server-build" :title="config.commit || 'no commit stamp'">
+          v{{ config.version }}<span v-if="config.commit"> · {{ config.commit.slice(0, 7) }}</span>
+        </div>
       </div>
       <DarkModeToggle style="font-size: 20px; margin-top: 4px" />
     </div>
@@ -223,6 +226,13 @@ h1 {
   color: var(--text-muted);
   font-family: monospace;
   margin-top: 4px;
+}
+
+.server-build {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: monospace;
+  margin-top: 2px;
 }
 
 h2 {

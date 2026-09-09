@@ -21,6 +21,7 @@
 | Design philosophy note | `CLAUDE.md` §Design philosophy |
 | New planned feature | `ROADMAP.md` |
 | Project-level vision or use case | `README.md` |
+| Change to the release or versioning process | `CLAUDE.md` §Development Commands (Release) |
 
 ## Development Commands
 
@@ -43,6 +44,19 @@ pnpm run build
 pnpm run lint
 pnpm run dev
 ```
+
+**Release** (tagged; publishing stays a separate manual step):
+```bash
+uv version --bump patch    # edits pyproject.toml AND refreshes uv.lock
+git commit -am "Release $(uv version --short)"
+./scripts/release.sh       # checks, builds, verifies the stamp, tags v<version>
+git push origin HEAD && git push origin v<version>
+make publish               # only when you actually want to upload
+```
+`release.sh` never pushes and never publishes. It refuses to build when the tree is
+dirty, `uv.lock` disagrees with `pyproject.toml`, the tag already exists locally or on a
+remote, `node`/`pnpm` are missing (which would ship a stale UI), or the built artifact's
+commit stamp is not `HEAD`. Escape hatches: `--allow-dirty`, `--skip-tests`, `--yes`.
 
 **Dev server (for AI agent):**
 - To pick up code changes, run `./scripts/dev-restart.sh`. It signals the running supervisors to relaunch in place.
@@ -241,6 +255,49 @@ column for free via `caretRangeFromPoint` plus a text-node walk
 (`ui/src/utils/textPosition.js`), leaving the highlight pipeline untouched. The
 `g` prefix stays free for a later keyboard pass, which would want a real column
 cursor and `w`/`b`/`e` motions with it.
+
+**The build stamps the commit; the release script is the strict gate** -
+`setup.py` writes `auditview/_build_info.py` (`VERSION`, full `COMMIT`, `DIRTY`,
+`BUILD_TIME`) from both the `build_py` and `sdist` hooks, and
+`auditview/__init__.py` turns it into `__version__` / `__commit__` /
+`version_string()`. `__version__` comes from installed distribution metadata, not
+from the stamp; the stamp answers *which source tree*, which matters because
+`auditview/static/` is gitignored build output, so without it a wheel's bundled
+SPA is untraceable. Four things about this are load-bearing:
+
+- **The wheel is built from the unpacked sdist, where there is no `.git`.**
+  `uv build` produces the sdist from the tree, then unpacks it into
+  `~/.cache/uv/sdists-*/` and builds the wheel there. So the stamp is generated
+  during `sdist` and *reused* during `build_py`, exactly the asymmetry
+  `_require_static_bundle()` already handles for the UI bundle (`ui/` is not in
+  the sdist either). The proof that the reuse path fired rather than a clobber is
+  that the sdist's and the wheel's `_build_info.py` are byte-identical - which is
+  what `scripts/release.sh` asserts.
+- **Both hooks must stamp *before* `super().run()`.** `build_py` globs `*.py` out
+  of the package directory as it runs and `sdist`'s `egg_info` computes the file
+  list, so a file written afterwards reaches neither artifact.
+- **`.git` is a *file*, not a directory, in a git worktree.** The usual
+  `os.path.isdir(".git")` guard is therefore false for every build made the way
+  the sandbox requires, and would silently skip stamping forever. Ask
+  `git rev-parse` instead, and compare `--show-toplevel` against the source root
+  so a vendored copy or an unpacked sdist under a git-managed `$HOME` cannot
+  stamp an unrelated repository's commit - a wrong hash being worse than none.
+- **Dirtiness is tracked-files-only** (`--untracked-files=no`, matching
+  `git describe --dirty`). `dist/` and the `.claude/worktrees/` copies sit inside
+  the tree, so counting untracked files would report every build as dirty. The
+  hole that leaves - an untracked `.py` under `auditview/` that the packaging glob
+  would pick up - is closed in `release.sh` rather than by making the flag noisy.
+  `_build_info.py` is itself gitignored for the same reason: were it tracked,
+  writing it would dirty the tree immediately after dirtiness was measured.
+
+The build is deliberately permissive and the release deliberately strict. With no
+git and no inherited stamp, `setup.py` records `COMMIT = ""` / `DIRTY = None` and a
+reason comment rather than failing - a missing hash makes the package less
+debuggable, not broken, so "escape hatches over hard failures" applies (unlike a
+missing UI bundle, which is why `_require_static_bundle()` does raise).
+`scripts/release.sh` supplies the rigor: it refuses to tag unless the artifact's
+stamp is a clean `HEAD` and its `VERSION` matches `pyproject.toml`. `DIRTY = None`
+is distinct from `False` precisely so that gate can tell "clean" from "never asked".
 
 ### Design philosophy
 

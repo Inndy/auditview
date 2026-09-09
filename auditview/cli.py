@@ -4,6 +4,7 @@ import json
 import os
 import sys
 
+from auditview import version_string
 from auditview.db.connection import open_db
 from auditview.core.progress import (
     active_session,
@@ -96,12 +97,14 @@ async def _cmd_context(conn, session, args, db_path):
         "label": session["label"],
         "root_path": session["root_path"],
         "db_path": db_path,
+        "version": version_string(),
     }
 
     def render(p):
         print(f"session #{p['session_id']}  {p['label']!r}")
         print(f"  root_path : {p['root_path']}")
         print(f"  db_path   : {p['db_path']}")
+        print(f"  version   : {p['version']}")
         print()
         print("Confirm this root_path matches the repository you are working in "
               "before acting on anything below.")

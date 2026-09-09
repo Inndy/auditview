@@ -1,5 +1,6 @@
 from pathlib import Path
 from quart import Blueprint, jsonify, request, current_app
+from auditview import __commit__, __version__
 from auditview.db.connection import open_db
 from auditview.core.progress import active_session as _get_mcp_session
 
@@ -13,6 +14,8 @@ async def get_config():
     return jsonify({
         "root_path": current_app.config["ROOT_PATH"],
         "db_path": current_app.config["DB_PATH"],
+        "version": __version__,
+        "commit": __commit__ or None,
         "mcp_session": mcp_session,
     })
 

@@ -5,7 +5,7 @@ import sys
 
 import uvicorn
 from auditview.app import create_app
-from auditview import cli
+from auditview import cli, version_string
 
 
 def serve(argv):
@@ -20,6 +20,10 @@ def serve(argv):
     p.add_argument("--lsp", action="store_true",
                    help="Enable symbol navigation by spawning language servers "
                         "found on PATH (off by default; see API.md)")
+    # `main()` routes anything that is neither `serve` nor a query subcommand
+    # here, so this parser is what a bare `auditview --version` reaches.
+    p.add_argument("--version", action="version",
+                   version=f"auditview {version_string()}")
     args = p.parse_args(argv)
 
     logging.basicConfig(format="%(levelname)s:%(name)s:%(message)s", level=logging.WARNING)
@@ -30,7 +34,8 @@ def serve(argv):
     db_path = os.path.abspath(args.db) if args.db else os.path.join(root, ".auditview.db")
 
     app = create_app(db_path, root, enable_lsp=args.lsp)
-    print(f"auditview  root={root}")
+    print(f"auditview  {version_string()}")
+    print(f"           root={root}")
     print(f"           db={db_path}")
     print(f"           http://{args.host}:{args.port}")
     if args.lsp:

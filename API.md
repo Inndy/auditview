@@ -836,6 +836,8 @@ the "active" MCP session that drives the MCP server's tool context.
 {
   "root_path": "/home/user/myproject",
   "db_path": "/home/user/myproject/.auditview.db",
+  "version": "0.1.3",
+  "commit": "59a7348aa17b5a763610fd9b443d5d90617761ff",
   "mcp_session": {
     "id": 1,
     "label": "First pass",
@@ -844,6 +846,12 @@ the "active" MCP session that drives the MCP server's tool context.
 }
 ```
 - `mcp_session`: `null` if no session has been pinned for MCP use
+- `version`: the installed distribution's version. `"0.0.0+unknown"` when running
+  from a source tree that was never installed
+- `commit`: full 40-character git commit the running build was made from, stamped
+  into the package at build time. `null` when the build carried no stamp — a
+  `git archive` tarball or a vendored copy, for instance. Slice it yourself for
+  display; the server does not shorten it
 
 ---
 

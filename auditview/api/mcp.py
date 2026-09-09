@@ -3,6 +3,8 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 from quart import Quart
 
+from auditview import version_string
+
 _INSTRUCTIONS = """
 You are connected to auditview, a line-level code audit tool.
 
@@ -105,13 +107,14 @@ async def check_context() -> str:
     session = config.get("mcp_session")
     if session is None:
         return (
-            "NO ACTIVE SESSION. "
+            f"NO ACTIVE SESSION (auditview {version_string()}). "
             "Ask the user to open the auditview web UI and activate a session before proceeding."
         )
     return (
         f"Session active.\n"
         f"  label     : {session['label']}\n"
-        f"  root_path : {session['root_path']}\n\n"
+        f"  root_path : {session['root_path']}\n"
+        f"  version   : {version_string()}\n\n"
         f"Confirm this root_path matches the repository you are auditing before calling other tools."
     )
 
