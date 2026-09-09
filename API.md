@@ -98,6 +98,12 @@ Changing `exclusion_patterns` alone does not remove already-tracked files — ca
 
 List all tracked files with per-file coverage and counts.
 
+**This endpoint never scans the filesystem.** It reports the `files` table as it
+stands, so a file created since the last scan is absent from the response and
+`GET /files/:path` returns 404 for it. `POST /api/sessions/:id/rescan` is the
+only endpoint that adopts a new file; a client whose job is to display current
+state (a file tree, a progress list) should call that instead of this.
+
 **Response 200**
 ```json
 [
@@ -325,7 +331,23 @@ runs before the response is built.
 
 **Errors**
 - `400` — invalid path (escapes session root)
-- `404` — session not found, file not on disk, or file not tracked in this session (caller should hit `GET /files` or `POST /rescan` first)
+- `404` — session not found, or file not on disk (`{"error": "Session not found"}` /
+  `{"error": "File not found"}`, no `reason`)
+- `404` with a `reason` — the file is on disk but has no `files` row, for one of
+  two reasons the caller must tell apart:
+  ```json
+  { "error": "File is not scanned yet — POST /api/sessions/1/rescan", "reason": "untracked" }
+  { "error": "File is excluded from this session by exclusion_patterns or a .gitignore", "reason": "excluded" }
+  ```
+  - `untracked` — created since the last scan. One `POST /rescan` adopts it and
+    the retried request succeeds.
+  - `excluded` — no rescan will ever help. The fix is a human one: edit
+    `exclusion_patterns` (`PATCH /sessions/:id`) or the `.gitignore`, then
+    `POST /rescan?force=1`. Clients must not retry on this reason.
+
+  The verdict is computed per path from `exclusion_patterns` plus the
+  `.gitignore` chain, not from the session's cached scan, so it is correct even
+  when the watcher never saw the file appear.
 - `422` — file exceeds 1 MB or contains binary content; retry with `?force=1` to override
   ```json
   { "error": "File is too large", "reason": "large", "size": 2097152 }
@@ -929,6 +951,13 @@ data: {}
 
 - `heartbeat`: keep-alive; one is sent immediately on connect, then every 15 s
 - `file_changed`: emitted after reconciliation completes for a file; clients should re-fetch `/api/sessions/:id/files/:path`
+  - `rel_path: null` means the *tracked set* moved rather than one file's
+    content: a path with no `files` row was created, deleted or moved (a new
+    file, most often), or a forced rescan changed what the session tracks. There
+    is nothing to re-fetch per file — call `POST /api/sessions/:id/rescan`
+    (unforced is enough; the server has already invalidated its cached scan).
+    Without this event a new file stays invisible until some unrelated tracked
+    file happens to change.
 - `annotation_changed`: emitted after a note or issue is created/updated/deleted
   - `kind`: `"note"` or `"issue"`
   - `action`: `"create"`, `"update"`, or `"delete"`

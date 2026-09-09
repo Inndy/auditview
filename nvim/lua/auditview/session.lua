@@ -4,13 +4,13 @@ local M = {}
 
 local state = {
   session = nil,
-  files_listed = false,
+  files_scanned = false,
   project_root = nil,
   project_root_searched = false,
   resolving = false,
   resolve_pending = {},
-  files_listing = false,
-  files_listing_pending = {},
+  files_scanning = false,
+  files_scanning_pending = {},
 }
 
 local function normalize(path)
@@ -80,7 +80,7 @@ local function float_select(sessions, cb)
     local picked = idx and sessions[idx] or nil
     if picked then
       state.session = picked
-      state.files_listed = false
+      state.files_scanned = false
     end
     cb(picked)
   end
@@ -107,7 +107,7 @@ local function choose_interactive(sessions, cb)
     }, function(picked)
       if picked then
         state.session = picked
-        state.files_listed = false
+        state.files_scanned = false
       end
       cb(picked)
     end)
@@ -179,7 +179,7 @@ function M.resolve(cb, opts)
   local matches = pick_for_path(sessions, root or vim.fn.getcwd())
   if #matches == 1 then
     state.session = matches[1]
-    state.files_listed = false
+    state.files_scanned = false
     finish(state.session)
     return
   end
@@ -201,25 +201,47 @@ function M.resolve(cb, opts)
   end)
 end
 
+--- Sync the server's file table with the disk, and return the file list.
+---
+--- POST /rescan is the only endpoint that adopts a file created since the last
+--- scan; GET /files is read-only (API.md), so listing it can never make an
+--- untracked file fetchable. Unforced is cheap — the server serves a cached
+--- scan and only re-walks the tree once a watchdog event has invalidated it.
+--- force=1 re-walks regardless, which is what picks up an edited .gitignore or
+--- a changed exclusion_patterns.
+---@param opts? { force?: boolean }
+---@return table|nil files, string|nil err
+function M.rescan(opts)
+  local sess = state.session
+  if not sess then return nil, "no session resolved" end
+  local qs = (opts or {}).force and "?force=1" or ""
+  local files, err = http.post(
+    "/api/sessions/" .. sess.id .. "/rescan" .. qs, vim.empty_dict()
+  )
+  if err then return nil, err end
+  state.files_scanned = true
+  return files, nil
+end
+
 ---@param cb fun(ok: boolean)
 ---@param opts? { interactive?: boolean }
-function M.ensure_files_listed(cb, opts)
-  if state.files_listed then
+function M.ensure_files_scanned(cb, opts)
+  if state.files_scanned then
     cb(true)
     return
   end
 
-  if state.files_listing then
-    table.insert(state.files_listing_pending, cb)
+  if state.files_scanning then
+    table.insert(state.files_scanning_pending, cb)
     return
   end
 
-  state.files_listing = true
+  state.files_scanning = true
 
   local function finish(ok)
-    state.files_listing = false
-    local pending = state.files_listing_pending
-    state.files_listing_pending = {}
+    state.files_scanning = false
+    local pending = state.files_scanning_pending
+    state.files_scanning_pending = {}
     cb(ok)
     for _, pcb in ipairs(pending) do
       pcb(ok)
@@ -231,7 +253,7 @@ function M.ensure_files_listed(cb, opts)
       finish(false)
       return
     end
-    local _, err = http.get("/api/sessions/" .. session.id .. "/files")
+    local _, err = M.rescan()
     if err then
       if (opts or {}).interactive ~= false then
         vim.notify("auditview: " .. err, vim.log.levels.ERROR)
@@ -239,7 +261,6 @@ function M.ensure_files_listed(cb, opts)
       finish(false)
       return
     end
-    state.files_listed = true
     finish(true)
   end, opts)
 end
@@ -260,13 +281,13 @@ end
 
 function M.reset()
   state.session = nil
-  state.files_listed = false
+  state.files_scanned = false
   state.project_root = nil
   state.project_root_searched = false
   state.resolving = false
   state.resolve_pending = {}
-  state.files_listing = false
-  state.files_listing_pending = {}
+  state.files_scanning = false
+  state.files_scanning_pending = {}
 end
 
 return M

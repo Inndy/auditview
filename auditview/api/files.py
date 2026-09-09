@@ -8,7 +8,7 @@ from auditview.core.reconciler import reconcile_file
 from auditview.core.io_utils import read_file_lines, is_binary_file, file_is_large
 from auditview.api.util import safe_path
 from auditview.core.progress import file_progress as _build_file_list_response
-from auditview.core.scanner import _base_spec, scan_folder
+from auditview.core.scanner import _base_spec, path_excluded, scan_folder
 from pathspec.patterns.gitwildmatch import GitWildMatchPattern
 
 bp = Blueprint("files", __name__)
@@ -448,7 +448,8 @@ async def purge_path(session_id):
 async def get_file(session_id, fpath):
     async with open_db(current_app.config["DB_PATH"]) as conn:
         cur = await conn.execute(
-            "SELECT id, root_path FROM sessions WHERE id = ?", (session_id,)
+            "SELECT id, root_path, exclusion_patterns FROM sessions WHERE id = ?",
+            (session_id,),
         )
         session = await cur.fetchone()
         if session is None:
@@ -478,7 +479,30 @@ async def get_file(session_id, fpath):
         )
         file_row = await cur.fetchone()
         if file_row is None:
-            return jsonify({"error": "File not tracked in this session — call list_files first"}), 404
+            # Two situations that look identical to the client and are not: the
+            # file is excluded from this session, or the files table has merely
+            # not caught up with the disk. Only the second is fixable by the
+            # caller, so the difference is reported as a machine-readable reason
+            # (as the 422 guards above do) rather than as prose.
+            #
+            # path_excluded() rather than the session's cached scan: a file
+            # created since the last scan is missing from that list too, and it
+            # is missing whether or not the watcher ever saw the create — an
+            # inotify watch that never armed would otherwise have every new file
+            # reported as excluded. GET stays read-only either way; POST /rescan
+            # remains the only endpoint that adopts a file.
+            excluded = await asyncio.to_thread(
+                path_excluded, root_path, fpath, session["exclusion_patterns"] or ""
+            )
+            if excluded:
+                return jsonify({
+                    "error": "File is excluded from this session by exclusion_patterns or a .gitignore",
+                    "reason": "excluded",
+                }), 404
+            return jsonify({
+                "error": f"File is not scanned yet — POST /api/sessions/{session_id}/rescan",
+                "reason": "untracked",
+            }), 404
 
         try:
             current_mtime = os.path.getmtime(full_path)

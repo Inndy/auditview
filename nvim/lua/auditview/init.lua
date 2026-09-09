@@ -3,7 +3,6 @@ local session = require("auditview.session")
 local buffer = require("auditview.buffer")
 local marks = require("auditview.marks")
 local notes = require("auditview.notes")
-local http = require("auditview.http")
 
 local M = {}
 
@@ -31,7 +30,7 @@ function M.on_buf_read(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
   if vim.bo[bufnr].buftype ~= "" then return end
   if vim.api.nvim_buf_get_name(bufnr) == "" then return end
-  session.ensure_files_listed(function(ok)
+  session.ensure_files_scanned(function(ok)
     if not ok then return end
     if session.rel_path(bufnr) then
       buffer.fetch(bufnr, function(_, err)
@@ -71,7 +70,9 @@ end
 local function all_files_progress()
   session.resolve(function(sess)
     if not sess then return end
-    local files, err = http.get("/api/sessions/" .. sess.id .. "/files")
+    -- Rescan rather than list: the quickfix list is meant to show what is left
+    -- to review, and a file created since the last scan is not in GET /files.
+    local files, err = session.rescan()
     if err then
       vim.notify("auditview: " .. err, vim.log.levels.ERROR)
       return
@@ -156,7 +157,18 @@ function M.jump_prev_unreviewed() jump_unreviewed("prev") end
 function M.refresh()
   local bufnr = vim.api.nvim_get_current_buf()
   buffer.invalidate(bufnr)
-  M.on_buf_read(bufnr)
+  -- Forced, so this is also the escape hatch after editing a .gitignore or a
+  -- session's exclusion_patterns: an unforced rescan would be served from the
+  -- server's cached scan and see neither.
+  session.resolve(function(sess)
+    if sess then
+      local _, err = session.rescan({ force = true })
+      if err then
+        vim.notify("auditview: rescan failed — " .. err, vim.log.levels.WARN)
+      end
+    end
+    M.on_buf_read(bufnr)
+  end)
 end
 
 function M.session_reset()

@@ -1,4 +1,3 @@
-local http = require("auditview.http")
 local session = require("auditview.session")
 
 local M = {}
@@ -25,7 +24,10 @@ function M.refresh()
   if not enabled then return end
   session.resolve(function(sess)
     if not sess then return end
-    local files, err = http.get("/api/sessions/" .. sess.id .. "/files")
+    -- Rescan, not list: a file created since the last scan has no files row and
+    -- would render undecorated in the tree. Unforced, so this stays a cheap
+    -- cache read on the common path (it runs on every TreeOpen and mark).
+    local files, err = session.rescan()
     if err or not files then return end
     local new_map = {}
     for _, f in ipairs(files) do

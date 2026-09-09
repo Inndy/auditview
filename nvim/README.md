@@ -95,7 +95,7 @@ set a key to `""` to skip just that one.
 | `:AuditviewUnmark`       | unmark current line / range                           |
 | `:AuditviewProgress`     | echo `reviewed/countable (NN%)` for current file      |
 | `:AuditviewProgress!`    | quickfix list of every file's coverage                |
-| `:AuditviewRefresh`      | refetch current buffer's state from the server        |
+| `:AuditviewRefresh`      | rescan the session, refetch current buffer's state    |
 | `:AuditviewSessionReset` | drop cached session id (next action re-resolves)      |
 | `:AuditviewNote [text]`  | add note on current line / range (prompts if no arg)  |
 | `:AuditviewTodo [text]`  | add TODO on current line / range (prompts if no arg)  |
@@ -192,6 +192,11 @@ Buffer indicators (linked to sensible defaults — override with `:hi`):
   `BufWritePost`, and after every mark/unmark or note action.
 - If you edit a file outside nvim, run `:AuditviewRefresh` (or just
   re-enter the buffer).
+- Opening a file created since the server last scanned works: the plugin sees
+  the server's `reason: "untracked"`, rescans once, and retries. A file the
+  session *excludes* (`exclusion_patterns` or a `.gitignore`) reports
+  "excluded from this session" and is not retried — fix the pattern, then
+  `:AuditviewRefresh`, which forces a full re-walk.
 - Marking and note creation are blocked while a buffer is `modified` —
   save first so the server hashes match what you see.
 - Reviewed lines render as a whole-line background tint (so the sign

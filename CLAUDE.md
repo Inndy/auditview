@@ -98,9 +98,42 @@ input-source plumbing here to widen the guard.
 
 Gamepad support targets the W3C **standard** mapping (Xbox layout) only. A Steam Controller or Steam Deck reports that mapping through Steam Input, which also consumes the touchpads before the browser sees them — pad coordinates are not readable from a browser, and the right pad arrives as ordinary mouse movement. `/gamepad` is a live input dump for checking an unfamiliar pad; both the action→button map and the physical input map are overridable from `localStorage` (`auditview:gamepad:bindings`, `auditview:gamepad:inputs`).
 
+**Which files a session tracks: two filters, and only one of them is negotiable** -
+`scan_folder()` applies `_base_spec` (the built-in excludes plus the session's
+`exclusion_patterns`) first and unconditionally, then the nested `.gitignore`
+chain with git's own precedence: a deeper `.gitignore` overrides a shallower one,
+so the chain is consulted deepest-first and the first file with an opinion decides
+(`_gitignore_verdict`). That needs `PathSpec.check_file()` rather than
+`match_file()` — only it separates "this file says nothing" from "this file
+re-includes the path with a `!pattern`", and collapsing the two left a `!keep.log`
+in a nested `.gitignore` inert, with the file invisible to the whole tool. The
+asymmetry is deliberate: `POST /purge` keeps a path out of future scans by
+appending a pattern to `exclusion_patterns`, so a `.gitignore` must never be able
+to re-include what a purge removed.
+
+There are three "is this excluded?" predicates and they are not
+interchangeable. `scan_folder()` answers for the whole tree and its result is
+cached per session. `path_excluded()` answers for one path without walking, which
+is what lets `GET /files/:path` report `reason: "excluded"` versus
+`reason: "untracked"` — it must not consult the cached scan, because a file
+created since the last scan is absent from that list too, and an inotify watch
+that never armed would then have every new file reported as excluded.
+`api/util.is_excluded()` is narrower still (session patterns only, no filesystem
+access) and is what the write paths use, which must not consult a `.gitignore`.
+
 **`WatcherService` uses asyncio.Queue for thread→async bridging** - watchdog runs file observer threads that post paths via `loop.call_soon_threadsafe`. An async worker task consumes and does all DB work. Each operation opens its own short-lived aiosqlite connection.
 
 The handler must implement `on_moved` alongside create/modify/delete: inotify pairs `IN_MOVED_FROM`/`IN_MOVED_TO` into a single move event whenever both ends are inside the watched tree, so an atomic save (write temp, rename over the target) — what editors, `sed -i`, and `git checkout` all do — arrives *only* as `on_moved`. Dropping it leaves `reviewed_lines` and `countable_lines` frozen at pre-edit values, so a fully reviewed file keeps reporting 100% until something else forces a reconcile.
+
+A path with **no** `files` row broadcasts as well, with `rel_path: None` — the
+same "the tracked set moved" signal a forced rescan sends. Invalidating the
+cached scan is not enough by itself: no client rescans until something tells it
+to, so a newly created file stayed invisible until an unrelated *tracked* file
+happened to change and broadcast on its behalf, which is what made new files
+appear only sometimes. The nvim client, which has no SSE at all, saw the same gap
+as a 404 on open. That broadcast has to happen after `_lock` is released —
+`broadcast_to_session` takes the same non-reentrant lock the surrounding block
+holds.
 
 **`core/progress.py` is the single source for coverage queries** - `file_progress()`,
 `session_coverage()`, `issue_counts()` and `active_session()` take a bare connection and are

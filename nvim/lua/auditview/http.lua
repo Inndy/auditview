@@ -38,7 +38,11 @@ local function run(args)
   end
   if status < 200 or status >= 300 then
     local msg = (type(decoded) == "table" and decoded.error) or body_str:sub(1, 200)
-    return nil, string.format("HTTP %d: %s", status, msg)
+    -- Third value: the decoded error body. Callers that only want a message for
+    -- vim.notify ignore it; the ones that have to branch on *why* the request
+    -- failed read its `reason` (see API.md) instead of matching on prose.
+    return nil, string.format("HTTP %d: %s", status, msg),
+      (type(decoded) == "table" and decoded or nil)
   end
   return decoded, nil
 end

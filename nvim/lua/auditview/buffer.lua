@@ -174,7 +174,8 @@ function M.notes_at_line(bufnr, line_no)
   return hits
 end
 
-function M.fetch(bufnr, cb)
+---@param opts? { retried?: boolean } internal: set on the post-rescan attempt
+function M.fetch(bufnr, cb, opts)
   cb = cb or function() end
   local rel = session.rel_path(bufnr)
   if not rel then
@@ -182,10 +183,24 @@ function M.fetch(bufnr, cb)
     return
   end
   local sess = session.current()
-  local data, err = http.get(
+  local data, err, body = http.get(
     "/api/sessions/" .. sess.id .. "/files/" .. http.encode_path(rel)
   )
   if err then
+    -- reason="untracked": the file is on disk but has no files row, i.e. it was
+    -- created since the last scan. One rescan adopts it, so open-a-new-file
+    -- heals itself. Guarded by `retried` rather than looping: if the server
+    -- still says untracked after a rescan the answer is the error, not another
+    -- round trip. reason="excluded" is never retried — no scan will change it.
+    if body and body.reason == "untracked" and not (opts or {}).retried then
+      local _, rescan_err = session.rescan()
+      if not rescan_err then
+        M.fetch(bufnr, cb, { retried = true })
+        return
+      end
+      cb(nil, rescan_err)
+      return
+    end
     cb(nil, err)
     return
   end
@@ -236,7 +251,7 @@ function M.ensure(bufnr, cb, opts)
     cb(cache[bufnr])
     return
   end
-  session.ensure_files_listed(function(ok)
+  session.ensure_files_scanned(function(ok)
     if not ok then
       cb(nil, "session not resolved")
       return

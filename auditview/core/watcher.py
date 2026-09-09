@@ -284,6 +284,13 @@ class WatcherService:
             if not rows:
                 cur2 = await conn.execute("SELECT id, root_path FROM sessions")
                 session_rows = await cur2.fetchall()
+                # Only an appearance is worth announcing. A path that is already
+                # gone and never had a files row cannot have changed any
+                # client's view, and an atomic save produces two of those (the
+                # temp file's create, then the move's source side) for every one
+                # real new file. The cached scan is invalidated either way.
+                exists = os.path.exists(abs_path)
+                bumped = []
                 # Under one lock hold: _lock is not reentrant, so this uses the
                 # caller-locked _bump_scan_gen rather than invalidate_scan().
                 with self._lock:
@@ -298,6 +305,23 @@ class WatcherService:
                             if spec.match_file(sess_rel):
                                 continue
                         self._bump_scan_gen(r["id"])
+                        if exists:
+                            bumped.append(r["id"])
+
+                # A path with no files row that survived the session's spec is
+                # one the next scan will adopt - usually a file just created.
+                # Invalidating the cache is not enough on its own: no client
+                # rescans until it is told to, so without this a new file stayed
+                # invisible until some unrelated tracked file changed and
+                # broadcast on its behalf, which is why it appeared only
+                # sometimes. rel_path is None, the same "the tracked set moved"
+                # signal a forced rescan sends; FileTree rescans off it and
+                # CodeViewer ignores it. Outside the lock above -
+                # broadcast_to_session takes the same non-reentrant _lock.
+                for sid in bumped:
+                    self.broadcast_to_session(
+                        sid, {"type": "file_changed", "rel_path": None}
+                    )
                 return
 
             file_deleted = not os.path.isfile(abs_path)
