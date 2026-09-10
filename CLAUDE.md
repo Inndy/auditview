@@ -149,6 +149,21 @@ as a 404 on open. That broadcast has to happen after `_lock` is released —
 `broadcast_to_session` takes the same non-reentrant lock the surrounding block
 holds.
 
+Every root an event path is compared against is stored **realpath'd**, because
+macOS FSEvents reports resolved paths: a watch on `/var/folders/x` reports
+`/private/var/folders/x` back, and watchdog's own fsevents emitter realpaths the
+watch path for exactly that reason. `/tmp` and `/var` are symlinks on macOS — and
+`tempfile` hands out directories under one — so an unresolved root matched *no*
+event: the watcher armed, saw every write, and dropped all of it on the prefix
+check, silently and permanently. Linux inotify hides this by building its event
+paths from the watch path it was given, so the divergence is invisible in a
+container and the two watcher tests failed only on the host. `__init__` resolves
+the observed root, `get_scan()` stores a resolved root in `_session_specs`, and
+the no-`files`-row branch resolves `sessions.root_path` before comparing.
+`scan_folder()` and `reconcile_file()` take either spelling — they only read the
+filesystem — and `rel_path` comes out the same either way, so nothing stored in
+the DB changes.
+
 **`core/progress.py` is the single source for coverage queries** - `file_progress()`,
 `session_coverage()`, `issue_counts()` and `active_session()` take a bare connection and are
 called by `api/files.py`, `api/coverage.py`, `api/config.py` and `cli.py` alike. Adding a fourth

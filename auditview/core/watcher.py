@@ -52,7 +52,16 @@ class _Handler(FileSystemEventHandler):
 class WatcherService:
     def __init__(self, db_path, root_path):
         self._db_path = db_path
-        self._root_path = root_path
+        # Every path comparison in this class is against a path that came back
+        # out of the observer, and macOS FSEvents reports realpath'd ones: a
+        # watch on /var/folders/... reports /private/var/folders/..., which is
+        # why watchdog's own fsevents emitter realpaths the watch path before
+        # comparing. An unresolved root here therefore matches nothing, and
+        # since /tmp and /var are symlinks on macOS -- as is any symlinked
+        # checkout, on any platform -- every event would be dropped and the
+        # tool would silently stop noticing edits. Resolve once, here, so the
+        # observer watches and reports the same spelling.
+        self._root_path = os.path.realpath(root_path)
         self._observer = Observer()
         self._handler = _Handler(self)
         self._lock = threading.Lock()
@@ -139,11 +148,15 @@ class WatcherService:
     async def get_scan(self, session_id, root_path, exclusion_patterns):
         patterns_str = exclusion_patterns or ""
         spec = _base_spec(patterns_str)
+        # _handle_change matches event paths against this root, so it has to be
+        # resolved for the same reason self._root_path is. scan_folder() walks
+        # the filesystem instead and is happy with either spelling.
+        spec_root = os.path.realpath(root_path)
         loop = asyncio.get_running_loop()
 
         while True:
             with self._lock:
-                self._session_specs[session_id] = (root_path, spec)
+                self._session_specs[session_id] = (spec_root, spec)
                 gen = self._scan_gen.get(session_id, 0)
                 cached = self._scan_cache.get(session_id)
                 if cached is None:
@@ -291,22 +304,25 @@ class WatcherService:
                 # real new file. The cached scan is invalidated either way.
                 exists = os.path.exists(abs_path)
                 bumped = []
+                # Resolved to compare against an event path; see __init__.
+                # Before the lock: realpath() is a syscall per path component
+                # and the watchdog thread blocks on this same lock.
+                roots = [(r["id"], os.path.realpath(r["root_path"])) for r in session_rows]
                 # Under one lock hold: _lock is not reentrant, so this uses the
                 # caller-locked _bump_scan_gen rather than invalidate_scan().
                 with self._lock:
-                    for r in session_rows:
-                        sess_root = r["root_path"]
+                    for sess_id, sess_root in roots:
                         if not (abs_path.startswith(sess_root + os.sep) or abs_path.startswith(sess_root + "/")):
                             continue
-                        entry = self._session_specs.get(r["id"])
+                        entry = self._session_specs.get(sess_id)
                         if entry is not None:
                             spec_root, spec = entry
                             sess_rel = os.path.relpath(abs_path, spec_root).replace(os.sep, "/")
                             if spec.match_file(sess_rel):
                                 continue
-                        self._bump_scan_gen(r["id"])
+                        self._bump_scan_gen(sess_id)
                         if exists:
-                            bumped.append(r["id"])
+                            bumped.append(sess_id)
 
                 # A path with no files row that survived the session's spec is
                 # one the next scan will adopt - usually a file just created.
