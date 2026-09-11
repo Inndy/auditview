@@ -1,0 +1,9 @@
+include API.md
+include CLAUDE.md
+include CONTRIBUTING.md
+include LICENSE
+include README.md
+include ROADMAP.md
+include SECURITY.md
+include THIRD_PARTY_LICENSES.txt
+recursive-include tests *.py *.json

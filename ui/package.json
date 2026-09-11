@@ -15,7 +15,9 @@
     "lint:oxlint:fix": "oxlint . --fix",
     "lint:eslint:check": "eslint .",
     "lint:eslint:fix": "eslint . --fix --cache",
-    "format": "oxfmt src/"
+    "format": "oxfmt src/",
+    "licenses:generate": "node ../scripts/generate-third-party-licenses.mjs",
+    "licenses:check": "node ../scripts/generate-third-party-licenses.mjs --check"
   },
   "dependencies": {
     "highlight.js": "^11.11.1",
