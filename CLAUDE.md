@@ -189,6 +189,14 @@ way because it needs no running server and no port discovery; they write via the
 handle reconciliation and SSE broadcast. `__main__.main()` routes to the CLI when any argument is
 exactly a subcommand name; `auditview serve <path>` is the escape hatch for a directory that
 shares one of those names.
+The CLI uses `open_db_readonly()`, never the server's `open_db()`: the latter
+enables WAL and is inherently a write-capable connection. A writable live WAL
+database opens with SQLite `mode=ro`, so queries see uncheckpointed server
+changes; SQLite may still create its `-wal`/`-shm` coordination sidecars. A
+database in a read-only directory instead opens as an `immutable=1` snapshot,
+which creates no sidecars. If filesystem permissions or mount flags defeat the
+initial live attempt, the same immutable mode is the fallback.
+
 
 **Coverage is the human's ledger; agents must never mark lines reviewed** - a reviewed line means
 a person read it. If an agent writes `reviewed_lines`, the metric stops meaning anything and every

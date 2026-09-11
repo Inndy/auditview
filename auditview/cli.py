@@ -3,9 +3,10 @@ import asyncio
 import json
 import os
 import sys
+import sqlite3
 
 from auditview import version_string
-from auditview.db.connection import open_db
+from auditview.db.connection import open_db_readonly
 from auditview.core.progress import (
     active_session,
     file_progress,
@@ -218,7 +219,7 @@ def _build_parser():
 
 async def _run(args):
     db_path = _find_db(args.db)
-    async with open_db(db_path) as conn:
+    async with open_db_readonly(db_path) as conn:
         session = await _resolve_session(conn, args.session)
         await _HANDLERS[args.command](conn, session, args, db_path)
 
@@ -227,7 +228,7 @@ def run(argv):
     args = _build_parser().parse_args(argv)
     try:
         asyncio.run(_run(args))
-    except CliError as exc:
+    except (CliError, sqlite3.Error) as exc:
         print(f"auditview: {exc}", file=sys.stderr)
         return 1
     return 0

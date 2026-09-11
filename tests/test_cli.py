@@ -4,12 +4,13 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sqlite3
 import tempfile
 
 import pytest
 
 from auditview import cli
-from auditview.db.connection import open_db
+from auditview.db.connection import open_db, open_db_readonly
 from auditview.db.schema import run_migrations
 
 _SHM_DIR = "/dev/shm" if os.path.isdir("/dev/shm") else None
@@ -135,3 +136,47 @@ def test_missing_database_is_an_error(capsys, tmp_path):
     code = cli.run(["context", "--db", str(tmp_path / "nope.db")])
     assert code == 1
     assert "database not found" in capsys.readouterr().err
+
+
+def test_readonly_connection_rejects_writes(tmpdb):
+    _seed(tmpdb, sessions=[("only", "/a")])
+
+    async def check():
+        async with open_db_readonly(tmpdb) as conn:
+            cur = await conn.execute("PRAGMA query_only")
+            assert (await cur.fetchone())[0] == 1
+            with pytest.raises(sqlite3.OperationalError, match="readonly"):
+                await conn.execute(
+                    "INSERT INTO sessions (label, root_path) VALUES ('nope', '/nope')"
+                )
+
+    asyncio.run(check())
+
+
+def test_cli_does_not_modify_database(tmpdb, capsys):
+    _seed(tmpdb, sessions=[("only", "/a")])
+    before = open(tmpdb, "rb").read()
+
+    code, out = _run(capsys, ["context", "--json"], tmpdb)
+
+    assert code == 0
+    assert json.loads(out.out)["session_id"] == 1
+    assert open(tmpdb, "rb").read() == before
+
+
+def test_cli_reads_database_from_readonly_directory(tmp_path, capsys):
+    directory = tmp_path / "snapshot"
+    directory.mkdir()
+    db_path = directory / "auditview.db"
+    _seed(str(db_path), sessions=[("only", "/a")])
+
+    db_path.chmod(0o444)
+    directory.chmod(0o555)
+    try:
+        code, out = _run(capsys, ["context", "--json"], str(db_path))
+    finally:
+        directory.chmod(0o755)
+        db_path.chmod(0o644)
+
+    assert code == 0, out.err
+    assert json.loads(out.out)["session_id"] == 1
