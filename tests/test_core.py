@@ -107,6 +107,12 @@ def test_c_line_comment_not_countable():
     assert not is_countable_line("    // comment", ".cpp")
 
 
+def test_c_block_comment_opening_not_countable():
+    assert not is_countable_line("/* comment */", ".c")
+    assert not is_countable_line("    /** docs", ".js")
+    assert is_countable_line("const x = 1; /* explanation */", ".js")
+
+
 def test_c_block_comment_continuation_not_countable():
     assert not is_countable_line(" * continuation", ".c")
     assert not is_countable_line("  * @param x", ".java")
