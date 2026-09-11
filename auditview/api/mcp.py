@@ -1,4 +1,5 @@
 from typing import Optional
+from urllib.parse import quote
 
 from mcp.server.fastmcp import FastMCP
 from quart import Quart
@@ -122,7 +123,7 @@ async def check_context() -> str:
 async def _fetch_file_lines(api: _SessionAPI, file_path: str) -> tuple[dict[int, str], Optional[str]]:
     """Return ({line_no: content}, error_msg). error_msg is None on success."""
     try:
-        data = await api.get(f"/files/{file_path}")
+        data = await api.get(f"/files/{quote(file_path, safe='/')}")
         return {l["line_no"]: l["content"] for l in data["lines"]}, None
     except Exception as exc:
         return {}, str(exc)
@@ -244,7 +245,6 @@ async def list_issues(status: Optional[str] = None, file_path: Optional[str] = N
     if status:
         qs_parts.append(f"status={status}")
     if file_path:
-        from urllib.parse import quote
         qs_parts.append(f"file_path={quote(file_path, safe='/')}")
     path = "/issues" + (f"?{'&'.join(qs_parts)}" if qs_parts else "")
     issues = await api.get(path)
