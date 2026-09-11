@@ -7,6 +7,7 @@
       </div>
 
       <div class="modal-body">
+        <div v-if="error" class="form-error" role="alert">{{ error }}</div>
         <div class="form-group">
           <label>Issue Title</label>
           <input v-model="title" type="text" placeholder="e.g., SQL injection vulnerability" />
@@ -159,7 +160,7 @@ export default {
   border: 1px solid var(--border);
   border-radius: 4px;
   font-size: 13px;
-  background: var(--bg);
+  background: var(--bg-surface);
   color: var(--text);
   font-family: inherit;
 }
@@ -175,6 +176,11 @@ export default {
   color: var(--text-muted);
   font-size: 11px;
   margin-left: 4px;
+}
+.form-error {
+  margin-bottom: 16px;
+  color: var(--badge-orphan-text);
+  font-size: 13px;
 }
 
 .notes-preview {

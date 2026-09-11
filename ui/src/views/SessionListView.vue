@@ -179,13 +179,14 @@ export default {
     },
     async toggleMcpSession(id) {
       try {
+        let res
         if (this.mcpSessionId === id) {
-          await clearMcpSession()
-          this.mcpSessionId = null
+          res = await clearMcpSession()
         } else {
-          const res = await setMcpSession(id)
-          this.mcpSessionId = res.mcp_session ? res.mcp_session.id : null
+          res = await setMcpSession(id)
         }
+        this.config.mcp_session = res.mcp_session
+        this.mcpSessionId = res.mcp_session ? res.mcp_session.id : null
       } catch (e) {
         this.error = e.message
       }

@@ -146,7 +146,11 @@
 
           <div class="notes-section">
             <h4>Attached Notes</h4>
-            <div v-if="issueNotes.length === 0" class="empty-notes">No notes attached.</div>
+            <div v-if="issueNotesLoading" class="empty-notes">Loading notes…</div>
+            <div v-else-if="issueNotesError" class="empty-notes">
+              Failed to load notes. <button class="btn-link" @click="loadIssueNotes(selectedIssueId)">Retry</button>
+            </div>
+            <div v-else-if="issueNotes.length === 0" class="empty-notes">No notes attached.</div>
             <div v-else class="snippet-list">
               <NoteSnippet
                 v-for="note in issueNotes"
@@ -262,6 +266,9 @@ export default {
       issues: [],
       orphanNotes: [],
       issueNotes: [],
+      issueNotesLoading: false,
+      issueNotesError: null,
+      issueNotesRequestId: 0,
       loadingIssues: true,
       loadError: null,
       editError: null,
@@ -319,6 +326,9 @@ export default {
         this.loadIssueNotes(id)
       } else {
         this.issueNotes = []
+        this.issueNotesRequestId += 1
+        this.issueNotesLoading = false
+        this.issueNotesError = null
       }
     },
   },
@@ -415,10 +425,27 @@ export default {
       this.$router.push(this.closeRoute)
     },
     async loadIssueNotes(issueId) {
+      const requestId = ++this.issueNotesRequestId
+      this.issueNotesLoading = true
+      this.issueNotesError = null
       try {
-        this.issueNotes = await getIssueNotes(this.session.id, issueId)
+        const notes = await getIssueNotes(this.session.id, issueId)
+        if (
+          requestId !== this.issueNotesRequestId ||
+          this.selectedIssueId !== issueId
+        ) return
+        this.issueNotes = notes
       } catch (e) {
-        console.error('Failed to load issue notes:', e.message)
+        if (
+          requestId !== this.issueNotesRequestId ||
+          this.selectedIssueId !== issueId
+        ) return
+        this.issueNotesError = e.message
+      } finally {
+        if (
+          requestId === this.issueNotesRequestId &&
+          this.selectedIssueId === issueId
+        ) this.issueNotesLoading = false
       }
     },
     issueRoute(id) {
@@ -459,61 +486,73 @@ export default {
     async saveDescription() {
       if (!this.editingDescription || !this.selectedIssue) return
       this.editingDescription = false
+      const issueId = this.selectedIssueId
+      const before = this.descriptionBeforeEdit
       const value = this.descriptionDraft
-      if (value === this.descriptionBeforeEdit) return
+      if (value === before) return
       try {
-        const updated = await apiUpdateIssue(
-          this.session.id,
-          this.selectedIssueId,
-          { description: value },
-        )
-        const idx = this.issues.findIndex((i) => i.id === this.selectedIssueId)
+        const updated = await apiUpdateIssue(this.session.id, issueId, { description: value })
+        const idx = this.issues.findIndex((i) => i.id === issueId)
         if (idx !== -1) this.issues.splice(idx, 1, updated)
       } catch (e) {
-        if (this.selectedIssue) this.selectedIssue.description = this.descriptionBeforeEdit
-        this.editError = `Failed to save description: ${e.message}`
+        const issue = this.issues.find((i) => i.id === issueId)
+        if (issue) issue.description = before
+        if (this.selectedIssueId === issueId) {
+          this.editError = `Failed to save description: ${e.message}`
+        }
       }
     },
     async updateField(field) {
       if (!this.selectedIssue) return
-      const value = this.selectedIssue[field]
+      const issueId = this.selectedIssueId
+      const issue = this.selectedIssue
+      const value = issue[field]
+      const before = field === 'title' ? this.titleBeforeEdit : this.severityBeforeEdit
       if (field === 'title' && (typeof value !== 'string' || value.trim() === '')) {
-        this.selectedIssue.title = this.titleBeforeEdit
+        issue.title = before
         return
       }
-      const before = field === 'title' ? this.titleBeforeEdit : this.severityBeforeEdit
       try {
         const updates = {}
         updates[field] = value
-        const updated = await apiUpdateIssue(this.session.id, this.selectedIssueId, updates)
-        const idx = this.issues.findIndex((i) => i.id === this.selectedIssueId)
+        const updated = await apiUpdateIssue(this.session.id, issueId, updates)
+        const idx = this.issues.findIndex((i) => i.id === issueId)
         if (idx !== -1) this.issues.splice(idx, 1, updated)
       } catch (e) {
-        if (this.selectedIssue) this.selectedIssue[field] = before
-        this.editError = `Failed to update ${field}: ${e.message}`
+        const current = this.issues.find((i) => i.id === issueId)
+        if (current) current[field] = before
+        if (this.selectedIssueId === issueId) {
+          this.editError = `Failed to update ${field}: ${e.message}`
+        }
       }
     },
     async setStatus(newStatus) {
       if (!this.selectedIssue) return
-      const prevStatus = this.selectedIssue.status
+      const issueId = this.selectedIssueId
+      const previousStatus = this.selectedIssue.status
       try {
-        const updated = await apiUpdateIssue(this.session.id, this.selectedIssueId, { status: newStatus })
-        const idx = this.issues.findIndex((i) => i.id === this.selectedIssueId)
+        const updated = await apiUpdateIssue(this.session.id, issueId, { status: newStatus })
+        const idx = this.issues.findIndex((i) => i.id === issueId)
         if (idx !== -1) this.issues.splice(idx, 1, updated)
       } catch (e) {
-        if (this.selectedIssue) this.selectedIssue.status = prevStatus
-        this.editError = `Failed to update status: ${e.message}`
+        const issue = this.issues.find((i) => i.id === issueId)
+        if (issue) issue.status = previousStatus
+        if (this.selectedIssueId === issueId) {
+          this.editError = `Failed to update status: ${e.message}`
+        }
       }
     },
     async onDeleteIssue() {
       if (!confirm('Delete this issue?')) return
+      const issueId = this.selectedIssueId
       try {
-        const issueId = this.selectedIssueId
         await apiDeleteIssue(this.session.id, issueId)
         this.issues = this.issues.filter((i) => i.id !== issueId)
-        this.$router.push(this.closeRoute)
+        if (this.selectedIssueId === issueId) this.$router.push(this.closeRoute)
       } catch (e) {
-        console.error('Failed to delete:', e.message)
+        if (this.selectedIssueId === issueId) {
+          this.editError = `Failed to delete issue: ${e.message}`
+        }
       }
     },
     onIssueCreated(issue) {

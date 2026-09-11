@@ -12,8 +12,10 @@
       ></textarea>
       <div class="modal-actions">
         <button data-modal-cancel @click="cancel">Cancel</button>
-        <button @click="pickIssue">Add to Issue Instead</button>
-        <button class="btn-primary" data-modal-confirm @click="submit" :disabled="!content.trim()">Submit</button>
+        <button :disabled="submitting" @click="pickIssue">Add to Issue Instead</button>
+        <button class="btn-primary" data-modal-confirm @click="submit" :disabled="!content.trim() || submitting">
+          {{ submitting ? 'Submitting…' : 'Submit' }}
+        </button>
       </div>
     </div>
   </div>
@@ -27,6 +29,8 @@ export default {
     isTodo: { type: Boolean, default: false },
     startLine: { type: Number, default: null },
     endLine: { type: Number, default: null },
+    initialContent: { type: String, default: '' },
+    submitting: { type: Boolean, default: false },
   },
   emits: ['submit', 'cancel', 'pick-issue'],
   data() {
@@ -35,7 +39,7 @@ export default {
   watch: {
     visible(val) {
       if (val) {
-        this.content = ''
+        this.content = this.initialContent
         this.$nextTick(() => {
           this.$refs.textarea?.focus()
         })
@@ -44,13 +48,11 @@ export default {
   },
   methods: {
     submit() {
-      if (!this.content.trim()) return
+      if (!this.content.trim() || this.submitting) return
       this.$emit('submit', { content: this.content, is_todo: this.isTodo })
-      this.content = ''
     },
     pickIssue() {
       this.$emit('pick-issue', { content: this.content, is_todo: this.isTodo })
-      this.content = ''
     },
     cancel() {
       this.content = ''

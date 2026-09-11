@@ -37,8 +37,10 @@
       :startLine="rangeMin"
       :endLine="rangeMax"
       @submit="onNoteSubmit"
+      :initialContent="noteDraft"
+      :submitting="noteSubmitting"
       @pick-issue="onPickIssue"
-      @cancel="showModal = false"
+      @cancel="cancelNoteModal"
     />
     <LspPreviewModal
       v-if="previewTarget"
@@ -53,7 +55,7 @@
       :startLine="rangeMin"
       :endLine="rangeMax"
       @picked="onIssuePicked"
-      @cancel="showIssuePicker = false"
+      @cancel="cancelIssuePicker"
     />
   </div>
 </template>
@@ -120,6 +122,8 @@ export default {
       dragStart: null,
       showModal: false,
       modalIsTodo: false,
+      noteDraft: '',
+      noteSubmitting: false,
       showIssuePicker: false,
       pendingNote: null,
       loading: false,
@@ -436,6 +440,19 @@ export default {
 
     openNoteModal(isTodo) {
       this.modalIsTodo = isTodo
+      this.noteDraft = ''
+      this.pendingNote = null
+      this.showModal = true
+    },
+
+    cancelNoteModal() {
+      this.noteDraft = ''
+      this.pendingNote = null
+      this.showModal = false
+    },
+
+    cancelIssuePicker() {
+      this.showIssuePicker = false
       this.showModal = true
     },
 
@@ -656,7 +673,9 @@ export default {
     },
 
     async onNoteSubmit({ content, is_todo }) {
-      this.showModal = false
+      if (this.noteSubmitting) return
+      this.noteDraft = content
+      this.noteSubmitting = true
       try {
         const note = await createNote(this.sessionId, {
           file_path: this.filePath,
@@ -668,21 +687,27 @@ export default {
         if (!this.notes.some((n) => n.id === note.id)) this.notes.push(note)
         this.$emit('notes-updated', this.notes)
         this.anchorLine = null
+        this.noteDraft = ''
+        this.showModal = false
       } catch (e) {
         this.actionError = `Failed to create note: ${e.message}`
+      } finally {
+        this.noteSubmitting = false
       }
     },
 
     onPickIssue({ content, is_todo }) {
+      this.noteDraft = content
       this.pendingNote = { content, is_todo }
       this.showModal = false
       this.showIssuePicker = true
     },
 
     async onIssuePicked({ issue_id }) {
+      if (this.noteSubmitting) return
       this.showIssuePicker = false
       const pending = this.pendingNote || { content: '', is_todo: false }
-      this.pendingNote = null
+      this.noteSubmitting = true
       try {
         const note = await createNote(this.sessionId, {
           file_path: this.filePath,
@@ -695,8 +720,13 @@ export default {
         if (!this.notes.some((n) => n.id === note.id)) this.notes.push(note)
         this.$emit('notes-updated', this.notes)
         this.anchorLine = null
+        this.pendingNote = null
+        this.noteDraft = ''
       } catch (e) {
         this.actionError = `Failed to create note: ${e.message}`
+        this.showModal = true
+      } finally {
+        this.noteSubmitting = false
       }
     },
 
