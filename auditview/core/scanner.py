@@ -1,5 +1,5 @@
 import os
-import pathspec
+from pathspec import GitIgnoreSpec
 import logging
 from functools import lru_cache
 
@@ -18,13 +18,13 @@ _DEFAULT_EXCLUDES = [
 
 
 @lru_cache(maxsize=32)
-def _base_spec(exclusion_patterns_str: str) -> pathspec.PathSpec:
+def _base_spec(exclusion_patterns_str: str) -> GitIgnoreSpec:
     patterns = list(_DEFAULT_EXCLUDES)
     for line in exclusion_patterns_str.splitlines():
         line = line.strip()
         if line and not line.startswith("#"):
             patterns.append(line)
-    return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+    return GitIgnoreSpec.from_lines(patterns)
 
 
 def _load_gitignore_patterns(path):
@@ -92,7 +92,7 @@ def path_excluded(root, rel_path, exclusion_patterns_str=""):
             patterns = _load_gitignore_patterns(gi_path)
             if patterns:
                 active_specs.append(
-                    (dirpath, pathspec.PathSpec.from_lines("gitwildmatch", patterns))
+                    (dirpath, GitIgnoreSpec.from_lines(patterns))
                 )
 
         suffix = "" if depth == len(parts) - 1 else "/"
@@ -140,7 +140,7 @@ def scan_folder(root, exclusion_patterns_str=""):
             patterns = _load_gitignore_patterns(gi_path)
             if patterns:
                 active_specs.append(
-                    (dirpath, pathspec.PathSpec.from_lines("gitwildmatch", patterns))
+                    (dirpath, GitIgnoreSpec.from_lines(patterns))
                 )
 
         for fname in filenames:

@@ -22,7 +22,7 @@ import shutil
 import time
 from urllib.parse import unquote, urlparse
 
-from pathspec import PathSpec
+from pathspec import GitIgnoreSpec
 
 logger = logging.getLogger("auditview")
 
@@ -438,7 +438,7 @@ class LspService:
         self._root_path = root_path
         self._specs = [dict(s) for s in (servers or DEFAULT_SERVERS)]
         self._matchers = {
-            s["name"]: PathSpec.from_lines("gitwildmatch", s["match"])
+            s["name"]: GitIgnoreSpec.from_lines(s["match"])
             for s in self._specs
         }
         self._servers = {}          # (name, root) -> _Server

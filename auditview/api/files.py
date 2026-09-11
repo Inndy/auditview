@@ -9,7 +9,7 @@ from auditview.core.io_utils import read_file_lines, is_binary_file, file_is_lar
 from auditview.api.util import get_json_object, safe_path
 from auditview.core.progress import file_progress as _build_file_list_response
 from auditview.core.scanner import _base_spec, path_excluded, scan_folder
-from pathspec.patterns.gitwildmatch import GitWildMatchPattern
+from pathspec.gitignore import GitIgnoreSpecPattern
 
 bp = Blueprint("files", __name__)
 
@@ -391,7 +391,7 @@ async def purge_path(session_id):
             if r["rel_path"] == rel_path or r["rel_path"].startswith(prefix)
         )
 
-        pattern = "/" + GitWildMatchPattern.escape(rel_path)
+        pattern = "/" + GitIgnoreSpecPattern.escape(rel_path)
         existing_patterns = session["exclusion_patterns"] or ""
         lines = existing_patterns.splitlines()
         if pattern not in (l.strip() for l in lines):
