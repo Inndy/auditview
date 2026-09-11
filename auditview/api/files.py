@@ -5,7 +5,7 @@ from auditview.db.connection import open_db
 from auditview.core.hashing import line_hash, context_hash
 from auditview.core.coverage import is_countable_line
 from auditview.core.reconciler import reconcile_file
-from auditview.core.io_utils import read_file_lines, is_binary_file, file_is_large
+from auditview.core.io_utils import read_file_lines, is_binary_file, file_is_large, unreviewable_reason
 from auditview.api.util import safe_path
 from auditview.core.progress import file_progress as _build_file_list_response
 from auditview.core.scanner import _base_spec, path_excluded, scan_folder
@@ -144,11 +144,13 @@ async def _count_one(rel_path, root_path, sem):
     full_path = os.path.join(root_path, rel_path)
     async with sem:
         if not os.path.isfile(full_path):
-            return rel_path, 0
+            return rel_path, None
         try:
+            if unreviewable_reason(full_path) is not None:
+                return rel_path, None
             lines = await read_file_lines(full_path)
         except OSError:
-            return rel_path, 0
+            return rel_path, None
     return rel_path, sum(1 for l in lines if is_countable_line(l, ext))
 
 

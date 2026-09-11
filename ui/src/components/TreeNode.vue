@@ -16,7 +16,7 @@
         >{{ node.fileData.max_severity }}</span>
         <span v-if="node.fileData.todos_count" class="badge-todo-count" title="TODOs">{{ node.fileData.todos_count }}</span>
         <span v-if="node.fileData.notes_count" class="badge-note-count" title="Notes">{{ node.fileData.notes_count }}</span>
-        <span v-if="node.fileData.status !== 'empty'" class="pct" :title="pctTitle">{{ filePct }}%</span>
+        <span v-if="!['empty', 'unreviewable'].includes(node.fileData.status)" class="pct" :title="pctTitle">{{ filePct }}%</span>
         <span
           class="status-dot"
           :class="'status-' + node.fileData.status"
@@ -62,6 +62,7 @@ export default {
       if (s === 'partial') return 'Partially reviewed'
       if (s === 'not_viewed') return 'Not viewed'
       if (s === 'empty') return 'Empty file'
+      if (s === 'unreviewable') return 'Too large or binary; excluded from coverage'
       return 'No countable lines'
     },
     filePct() {
@@ -154,6 +155,7 @@ export default {
 .status-partial    { background: var(--status-warning); }
 .status-not_viewed { background: var(--bg-base); }
 .status-empty      { background: transparent; border: 1px dashed var(--text-faint); }
+.status-unreviewable { background: transparent; border: 1px solid var(--text-muted); }
 
 .badge-todo-count,
 .badge-note-count {

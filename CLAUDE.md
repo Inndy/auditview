@@ -135,6 +135,18 @@ that never armed would then have every new file reported as excluded.
 `api/util.is_excluded()` is narrower still (session patterns only, no filesystem
 access) and is what the write paths use, which must not consult a `.gitignore`.
 
+**Unreviewable files remain visible but stay outside the coverage ledger** -
+before a rescan or watcher reconciliation reads a file in full, it classifies
+files over 1 MiB and files whose first 8 KiB contains NUL as unreviewable. Their
+`countable_lines` remains NULL, which `core/progress.py` reports as
+`status: "unreviewable"` and excludes from session aggregates; zero is reserved
+for a readable file with no countable lines. If a previously reviewed file
+temporarily becomes large or binary, reconciliation preserves its marks, notes,
+and last readable hash snapshot. The NULL count keeps those unverifiable marks
+out of coverage. If the file becomes reviewable again, the normal reconciler
+uses the preserved snapshot to verify, migrate, or discard them safely.
+
+
 **`WatcherService` uses asyncio.Queue for thread→async bridging** - watchdog runs file observer threads that post paths via `loop.call_soon_threadsafe`. An async worker task consumes and does all DB work. Each operation opens its own short-lived aiosqlite connection.
 
 The handler must implement `on_moved` alongside create/modify/delete: inotify pairs `IN_MOVED_FROM`/`IN_MOVED_TO` into a single move event whenever both ends are inside the watched tree, so an atomic save (write temp, rename over the target) — what editors, `sed -i`, and `git checkout` all do — arrives *only* as `on_moved`. Dropping it leaves `reviewed_lines` and `countable_lines` frozen at pre-edit values, so a fully reviewed file keeps reporting 100% until something else forces a reconcile.

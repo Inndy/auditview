@@ -45,12 +45,15 @@ async def file_progress(conn, session_id):
 
     result = []
     for rel_path, countable_raw in countable_map.items():
-        countable = countable_raw or 0
+        reviewable = countable_raw is not None
+        countable = countable_raw if reviewable else 0
         reviewed = min(reviewed_map.get(rel_path, 0), countable)
         coverage = reviewed / countable if countable > 0 else 0.0
         notes_c, todos_c = notes_map.get(rel_path, (0, 0))
 
-        if countable == 0:
+        if not reviewable:
+            status = "unreviewable"
+        elif countable == 0:
             status = "empty"
         elif reviewed == 0:
             status = "not_viewed"

@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import tempfile
 from contextlib import asynccontextmanager
+from unittest import mock
 
 import pytest
 from quart import Quart
@@ -104,6 +105,37 @@ async def test_gitignored_file_reports_excluded():
             resp = await client.get(f"/api/sessions/{sid}/files/junk.log")
             assert resp.status_code == 404
             assert (await resp.get_json())["reason"] == "excluded"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("name", "payload", "reason"),
+    [
+        ("large.py", b"x" * ((1 << 20) + 1), "large"),
+        ("binary.py", b"prefix\x00payload", "binary"),
+    ],
+)
+async def test_rescan_does_not_read_unreviewable_files(name, payload, reason):
+    async with _test_app() as (app, tmpdir):
+        full = os.path.join(tmpdir, name)
+        with open(full, "wb") as fh:
+            fh.write(payload)
+
+        async with app.test_client() as client:
+            sid = await _mk_session(client)
+            with mock.patch(
+                "auditview.api.files.read_file_lines",
+                side_effect=AssertionError("rescan must not read this file"),
+            ):
+                body = await (await client.post(f"/api/sessions/{sid}/rescan")).get_json()
+            file_state = next(item for item in body if item["rel_path"] == name)
+            assert file_state["status"] == "unreviewable"
+            assert file_state["countable_lines"] == 0
+
+            blocked = await client.get(f"/api/sessions/{sid}/files/{name}")
+            assert blocked.status_code == 422
+            assert (await blocked.get_json())["reason"] == reason
+
 
 
 @pytest.mark.asyncio

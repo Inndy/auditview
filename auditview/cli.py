@@ -16,7 +16,7 @@ from auditview.core.progress import (
 
 SUBCOMMANDS = ("context", "stats", "files")
 
-_STATUSES = ("not_viewed", "partial", "reviewed", "empty")
+_STATUSES = ("not_viewed", "partial", "reviewed", "empty", "unreviewable")
 _SORTS = ("coverage", "path", "size")
 
 

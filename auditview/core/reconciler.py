@@ -4,7 +4,7 @@ import os
 
 from auditview.core.hashing import line_hash, context_hash
 from auditview.core.coverage import is_countable_line
-from auditview.core.io_utils import read_file_lines
+from auditview.core.io_utils import read_file_lines, unreviewable_reason
 
 logger = logging.getLogger("auditview")
 
@@ -284,6 +284,33 @@ async def ensure_snapshot(conn, session_id, file_path, root_path):
 
 async def reconcile_file(conn, session_id, file_path, root_path):
     full_path = os.path.join(root_path, file_path)
+
+    try:
+        reason = unreviewable_reason(full_path)
+    except FileNotFoundError:
+        # Preserve the deletion path below, which also removes the files row.
+        reason = None
+    except OSError:
+        logger.warning("reconcile_file: cannot classify %s", full_path, exc_info=True)
+        return
+
+    if reason is not None:
+        try:
+            mtime = os.path.getmtime(full_path)
+        except OSError:
+            logger.warning("reconcile_file: cannot stat %s", full_path, exc_info=True)
+            return
+        # Keep marks, notes and the last readable snapshot intact. If the file
+        # becomes reviewable again, that snapshot lets the normal reconciler
+        # verify them. NULL countability excludes the file from coverage while
+        # we deliberately refuse to read its current contents.
+        await conn.execute(
+            "INSERT INTO files (session_id, rel_path, last_mtime, countable_lines) "
+            "VALUES (?, ?, ?, NULL) ON CONFLICT(session_id, rel_path) DO UPDATE SET "
+            "last_mtime=excluded.last_mtime, countable_lines=NULL",
+            (session_id, file_path, mtime),
+        )
+        return
     try:
         new_lines = await read_file_lines(full_path)
     except FileNotFoundError:

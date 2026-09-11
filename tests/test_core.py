@@ -598,6 +598,50 @@ async def test_reconcile_file_no_state_updates_mtime(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_reconcile_file_temporarily_unreviewable_preserves_state(tmp_path):
+    filepath = "app.py"
+    full = tmp_path / filepath
+    full.write_bytes(b"x" * ((1 << 20) + 1))
+    original = "line1"
+    original_hash = line_hash(original)
+    original_context = context_hash("", original, "")
+
+    async with _test_db(root=str(tmp_path)) as (conn, root):
+        await conn.execute(
+            "INSERT INTO reviewed_lines (session_id, file_path, line_no, line_hash, context_hash) "
+            "VALUES (1, ?, 1, ?, ?)",
+            (filepath, original_hash, original_context),
+        )
+        await conn.execute(
+            "INSERT INTO files (session_id, rel_path, last_mtime, prev_line_hashes, countable_lines) "
+            "VALUES (1, ?, 0.0, ?, 1)",
+            (filepath, original_hash),
+        )
+
+        await reconcile_file(conn, 1, filepath, root)
+
+        cur = await conn.execute(
+            "SELECT prev_line_hashes, countable_lines FROM files WHERE session_id = 1 AND rel_path = ?",
+            (filepath,),
+        )
+        row = await cur.fetchone()
+        assert row["prev_line_hashes"] == original_hash
+        assert row["countable_lines"] is None
+        cur = await conn.execute(
+            "SELECT COUNT(*) AS n FROM reviewed_lines WHERE session_id = 1 AND file_path = ?",
+            (filepath,),
+        )
+        assert (await cur.fetchone())["n"] == 1
+
+        full.write_text(original)
+        await reconcile_file(conn, 1, filepath, root)
+        cur = await conn.execute(
+            "SELECT countable_lines FROM files WHERE session_id = 1 AND rel_path = ?",
+            (filepath,),
+        )
+        assert (await cur.fetchone())["countable_lines"] == 1
+
+@pytest.mark.asyncio
 async def test_reconcile_file_deleted_clears_marks(tmp_path):
     filepath = "app.py"
     full = tmp_path / filepath

@@ -121,8 +121,9 @@ state (a file tree, a progress list) should call that instead of this.
 ]
 ```
 - `coverage` is `reviewed_lines / countable_lines`; `0` if `countable_lines == 0`
-- `status` is one of `"empty"` (no countable lines), `"not_viewed"` (none reviewed),
-  `"partial"` (some reviewed), `"reviewed"` (all countable lines reviewed)
+- `status` is one of `"empty"` (no countable lines), `"unreviewable"` (large,
+  binary, missing during the scan, or unreadable), `"not_viewed"` (none reviewed),
+  `"partial"` (some reviewed), or `"reviewed"` (all countable lines reviewed)
 - `reviewed_lines` is clamped to `countable_lines` so stale rows can't push it above 100%
 - `notes_count` / `todos_count` count only **live** (non-orphaned) notes
 - `max_severity` is `"P0"` | `"P1"` | `"P2"` | `null` — the highest severity among
@@ -144,6 +145,10 @@ Re-scan the session root: insert newly-discovered files, drop files that no
 longer exist (orphaning their notes and removing their reviewed-line rows),
 and backfill `countable_lines` for any new entries. Returns the same shape as
 `GET /api/sessions/:id/files`.
+Files over 1 MiB and binary or unreadable files remain tracked but receive
+`status: "unreviewable"`; rescan does not read them in full. They contribute
+neither lines nor files to aggregate coverage.
+
 
 **Request body**: empty (`{}` or no body)
 
@@ -690,7 +695,8 @@ Aggregate coverage statistics for the session.
   "coverage": 0.4204
 }
 ```
-- Files whose `countable_lines` has not yet been computed are excluded from the totals
+- Files whose `countable_lines` has not been computed, including files reported
+  as `unreviewable`, are excluded from the totals
 - `total_reviewed_lines` clamps each file's reviewed count to its `countable_lines` so stale rows can't push coverage above 100%
 - `coverage` is `total_reviewed_lines / total_countable_lines`; `0` if denominator is zero
 

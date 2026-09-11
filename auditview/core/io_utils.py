@@ -2,7 +2,7 @@ import asyncio
 import os
 import re
 
-_LARGE_FILE_BYTES = 1 << 20  # 1 MB
+MAX_REVIEWABLE_FILE_BYTES = 1 << 20  # 1 MiB
 
 # Real line terminators only. str.splitlines() additionally breaks on \f, \v,
 # \x1c-\x1e, \x85, U+2028 and U+2029, and nothing else that consumes auditview's
@@ -23,7 +23,16 @@ def is_binary_file(path: str, sample: int = 8192) -> bool:
 
 
 def file_is_large(path: str) -> bool:
-    return os.path.getsize(path) > _LARGE_FILE_BYTES
+    return os.path.getsize(path) > MAX_REVIEWABLE_FILE_BYTES
+
+
+def unreviewable_reason(path: str) -> str | None:
+    """Return why the normal review pipeline must not read *path* in full."""
+    if file_is_large(path):
+        return "large"
+    if is_binary_file(path):
+        return "binary"
+    return None
 
 
 def _split_lines(text):
