@@ -1,11 +1,15 @@
 <template>
   <div class="tree-node">
-    <div
+    <button
+      type="button"
       class="tree-item"
       :class="{ 'tree-file': node.isFile, 'tree-dir': !node.isFile, 'tree-active': isActive }"
+      :aria-expanded="node.isFile ? undefined : expanded"
+      :aria-current="isActive ? 'true' : undefined"
+      :aria-label="itemLabel"
       @click="node.isFile ? select() : toggle()"
     >
-      <span class="tree-icon" :title="isActive ? 'Open in the viewer' : null">{{ icon }}</span>
+      <span class="tree-icon" aria-hidden="true">{{ icon }}</span>
       <span class="tree-name">{{ node.name }}</span>
       <template v-if="node.isFile && node.fileData">
         <span
@@ -24,7 +28,7 @@
         ></span>
       </template>
       <span v-else-if="!node.isFile && node.rollup" class="pct" :title="dirPctTitle">{{ dirPct }}%</span>
-    </div>
+    </button>
     <div v-if="!node.isFile && expanded" class="tree-children">
       <TreeNode
         v-for="child in node.children"
@@ -87,6 +91,14 @@ export default {
       if (!sev) return ''
       return `Highest severity open issue in this file: ${sev}`
     },
+    itemLabel() {
+      if (!this.node.isFile) {
+        return `${this.node.name}, ${this.expanded ? 'expanded' : 'collapsed'}`
+      }
+      const issueCount = this.node.fileData?.open_issue_count || 0
+      const issueText = issueCount ? `, ${issueCount} open issues` : ''
+      return `${this.node.path}, ${this.statusTitle}${issueText}`
+    },
   },
   methods: {
     toggle() {
@@ -102,16 +114,27 @@ export default {
 <style scoped>
 .tree-item {
   display: flex;
+  width: 100%;
   align-items: center;
   padding: 3px 8px;
   font-size: 13px;
   cursor: pointer;
   gap: 4px;
   user-select: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
 }
 
 .tree-item:hover {
   background: var(--bg-hover);
+}
+
+.tree-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
 }
 
 .tree-active {
@@ -183,7 +206,7 @@ export default {
   letter-spacing: 0.3px;
   padding: 0 4px;
   border-radius: 3px;
-  color: white;
+  color: var(--on-solid);
   line-height: 1.4;
   flex-shrink: 0;
 }

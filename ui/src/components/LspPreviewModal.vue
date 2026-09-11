@@ -1,14 +1,14 @@
 <template>
-  <div class="modal-overlay" @click.self="$emit('close')">
-    <div class="modal-box lsp-preview">
-      <h3>
+  <div class="modal-overlay" @click.self="$emit('close')" @keydown="onDialogKeydown">
+    <div ref="dialog" class="modal-box lsp-preview" role="dialog" aria-modal="true" aria-labelledby="lsp-preview-title" tabindex="-1">
+      <h3 id="lsp-preview-title">
         <span class="ext-badge">external</span>
         {{ shortPath }}
       </h3>
       <div class="path-full" :title="path">{{ path }}</div>
 
       <div v-if="loading" class="loading">Loading…</div>
-      <div v-else-if="error" class="error-msg">{{ error }}</div>
+      <div v-else-if="error" class="error-msg" role="alert">{{ error }}</div>
       <table v-else class="preview-table">
         <tbody>
           <tr v-for="l in lines" :key="l.line_no" :class="{ target: l.line_no === line }">
@@ -32,6 +32,7 @@
 
 <script>
 import { getPreview } from '../api/lsp.js'
+import { openDialog, restoreDialogFocus, trapDialogFocus } from '../utils/dialogFocus.js'
 
 export default {
   name: 'LspPreviewModal',
@@ -57,9 +58,16 @@ export default {
     },
   },
   mounted() {
+    openDialog(this)
     this.load()
   },
+  beforeUnmount() {
+    restoreDialogFocus(this)
+  },
   methods: {
+    onDialogKeydown(event) {
+      trapDialogFocus(this, event)
+    },
     async load() {
       try {
         const data = await getPreview(this.sessionId, this.path, this.line)

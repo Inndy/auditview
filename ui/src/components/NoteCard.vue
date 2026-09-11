@@ -1,7 +1,9 @@
 <template>
   <div class="note-card" :class="{ 'note-card-focused': focused }">
-    <div class="note-meta" @click="$emit('jump', note)" title="Jump to lines">
-      Lines {{ note.start_line }}–{{ note.end_line }}
+    <div class="note-meta">
+      <button class="note-jump" type="button" @click="$emit('jump', note)" title="Jump to lines">
+        Lines {{ note.start_line }}–{{ note.end_line }}
+      </button>
       <span v-if="note.is_todo" class="badge badge-todo">TODO</span>
       <span v-if="note.is_orphaned" class="badge badge-orphan">orphan</span>
       <span class="note-actions">
@@ -96,15 +98,26 @@ export default {
 }
 
 .note-meta {
+  display: flex;
+  align-items: center;
+}
+
+.note-jump {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   cursor: pointer;
 }
 
-.note-meta:hover {
+.note-jump:hover,
+.note-jump:focus-visible {
   color: var(--primary);
 }
 
 .note-time {
-  float: right;
+  margin-left: auto;
   font-size: 10px;
   color: var(--text-faint);
 }

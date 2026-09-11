@@ -1,5 +1,5 @@
 <template>
-  <span class="sse-indicator" :class="'sse-' + status" :title="'Live updates: ' + status">
+  <span class="sse-indicator" aria-live="polite" :class="'sse-' + status" :title="'Live updates: ' + status">
     <span class="sse-dot">●</span>
     <span class="sse-label">{{ label }}</span>
     <button v-if="status === 'shutdown'" class="sse-reconnect" @click="reconnect">Reconnect</button>

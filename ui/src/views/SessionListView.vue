@@ -15,12 +15,12 @@
     <div class="create-session-form">
       <h2>New Session</h2>
       <div class="form-group">
-        <label>Label</label>
-        <input v-model="form.label" type="text" placeholder="e.g. First pass" />
+        <label for="session-label">Label</label>
+        <input id="session-label" v-model="form.label" type="text" placeholder="e.g. First pass" />
       </div>
       <div class="form-group">
-        <label>Exclusion patterns <span class="label-hint">(gitignore syntax, one per line)</span></label>
-        <textarea v-model="form.exclusion_patterns" rows="3" placeholder="*.log&#10;build/"></textarea>
+        <label for="session-exclusions">Exclusion patterns <span class="label-hint">(gitignore syntax, one per line)</span></label>
+        <textarea id="session-exclusions" v-model="form.exclusion_patterns" rows="3" placeholder="*.log&#10;build/"></textarea>
       </div>
       <button class="btn-primary" @click="submitCreate" :disabled="creating">
         {{ creating ? 'Creating…' : 'Create Session' }}

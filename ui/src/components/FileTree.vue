@@ -7,6 +7,8 @@
           type="button"
           class="view-btn"
           :class="{ 'is-active': viewMode === 'tree' }"
+          :aria-pressed="viewMode === 'tree'"
+          aria-label="Tree view"
           title="Tree view"
           @click="viewMode = 'tree'"
         >📁</button>
@@ -14,6 +16,8 @@
           type="button"
           class="view-btn"
           :class="{ 'is-active': viewMode === 'flat' }"
+          :aria-pressed="viewMode === 'flat'"
+          aria-label="Flat list sorted by severity"
           title="Flat list, sorted by severity"
           @click="viewMode = 'flat'"
         >📋</button>

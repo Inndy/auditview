@@ -1,10 +1,13 @@
 <template>
-  <div
+  <button
+    type="button"
     class="flat-row"
     :class="{ 'flat-active': isActive }"
+    :aria-current="isActive ? 'true' : undefined"
+    :aria-label="rowLabel"
     @click="$emit('click')"
   >
-    <span class="flat-icon" :title="isActive ? 'Open in the viewer' : null">{{ isActive ? '👁️' : '📄' }}</span>
+    <span class="flat-icon" aria-hidden="true">{{ isActive ? '👁️' : '📄' }}</span>
     <span class="flat-name">{{ basename }}</span>
     <span v-if="dirname" class="flat-dir">{{ dirname }}</span>
     <span class="flat-spacer"></span>
@@ -27,7 +30,7 @@
       :class="'status-' + file.status"
       :title="statusTitle"
     ></span>
-  </div>
+  </button>
 </template>
 
 <script>
@@ -63,6 +66,12 @@ export default {
       if (s === 'unreviewable') return 'Too large or binary; excluded from coverage'
       return 'No countable lines'
     },
+    rowLabel() {
+      const issueText = this.file.open_issue_count
+        ? `, ${this.file.open_issue_count} open issues`
+        : ''
+      return `${this.file.rel_path}, ${this.statusTitle}${issueText}`
+    },
   },
 }
 </script>
@@ -70,6 +79,7 @@ export default {
 <style scoped>
 .flat-row {
   display: flex;
+  width: 100%;
   align-items: center;
   padding: 3px 8px;
   font-size: 13px;
@@ -77,10 +87,20 @@ export default {
   gap: 4px;
   user-select: none;
   min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
 }
 
 .flat-row:hover {
   background: var(--bg-hover);
+}
+
+.flat-row:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
 }
 
 .flat-active {
@@ -143,7 +163,7 @@ export default {
   letter-spacing: 0.3px;
   padding: 0 4px;
   border-radius: 3px;
-  color: white;
+  color: var(--on-solid);
   line-height: 1.4;
   flex-shrink: 0;
 }

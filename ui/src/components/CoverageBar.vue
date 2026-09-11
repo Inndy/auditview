@@ -1,5 +1,13 @@
 <template>
-  <div class="coverage-bar-wrap" :title="`${pct}% reviewed`">
+  <div
+    class="coverage-bar-wrap"
+    role="progressbar"
+    aria-label="Review coverage"
+    aria-valuemin="0"
+    aria-valuemax="100"
+    :aria-valuenow="pct"
+    :title="`${pct}% reviewed`"
+  >
     <div class="coverage-bar-fill" :style="{ width: pct + '%' }"></div>
   </div>
 </template>

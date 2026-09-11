@@ -1,9 +1,9 @@
 <template>
-  <div class="modal-overlay" v-if="visible" @click.self="$emit('close')">
-    <div class="modal-box help-box">
+  <div class="modal-overlay" v-if="visible" @click.self="$emit('close')" @keydown="onDialogKeydown">
+    <div ref="dialog" class="modal-box help-box" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title" tabindex="-1">
       <div class="help-header">
-        <h3>Shortcuts</h3>
-        <button class="btn-icon" data-modal-cancel @click="$emit('close')">✕</button>
+        <h3 id="shortcuts-title">Shortcuts</h3>
+        <button class="btn-icon" aria-label="Close" data-modal-cancel @click="$emit('close')">✕</button>
       </div>
       <table class="help-table">
         <thead>
@@ -47,6 +47,7 @@
 <script>
 import { ACTIONS, GROUP_ORDER } from '../input/actions.js'
 import { padLabel } from '../input/gamepad.js'
+import { openDialog, restoreDialogFocus, trapDialogFocus } from '../utils/dialogFocus.js'
 
 const KEY_LABELS = {
   ' ': 'Space',
@@ -81,6 +82,20 @@ export default {
       groups: buildGroups(),
       countHint: '{count}',
     }
+  },
+  watch: {
+    visible(open) {
+      if (open) openDialog(this)
+      else restoreDialogFocus(this)
+    },
+  },
+  beforeUnmount() {
+    restoreDialogFocus(this)
+  },
+  methods: {
+    onDialogKeydown(event) {
+      trapDialogFocus(this, event)
+    },
   },
 }
 </script>

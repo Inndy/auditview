@@ -1,6 +1,6 @@
 <template>
   <div class="session-header">
-    <router-link to="/" class="back-btn" title="Back to session list">&#8592;</router-link>
+    <router-link to="/" class="back-btn" aria-label="Back to session list" title="Back to session list">&#8592;</router-link>
     <div class="session-title">
       <strong>{{ session.label }}</strong>
       <span class="session-path">{{ session.root_path }}</span>
@@ -18,7 +18,7 @@
       Wrap lines
     </label>
     <DarkModeToggle style="font-size: 16px" />
-    <button class="help-btn" title="Session settings" @click="$emit('show-settings')">&#9881;</button>
+    <button class="help-btn" aria-label="Session settings" title="Session settings" @click="$emit('show-settings')">&#9881;</button>
     <button class="help-btn" title="Keyboard shortcuts (?)" @click="$emit('show-help')">?</button>
   </div>
 </template>

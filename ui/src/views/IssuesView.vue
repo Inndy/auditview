@@ -79,6 +79,7 @@
             <label>Title</label>
             <input
               v-model="selectedIssue.title"
+              aria-label="Issue title"
               @focus="rememberTitle"
               @blur="updateField('title')"
               type="text"
@@ -86,7 +87,7 @@
           </div>
           <div class="detail-row">
             <label>Severity</label>
-            <select v-model="selectedIssue.severity" @focus="rememberSeverity" @change="updateField('severity')">
+            <select v-model="selectedIssue.severity" aria-label="Issue severity" @focus="rememberSeverity" @change="updateField('severity')">
               <option value="P0">P0</option>
               <option value="P1">P1</option>
               <option value="P2">P2</option>
@@ -105,6 +106,7 @@
               v-if="editingDescription"
               ref="descriptionEditor"
               v-model="descriptionDraft"
+              aria-label="Issue description"
               class="description-editor"
               rows="6"
               placeholder="Markdown supported"
@@ -116,11 +118,12 @@
               class="description-rendered"
               :source="selectedIssue.description"
             />
-            <div
+            <button
+              type="button"
               v-else
               class="description-empty"
               @click="startEditDescription"
-            >No description.</div>
+            >No description.</button>
           </div>
           <div class="detail-row">
             <div class="field-label">
@@ -182,7 +185,13 @@
               :class="{ selected: selectedNoteIds.includes(note.id) }"
               @click="toggleNoteSelection(note.id)"
             >
-              <input type="checkbox" :checked="selectedNoteIds.includes(note.id)" class="note-checkbox" />
+              <input
+                type="checkbox"
+                :checked="selectedNoteIds.includes(note.id)"
+                :aria-label="`Select note ${note.id}`"
+                class="note-checkbox"
+                @change.stop="toggleNoteSelection(note.id)"
+              />
               <div class="note-info">
                 <router-link
                   class="note-file note-file-link"
@@ -685,7 +694,7 @@ export default {
 
 .filter-btn.active {
   background: var(--primary);
-  color: white;
+  color: var(--on-solid);
   border-color: var(--primary);
 }
 
@@ -737,7 +746,7 @@ export default {
   font-weight: 600;
   padding: 2px 6px;
   border-radius: 3px;
-  color: white;
+  color: var(--on-solid);
 }
 
 .severity-dim {

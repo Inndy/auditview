@@ -64,7 +64,12 @@ function onKeyDown(e) {
     return
   }
 
-  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return
+  // Preserve native keyboard behavior for every interactive element. In
+  // particular, Space must activate a focused button instead of toggling the
+  // code selection anchor, and arrows in a select must not change files.
+  if (e.target?.closest?.(
+    'button, a, input, textarea, select, [contenteditable], [role="button"], [role="link"]',
+  )) return
 
   const key = e.key
 

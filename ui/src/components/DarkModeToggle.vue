@@ -1,6 +1,7 @@
 <template>
   <button
     class="dark-mode-toggle"
+    :aria-label="dark ? 'Switch to light mode' : 'Switch to dark mode'"
     :title="dark ? 'Switch to light mode' : 'Switch to dark mode'"
     @click="toggle"
   >{{ dark ? '☀️' : '🌙' }}</button>

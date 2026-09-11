@@ -1,16 +1,16 @@
 <template>
-  <div class="modal-overlay" v-if="visible" @click.self="close">
-    <div class="modal-box settings-box">
+  <div class="modal-overlay" v-if="visible" @click.self="close" @keydown="onDialogKeydown">
+    <div ref="dialog" class="modal-box settings-box" role="dialog" aria-modal="true" aria-labelledby="settings-title" tabindex="-1">
       <div class="settings-header">
-        <h3>Session Settings</h3>
-        <button class="btn-icon" @click="close">✕</button>
+        <h3 id="settings-title">Session Settings</h3>
+        <button class="btn-icon" aria-label="Close" data-modal-cancel @click="close">✕</button>
       </div>
 
-      <div v-if="error" class="error-msg">{{ error }}</div>
+      <div v-if="error" class="error-msg" role="alert">{{ error }}</div>
 
       <div class="form-group">
-        <label>Exclusion patterns <span class="label-hint">(gitignore syntax, one per line)</span></label>
-        <textarea v-model="patterns" rows="6" placeholder="*.log&#10;build/"></textarea>
+        <label for="settings-exclusions">Exclusion patterns <span class="label-hint">(gitignore syntax, one per line)</span></label>
+        <textarea id="settings-exclusions" v-model="patterns" rows="6" placeholder="*.log&#10;build/"></textarea>
       </div>
 
       <label class="purge-toggle">
@@ -71,13 +71,13 @@
           {{ busy === 'reload' ? 'Reloading…' : 'Reload ignore rules' }}
         </button>
         <span class="spacer"></span>
-        <button class="btn-sm" @click="close">Cancel</button>
-        <button class="btn-primary" @click="save" :disabled="busy">
+        <button class="btn-sm" data-modal-cancel @click="close">Cancel</button>
+        <button class="btn-primary" data-modal-confirm @click="save" :disabled="busy">
           {{ saveLabel }}
         </button>
       </div>
 
-      <p v-if="status" class="settings-status">{{ status }}</p>
+      <p v-if="status" class="settings-status" role="status">{{ status }}</p>
     </div>
   </div>
 </template>
@@ -85,6 +85,7 @@
 <script>
 import { updateSession, previewPurge } from '../api/sessions.js'
 import { rescanSession } from '../api/files.js'
+import { openDialog, restoreDialogFocus, trapDialogFocus } from '../utils/dialogFocus.js'
 
 export default {
   name: 'SessionSettings',
@@ -115,12 +116,16 @@ export default {
     // A purge appends to exclusion_patterns server-side, so the textarea is only
     // safe to seed at open time — reusing a stale copy would silently revert it.
     visible(open) {
-      if (!open) return
+      if (!open) {
+        restoreDialogFocus(this)
+        return
+      }
       this.patterns = this.session.exclusion_patterns || ''
       this.purge = false
       this.error = null
       this.status = null
       this.preview = null
+      openDialog(this, '#settings-exclusions')
     },
     // Any change to what would be purged invalidates the preview the user
     // approved, so Save drops back to previewing rather than firing blind.
@@ -131,7 +136,13 @@ export default {
       this.preview = null
     },
   },
+  beforeUnmount() {
+    restoreDialogFocus(this)
+  },
   methods: {
+    onDialogKeydown(event) {
+      trapDialogFocus(this, event)
+    },
     close() {
       if (this.busy) return
       this.$emit('close')

@@ -1,7 +1,7 @@
 <template>
-  <div class="modal-overlay" @click.self="$emit('cancel')">
-    <div class="modal-box issue-picker">
-      <h3>Add to Issue — lines {{ startLine }}–{{ endLine }}</h3>
+  <div class="modal-overlay" @click.self="$emit('cancel')" @keydown="onDialogKeydown">
+    <div ref="dialog" class="modal-box issue-picker" role="dialog" aria-modal="true" aria-labelledby="issue-picker-title" tabindex="-1">
+      <h3 id="issue-picker-title">Add to Issue — lines {{ startLine }}–{{ endLine }}</h3>
 
       <div v-if="loading" class="loading">Loading issues…</div>
       <template v-else>
@@ -24,12 +24,12 @@
 
         <div v-else class="new-issue-form">
           <div class="form-row">
-            <label>Title</label>
-            <input v-model="newTitle" type="text" ref="newTitleInput" placeholder="Short summary…" />
+            <label for="issue-picker-name">Title</label>
+            <input id="issue-picker-name" v-model="newTitle" type="text" ref="newTitleInput" placeholder="Short summary…" />
           </div>
           <div class="form-row">
-            <label>Severity</label>
-            <select v-model="newSeverity">
+            <label for="issue-picker-severity">Severity</label>
+            <select id="issue-picker-severity" v-model="newSeverity">
               <option value="P0">P0 - Critical</option>
               <option value="P1">P1 - High</option>
               <option value="P2">P2 - Medium</option>
@@ -39,7 +39,7 @@
         </div>
       </template>
 
-      <div v-if="error" class="error-msg">{{ error }}</div>
+      <div v-if="error" class="error-msg" role="alert">{{ error }}</div>
 
       <div class="modal-actions">
         <button data-modal-cancel @click="$emit('cancel')">Cancel</button>
@@ -53,6 +53,7 @@
 
 <script>
 import { listIssues, createIssue } from '../api/issues.js'
+import { openDialog, restoreDialogFocus, trapDialogFocus } from '../utils/dialogFocus.js'
 
 export default {
   name: 'IssuePickerModal',
@@ -81,7 +82,11 @@ export default {
     },
   },
   mounted() {
+    openDialog(this)
     this.load()
+  },
+  beforeUnmount() {
+    restoreDialogFocus(this)
   },
   watch: {
     creatingNew(val) {
@@ -91,6 +96,9 @@ export default {
     },
   },
   methods: {
+    onDialogKeydown(event) {
+      trapDialogFocus(this, event)
+    },
     async load() {
       this.loading = true
       try {
@@ -179,7 +187,7 @@ export default {
   font-weight: 600;
   padding: 2px 6px;
   border-radius: 3px;
-  color: white;
+  color: var(--on-solid);
   flex-shrink: 0;
 }
 

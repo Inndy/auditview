@@ -46,14 +46,16 @@ export default {
   /* Text (decreasing contrast: text > dim > muted > faint > gutter) */
   --text:                 #333333;
   --text-dim:             #555555;
-  --text-muted:           #888888;
-  --text-faint:           #aaaaaa;  /* timestamps, empty-state hints */
-  --text-gutter:          #999999;  /* line numbers */
+  --text-muted:           #666666;
+  --text-faint:           #767676;  /* timestamps, empty-state hints */
+  --text-gutter:          #666666;  /* line numbers */
 
   /* Brand */
   --link:                 #0066cc;
   --primary:              #0066cc;
   --primary-hover:        #0052a3;
+  --on-solid:             #ffffff;
+  --on-muted:             #ffffff;
 
   /* Destructive */
   --danger:               #dc3545;
@@ -65,15 +67,15 @@ export default {
   --badge-orphan-text:    #842029;
 
   /* Issue severity (P0/P1/P2/NONE dots and pills) */
-  --severity-p0:          #dc3545;
-  --severity-p1:          #fd7e14;
-  --severity-p2:          #0dcaf0;
+  --severity-p0:          #c82333;
+  --severity-p1:          #9a4d00;
+  --severity-p2:          #087990;
   --severity-none:        #adb5bd;
 
   /* Status indicators (file review state, SSE connection, issue resolution) */
-  --status-success:       #4caf50;  /* reviewed, connected, resolved */
-  --status-warning:       #ff9800;  /* partial, connecting */
-  --status-error:         #e53935;  /* disconnected */
+  --status-success:       #2e7d32;  /* reviewed, connected, resolved */
+  --status-warning:       #a95a00;  /* partial, connecting */
+  --status-error:         #c62828;  /* disconnected */
 
   /* Effects */
   --shadow:               rgba(0,0,0,0.18);
@@ -95,21 +97,22 @@ html.dark {
   --border-light:         #2a2a2a;
   --border-mid:           #383838;
   --text:                 #d4d4d4;
-  --text-dim:             #9d9d9d;
-  --text-muted:           #858585;
-  --text-faint:           #6e7681;
-  --text-gutter:          #6e7681;
+  --text-dim:             #b3b3b3;
+  --text-muted:           #a0a0a0;
+  --text-faint:           #909090;
+  --text-gutter:          #909090;
   --link:                 #4d9de0;
-  --primary:              #4d9de0;
-  --primary-hover:        #3a8fd6;
-  --danger:               #f1534a;
+  --primary:              #147eb3;
+  --primary-hover:        #0b6fa4;
+  --on-muted:             #111111;
+  --danger:               #c82333;
   --badge-todo-bg:        #3a2e00;
   --badge-todo-text:      #e6b800;
   --badge-orphan-bg:      #3a1a1a;
   --badge-orphan-text:    #f1534a;
-  --severity-p0:          #e74c3c;
-  --severity-p1:          #ff9f43;
-  --severity-p2:          #4dd0e1;
+  --severity-p0:          #c82333;
+  --severity-p1:          #9a4d00;
+  --severity-p2:          #087990;
   --severity-none:        #6c757d;
   --status-success:       #66bb6a;
   --status-warning:       #ffa726;
@@ -421,7 +424,7 @@ button:disabled {
 .btn-primary {
   background: var(--primary);
   border-color: var(--primary);
-  color: #fff;
+  color: var(--on-solid);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -432,7 +435,7 @@ button:disabled {
 .btn-danger {
   background: var(--danger);
   border-color: var(--danger);
-  color: #fff;
+  color: var(--on-solid);
 }
 
 .btn-danger:hover:not(:disabled) {
@@ -448,7 +451,7 @@ button:disabled {
 }
 .btn-outline-primary:hover:not(:disabled) {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-solid);
 }
 
 .btn-outline-success {
@@ -458,7 +461,7 @@ button:disabled {
 }
 .btn-outline-success:hover:not(:disabled) {
   background: var(--status-success);
-  color: #fff;
+  color: var(--on-solid);
 }
 
 .btn-outline-danger {
@@ -468,7 +471,7 @@ button:disabled {
 }
 .btn-outline-danger:hover:not(:disabled) {
   background: var(--danger);
-  color: #fff;
+  color: var(--on-solid);
 }
 
 .btn-outline-muted {
@@ -478,7 +481,7 @@ button:disabled {
 }
 .btn-outline-muted:hover:not(:disabled) {
   background: var(--text-muted);
-  color: #fff;
+  color: var(--on-muted);
 }
 
 .btn-ghost {

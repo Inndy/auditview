@@ -11,8 +11,8 @@ const app = createApp(App)
 app.config.globalProperties.$hljs = hljs
 
 app.use(router)
+initDark()
 app.mount('#app')
 
-initDark()
 attachKeyboard()
 gamepad.start()

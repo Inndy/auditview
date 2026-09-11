@@ -1,21 +1,21 @@
 <template>
-  <div class="modal-overlay" @click.self="$emit('close')">
-    <div class="modal">
+  <div class="modal-overlay" @click.self="$emit('close')" @keydown="onDialogKeydown">
+    <div ref="dialog" class="modal" role="dialog" aria-modal="true" aria-labelledby="create-issue-title" tabindex="-1">
       <div class="modal-header">
-        <h3>Create Issue from {{ selectedNoteIds.length }} Note(s)</h3>
-        <button class="btn-icon" @click="$emit('close')">✕</button>
+        <h3 id="create-issue-title">Create Issue from {{ selectedNoteIds.length }} Note(s)</h3>
+        <button class="btn-icon" aria-label="Close" @click="$emit('close')">✕</button>
       </div>
 
       <div class="modal-body">
         <div v-if="error" class="form-error" role="alert">{{ error }}</div>
         <div class="form-group">
-          <label>Issue Title</label>
-          <input v-model="title" type="text" placeholder="e.g., SQL injection vulnerability" />
+          <label for="create-issue-name">Issue Title</label>
+          <input id="create-issue-name" ref="titleInput" v-model="title" type="text" placeholder="e.g., SQL injection vulnerability" />
         </div>
 
         <div class="form-group">
-          <label>Severity</label>
-          <select v-model="severity">
+          <label for="create-issue-severity">Severity</label>
+          <select id="create-issue-severity" v-model="severity">
             <option value="P0">P0 - Critical</option>
             <option value="P1">P1 - High</option>
             <option value="P2">P2 - Medium</option>
@@ -23,8 +23,9 @@
         </div>
 
         <div class="form-group">
-          <label>Description <span class="hint">(markdown, optional)</span></label>
+          <label for="create-issue-description">Description <span class="hint">(markdown, optional)</span></label>
           <textarea
+            id="create-issue-description"
             v-model="description"
             rows="5"
             placeholder="Optional details — supports markdown"
@@ -53,6 +54,7 @@
 
 <script>
 import { createIssue } from '../api/issues.js'
+import { openDialog, restoreDialogFocus, trapDialogFocus } from '../utils/dialogFocus.js'
 
 export default {
   name: 'CreateIssueModal',
@@ -70,7 +72,16 @@ export default {
       error: null,
     }
   },
+  mounted() {
+    openDialog(this, '#create-issue-name')
+  },
+  beforeUnmount() {
+    restoreDialogFocus(this)
+  },
   methods: {
+    onDialogKeydown(event) {
+      trapDialogFocus(this, event)
+    },
     async create() {
       if (!this.title.trim()) return
 
