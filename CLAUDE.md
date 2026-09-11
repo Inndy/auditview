@@ -53,10 +53,14 @@ git commit -am "Release $(uv version --short)"
 git push origin HEAD && git push origin v<version>
 make publish               # only when you actually want to upload
 ```
-`release.sh` never pushes and never publishes. It refuses to build when the tree is
-dirty, `uv.lock` disagrees with `pyproject.toml`, the tag already exists locally or on a
-remote, `node`/`pnpm` are missing (which would ship a stale UI), or the built artifact's
-commit stamp is not `HEAD`. Escape hatches: `--allow-dirty`, `--skip-tests`, `--yes`.
+`release.sh` never pushes and never publishes. It installs the exact frontend lockfile,
+checks backend and frontend tests, frontend lint, and the generated third-party license
+notice, then builds and verifies both distributions. It refuses to build when the tree is
+dirty, untracked backend or frontend source could enter an artifact, either lockfile has
+drifted, the tag already exists locally or on a remote, `node`/`pnpm` are missing (which
+would ship a stale UI), or the built artifact's commit stamp is not `HEAD`. Escape
+hatches: `--allow-dirty`, `--skip-tests`, `--yes`; `--skip-tests` does not bypass the
+frozen frontend install or license-notice check.
 
 **Dev server (for AI agent):**
 - To pick up code changes, run `./scripts/dev-restart.sh`. It signals the running supervisors to relaunch in place.

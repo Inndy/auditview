@@ -82,22 +82,40 @@ if [ "$ALLOW_DIRTY" -eq 0 ]; then
     fi
 fi
 # The hole that tracked-only dirtiness leaves: an untracked .py under auditview/
-# would be packaged by build_py's glob without being in the tagged commit.
-# auditview/static/ and _build_info.py are gitignored, so anything here is stray.
-stray="$(git status --porcelain --untracked-files=all -- auditview | grep '^??' || true)"
+# would be packaged by build_py's glob, and an untracked source under ui/ could
+# be bundled by Vite, without either file being in the tagged commit.
+# auditview/static/, ui/dist/, node_modules/ and _build_info.py are gitignored,
+# so anything reported in these source trees is stray.
+stray="$(git status --porcelain --untracked-files=all -- auditview ui | grep '^??' || true)"
 if [ -n "$stray" ]; then
     echo "$stray" >&2
-    die "untracked files under auditview/ would be packaged; commit or remove them."
+    die "untracked files under auditview/ or ui/ would be packaged; commit or remove them."
 fi
 
 # uv.lock drifted behind pyproject on both prior releases (see 0fa09f7).
 step "checking uv.lock against pyproject.toml"
 uv lock --check || die "uv.lock is out of date with pyproject.toml (run 'uv lock' and commit it)."
 
+step "installing frozen UI dependencies"
+pnpm --dir "$ROOT/ui" install --frozen-lockfile \
+    || die "UI dependencies do not match ui/pnpm-lock.yaml."
+
+step "checking third-party license notices"
+pnpm --dir "$ROOT/ui" licenses:check \
+    || die "THIRD_PARTY_LICENSES.txt is stale (run 'pnpm --dir ui licenses:generate' and commit it)."
+
 if [ "$SKIP_TESTS" -eq 0 ]; then
-    step "running tests"
+    step "running backend tests"
     # addopts already deselects the fuzz suite.
-    uv run pytest -q || die "tests failed (pass --skip-tests to override)."
+    uv run --frozen pytest -q || die "backend tests failed (pass --skip-tests to override)."
+
+    step "running frontend tests"
+    pnpm --dir "$ROOT/ui" test \
+        || die "frontend tests failed (pass --skip-tests to override)."
+
+    step "linting frontend"
+    pnpm --dir "$ROOT/ui" lint \
+        || die "frontend lint failed (pass --skip-tests to override)."
 fi
 
 # -- Confirm ----------------------------------------------------------------
