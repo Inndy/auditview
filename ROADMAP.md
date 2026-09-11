@@ -12,11 +12,22 @@ Agents reviewing and fixing code is already happening in practice. The gap is th
 
 ## Medium term
 
-### Unit tests
-The frontend gamepad state machine has focused tests for bindings, modifiers, and repeat behavior, but backend coverage remains limited to the reconciler fuzz suite. Core business logic in `auditview/core/` has no unit tests. Adding targeted tests for the reconciler, scanner, and session management would catch regressions earlier and reduce reliance on fuzzing as the backend's only safety net.
+### Expand automated coverage
+The backend has focused tests for core hashing, counting, scanning, reconciliation,
+watchers, the CLI, LSP lifecycle, REST/MCP behavior, and SSE payloads, alongside the
+reconciler fuzzer. The frontend covers the gamepad state machine and pure navigation
+helpers. The largest remaining gap is browser-level coverage of the Vue components and
+complete review workflows: selecting files, marking ranges, creating notes and issues,
+and reacting to watcher events. Add component and end-to-end tests before expanding the
+UI surface further.
 
-### Issue lifecycle with attribution
-Notes and TODOs exist but are informal. A lightweight issue tracker — open → in progress → resolved — with `opened_by`, `resolved_by`, `verified_by` fields turns the tool into a coordination platform for mixed human/agent review workflows. Agents can open issues on suspicious lines; humans triage; other agents or humans resolve and verify.
+### Complete issue lifecycle attribution
+The issue tracker now supports open, resolved, and dismissed states; attached line notes;
+severity; markdown descriptions; and free-form `source` / `closed_by` attribution. To
+support a mixed human/agent workflow end to end, it still needs an in-progress state,
+independent verification (`verified_by`), and an append-only transition history rather
+than only the latest closer. That would let agents open findings, humans triage them, and
+another human or agent resolve and verify them without losing the audit trail.
 
 ### Gamepad remapping and wider coverage
 Gamepad support ships with a fixed default binding table (standard/Xbox mapping) plus `localStorage` overrides for both the action→button map and the physical input map. Missing: a remap UI that captures a button press and assigns it to an action; bindings for the issues view, which has no keyboard handling either; expanding and collapsing directories in the file tree from the pad (`TreeNode.vue` keeps `expanded` as per-node local state, unaddressable from outside); focus for the orphan-notes panel. `IssuesView`'s delete confirmation uses a native blocking `confirm()`, which no input layer can drive.
