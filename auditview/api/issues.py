@@ -1,6 +1,7 @@
-from quart import Blueprint, request, jsonify, current_app
+from quart import Blueprint, jsonify, request, current_app
 from auditview.db.connection import open_db
 from auditview.api.notes import NOTE_SELECT_COLUMNS, NOTE_SELECT_FROM, note_row
+from auditview.api.util import get_json_object
 
 bp = Blueprint("issues", __name__)
 
@@ -93,22 +94,28 @@ async def get_issue(session_id, issue_id):
 
 @bp.route("/sessions/<int:session_id>/issues", methods=["POST"])
 async def create_issue(session_id):
-    data = await request.get_json(force=True, silent=True) or {}
-    title = data.get("title", "").strip()
+    data = await get_json_object()
+    title = data.get("title")
     severity = data.get("severity", "P2")
     description = data.get("description", "")
     note_ids = data.get("note_ids", [])
-    source = data.get("source") or None
+    source = data.get("source")
 
-    if not title:
+    if not isinstance(title, str) or not title.strip():
         return jsonify({"error": "title is required"}), 400
+    title = title.strip()
     if severity not in ("P0", "P1", "P2"):
         return jsonify({"error": "severity must be P0, P1, or P2"}), 400
     if not isinstance(description, str):
         return jsonify({"error": "description must be a string"}), 400
-    if not isinstance(note_ids, list) or not all(isinstance(n, int) for n in note_ids):
+    if not isinstance(note_ids, list) or not all(
+        isinstance(n, int) and not isinstance(n, bool) for n in note_ids
+    ):
         return jsonify({"error": "note_ids must be an array of integers"}), 400
+    if source is not None and not isinstance(source, str):
+        return jsonify({"error": "source must be a string"}), 400
 
+    source = source or None
     async with open_db(current_app.config["DB_PATH"]) as conn:
         cur = await conn.execute("SELECT id FROM sessions WHERE id = ?", (session_id,))
         if await cur.fetchone() is None:
@@ -163,14 +170,16 @@ async def create_issue(session_id):
 
 @bp.route("/sessions/<int:session_id>/issues/<int:issue_id>", methods=["PATCH"])
 async def update_issue(session_id, issue_id):
-    data = await request.get_json(force=True, silent=True) or {}
+    data = await get_json_object()
     title = data.get("title")
     severity = data.get("severity")
     status = data.get("status")
     description = data.get("description")
-    actor = data.get("actor") or None
+    actor = data.get("actor")
 
     if title is not None:
+        if not isinstance(title, str):
+            return jsonify({"error": "title must be a string"}), 400
         title = title.strip()
         if not title:
             return jsonify({"error": "title cannot be empty"}), 400
@@ -181,6 +190,9 @@ async def update_issue(session_id, issue_id):
     if description is not None and not isinstance(description, str):
         return jsonify({"error": "description must be a string"}), 400
 
+    if actor is not None and not isinstance(actor, str):
+        return jsonify({"error": "actor must be a string"}), 400
+    actor = actor or None
     async with open_db(current_app.config["DB_PATH"]) as conn:
         cur = await conn.execute("SELECT id FROM sessions WHERE id = ?", (session_id,))
         if await cur.fetchone() is None:
@@ -292,10 +304,10 @@ async def list_issue_notes(session_id, issue_id):
 
 @bp.route("/sessions/<int:session_id>/notes/<int:note_id>/issue", methods=["PUT"])
 async def attach_note_to_issue(session_id, note_id):
-    data = await request.get_json(force=True, silent=True) or {}
+    data = await get_json_object()
     issue_id = data.get("issue_id")
 
-    if issue_id is None:
+    if not isinstance(issue_id, int) or isinstance(issue_id, bool):
         return jsonify({"error": "issue_id is required"}), 400
 
     async with open_db(current_app.config["DB_PATH"]) as conn:

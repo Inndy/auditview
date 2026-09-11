@@ -6,7 +6,7 @@ from auditview.core.hashing import line_hash, context_hash
 from auditview.core.coverage import is_countable_line
 from auditview.core.reconciler import reconcile_file
 from auditview.core.io_utils import read_file_lines, is_binary_file, file_is_large, unreviewable_reason
-from auditview.api.util import safe_path
+from auditview.api.util import get_json_object, safe_path
 from auditview.core.progress import file_progress as _build_file_list_response
 from auditview.core.scanner import _base_spec, path_excluded, scan_folder
 from pathspec.patterns.gitwildmatch import GitWildMatchPattern
@@ -304,7 +304,7 @@ async def purge_preview(session_id):
     Nothing here mutates: the candidate scan deliberately bypasses the watcher
     cache rather than seeding it with patterns that may never be saved.
     """
-    data = await request.get_json(force=True, silent=True) or {}
+    data = await get_json_object()
 
     async with open_db(current_app.config["DB_PATH"]) as conn:
         cur = await conn.execute(
@@ -364,7 +364,7 @@ async def purge_preview(session_id):
 
 @bp.route("/sessions/<int:session_id>/purge", methods=["POST"])
 async def purge_path(session_id):
-    data = await request.get_json(force=True, silent=True) or {}
+    data = await get_json_object()
     rel_path, err = _normalize_purge_path(data.get("path"))
     if err:
         return jsonify({"error": err}), 400

@@ -1,4 +1,15 @@
 import os
+from quart import request
+
+
+async def get_json_object():
+    """Return the request JSON object, or an empty object for invalid shapes.
+
+    Route-level required-field validation then produces its existing 400 error
+    without every endpoint having to defend `.get()` from arrays or scalars.
+    """
+    data = await request.get_json(force=True, silent=True)
+    return data if isinstance(data, dict) else {}
 
 
 def safe_path(root_path, rel_path):

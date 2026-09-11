@@ -284,6 +284,16 @@ async def test_definition_validates_position():
 
 
 @pytest.mark.asyncio
+async def test_definition_rejects_non_object_body_and_boolean_positions():
+    async with _test_app(_StubLsp()) as (app, tmp):
+        open(os.path.join(tmp, "a.py"), "w").close()
+        client = app.test_client()
+        assert (await _post(client, [])).status_code == 400
+        assert (await _post(client, {"file_path": "a.py", "line": True,
+                                     "character": 0})).status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_definition_missing_file_is_404():
     async with _test_app(_StubLsp()) as (app, tmp):
         r = await _post(app.test_client(),

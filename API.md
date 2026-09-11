@@ -1,6 +1,9 @@
 # auditview — API Contract
 
 All endpoints are under `/api`. Request/response bodies are JSON unless noted.
+Request bodies shown as objects reject missing fields and values of the wrong
+scalar type with `400`; malformed or non-object JSON is treated as having no
+fields, rather than causing an internal server error.
 Errors return `{"error": "<message>"}` with an appropriate HTTP status.
 
 The server is bound to a single `root_path` and `db_path` chosen at startup

@@ -5,7 +5,7 @@ from quart import Blueprint, jsonify, request, current_app
 from auditview.db.connection import open_db
 from auditview.core.io_utils import file_is_large, is_binary_file, read_file_lines
 from auditview.core.lsp import LspError, uri_to_path
-from auditview.api.util import safe_path, is_excluded
+from auditview.api.util import get_json_object, safe_path, is_excluded
 
 bp = Blueprint("lsp", __name__)
 
@@ -79,13 +79,18 @@ async def definition(session_id):
         root_path = row["root_path"]
         exclusions = row["exclusion_patterns"]
 
-        data = await request.get_json(force=True, silent=True) or {}
+        data = await get_json_object()
         file_path = data.get("file_path")
         line = data.get("line")
         character = data.get("character")
-        if not file_path or line is None or character is None:
+        if not isinstance(file_path, str) or not file_path:
+            return jsonify({"error": "file_path must be a non-empty string"}), 400
+        if line is None or character is None:
             return jsonify({"error": "file_path, line, and character are required"}), 400
-        if not isinstance(line, int) or not isinstance(character, int):
+        if (
+            not isinstance(line, int) or isinstance(line, bool) or
+            not isinstance(character, int) or isinstance(character, bool)
+        ):
             return jsonify({"error": "line and character must be integers"}), 400
         if line < 1 or character < 0:
             return jsonify({"error": "invalid position"}), 400

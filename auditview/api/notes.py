@@ -1,10 +1,10 @@
 import os
-from quart import Blueprint, request, jsonify, current_app
+from quart import Blueprint, jsonify, current_app
 from auditview.db.connection import open_db
 from auditview.core.hashing import line_hash
 from auditview.core.io_utils import read_file_lines
 from auditview.core.reconciler import ensure_snapshot
-from auditview.api.util import safe_path, is_excluded
+from auditview.api.util import get_json_object, safe_path, is_excluded
 
 bp = Blueprint("notes", __name__)
 
@@ -59,21 +59,34 @@ async def create_note(session_id):
             return jsonify({"error": "Session not found"}), 404
 
         root_path = session_row["root_path"]
-        data = await request.get_json(force=True, silent=True) or {}
-        file_path = data.get("file_path", "").strip()
+        data = await get_json_object()
+        file_path = data.get("file_path")
         start_line = data.get("start_line")
         end_line = data.get("end_line")
-        content = data.get("content", "").strip()
-        is_todo = bool(data.get("is_todo", False))
+        content = data.get("content", "")
+        is_todo = data.get("is_todo", False)
         issue_id = data.get("issue_id")
 
-        if not file_path:
+        if not isinstance(file_path, str) or not file_path.strip():
             return jsonify({"error": "file_path is required"}), 400
+        file_path = file_path.strip()
+        if not isinstance(content, str):
+            return jsonify({"error": "content must be a string"}), 400
+        content = content.strip()
+        if not isinstance(is_todo, bool):
+            return jsonify({"error": "is_todo must be a boolean"}), 400
+        if issue_id is not None and (
+            not isinstance(issue_id, int) or isinstance(issue_id, bool)
+        ):
+            return jsonify({"error": "issue_id must be an integer"}), 400
         if not content and not issue_id:
             return jsonify({"error": "content or issue_id is required"}), 400
         if start_line is None or end_line is None:
             return jsonify({"error": "start_line and end_line are required"}), 400
-        if not isinstance(start_line, int) or not isinstance(end_line, int):
+        if (
+            not isinstance(start_line, int) or isinstance(start_line, bool) or
+            not isinstance(end_line, int) or isinstance(end_line, bool)
+        ):
             return jsonify({"error": "start_line and end_line must be integers"}), 400
         if start_line > end_line or start_line < 1:
             return jsonify({"error": "invalid line range"}), 400
@@ -148,15 +161,18 @@ async def update_note(session_id, note_id):
         if await cur.fetchone() is None:
             return jsonify({"error": "Note not found"}), 404
 
-        data = await request.get_json(force=True, silent=True) or {}
+        data = await get_json_object()
         updates = {}
         if "content" in data:
-            content = data["content"].strip()
-            if not content:
+            content = data["content"]
+            if not isinstance(content, str) or not content.strip():
                 return jsonify({"error": "content cannot be empty"}), 400
-            updates["content"] = content
+            updates["content"] = content.strip()
         if "is_todo" in data:
-            updates["is_todo"] = int(bool(data["is_todo"]))
+            is_todo = data["is_todo"]
+            if not isinstance(is_todo, bool):
+                return jsonify({"error": "is_todo must be a boolean"}), 400
+            updates["is_todo"] = int(is_todo)
 
         if not updates:
             return jsonify({"error": "nothing to update"}), 400

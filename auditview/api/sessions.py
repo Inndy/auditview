@@ -1,6 +1,7 @@
-from quart import Blueprint, request, jsonify, current_app
+from quart import Blueprint, jsonify, current_app
 from auditview.db.connection import open_db
 from auditview.core.scanner import _base_spec
+from auditview.api.util import get_json_object
 
 bp = Blueprint("sessions", __name__)
 
@@ -17,12 +18,13 @@ async def list_sessions():
 
 @bp.route("/sessions", methods=["POST"])
 async def create_session():
-    data = await request.get_json(force=True, silent=True) or {}
-    label = data.get("label", "").strip()
+    data = await get_json_object()
+    label = data.get("label")
     exclusion_patterns = data.get("exclusion_patterns", "")
 
-    if not label:
+    if not isinstance(label, str) or not label.strip():
         return jsonify({"error": "label is required"}), 400
+    label = label.strip()
     if not isinstance(exclusion_patterns, str):
         return jsonify({"error": "exclusion_patterns must be a string"}), 400
     try:
@@ -48,14 +50,15 @@ async def create_session():
 
 @bp.route("/sessions/<int:session_id>", methods=["PATCH"])
 async def update_session(session_id):
-    data = await request.get_json(force=True, silent=True) or {}
+    data = await get_json_object()
 
     updates = []
     params = []
     if "label" in data:
-        label = (data.get("label") or "").strip()
-        if not label:
+        label = data.get("label")
+        if not isinstance(label, str) or not label.strip():
             return jsonify({"error": "label must be a non-empty string"}), 400
+        label = label.strip()
         updates.append("label = ?")
         params.append(label)
     spec = None

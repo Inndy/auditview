@@ -1,8 +1,9 @@
 from pathlib import Path
-from quart import Blueprint, jsonify, request, current_app
+from quart import Blueprint, jsonify, current_app
 from auditview import __commit__, __version__
 from auditview.db.connection import open_db
 from auditview.core.progress import active_session as _get_mcp_session
+from auditview.api.util import get_json_object
 
 bp = Blueprint("config", __name__)
 
@@ -22,9 +23,9 @@ async def get_config():
 
 @bp.route("/config/mcp-session", methods=["PUT"])
 async def set_mcp_session():
-    data = await request.get_json(force=True, silent=True) or {}
+    data = await get_json_object()
     session_id = data.get("session_id")
-    if not isinstance(session_id, int):
+    if not isinstance(session_id, int) or isinstance(session_id, bool):
         return jsonify({"error": "session_id required"}), 400
 
     async with open_db(current_app.config["DB_PATH"]) as conn:
@@ -53,10 +54,11 @@ async def resolve_path():
     if not mcp_session:
         return jsonify({"error": "no MCP session active"}), 400
 
-    data = await request.get_json(force=True, silent=True) or {}
-    path = data.get("path", "").strip()
-    if not path:
+    data = await get_json_object()
+    path = data.get("path")
+    if not isinstance(path, str) or not path.strip():
         return jsonify({"error": "path required"}), 400
+    path = path.strip()
 
     root = Path(mcp_session["root_path"]).resolve()
     p = Path(path)

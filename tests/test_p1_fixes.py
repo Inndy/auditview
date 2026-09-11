@@ -63,6 +63,66 @@ def _write_file(root, rel, lines):
 
 
 # ---------------------------------------------------------------------------
+# JSON request shape and scalar validation
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_write_endpoints_reject_malformed_json_types():
+    async with _test_app() as (app, tmpdir, _db):
+        _write_file(tmpdir, "src.py", ["x = 1"])
+        async with app.test_client() as client:
+            response = await client.post("/api/sessions", json=[])
+            assert response.status_code == 400
+            response = await client.post("/api/sessions", json={"label": 1})
+            assert response.status_code == 400
+
+            sid = await _create_session(client)
+            response = await client.post(
+                f"/api/sessions/{sid}/notes",
+                json={
+                    "file_path": "src.py",
+                    "start_line": True,
+                    "end_line": 1,
+                    "content": "note",
+                },
+            )
+            assert response.status_code == 400
+            response = await client.post(
+                f"/api/sessions/{sid}/notes",
+                json={
+                    "file_path": "src.py",
+                    "start_line": 1,
+                    "end_line": 1,
+                    "content": 123,
+                },
+            )
+            assert response.status_code == 400
+
+            response = await client.post(
+                f"/api/sessions/{sid}/issues", json={"title": 123}
+            )
+            assert response.status_code == 400
+            response = await client.post(
+                f"/api/sessions/{sid}/issues",
+                json={"title": "valid", "source": []},
+            )
+            assert response.status_code == 400
+            response = await client.patch(
+                f"/api/sessions/{sid}/issues/999", json={"actor": []}
+            )
+            assert response.status_code == 400
+
+            response = await client.put(
+                "/api/config/mcp-session", json={"session_id": True}
+            )
+            assert response.status_code == 400
+            response = await client.post(
+                f"/api/sessions/{sid}/purge", json=[]
+            )
+            assert response.status_code == 400
+
+
+# ---------------------------------------------------------------------------
 # Session existence guards (#56, #62)
 # ---------------------------------------------------------------------------
 

@@ -102,6 +102,28 @@ async def test_mark_lines_not_array_returns_400():
 
 
 @pytest.mark.asyncio
+async def test_mark_rejects_non_object_line_without_server_error():
+    async with _test_app() as (app, root, _):
+        _write_file(root, "a.py", ["x = 1"])
+        async with app.test_client() as client:
+            sid = await _create_session(client)
+            resp = await client.post(f"/api/sessions/{sid}/lines/mark", json={
+                "file_path": "a.py",
+                "lines": ["not-an-object"],
+                "reviewed": True,
+            })
+            assert resp.status_code == 200
+            body = await resp.get_json()
+            assert body["accepted"] == []
+            assert body["rejected"] == [{
+                "line_hash": None,
+                "context_hash": None,
+                "line_no": None,
+                "reason": "line must be an object",
+            }]
+
+
+@pytest.mark.asyncio
 async def test_mark_path_traversal_returns_400():
     async with _test_app() as (app, root, _):
         async with app.test_client() as client:
