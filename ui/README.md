@@ -1,50 +1,36 @@
-# auditview-ui
+# auditview frontend
 
-This template should help get you started developing with Vue 3 in Vite.
+The frontend is a Vue 3 single-page application served by the auditview Python
+process. See the [project README](../README.md) for product usage.
 
-## Recommended IDE Setup
+## Development
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+From the repository root:
 
-## Recommended Browser Setup
-
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
-pnpm install
+```bash
+pnpm --dir ui install --frozen-lockfile
+pnpm --dir ui dev
 ```
 
-### Compile and Hot-Reload for Development
+Vite proxies `/api` to the backend at `http://localhost:5000`. In another
+terminal, run the backend against a working directory:
 
-```sh
-pnpm dev
+```bash
+uv run auditview /path/to/project
 ```
 
-### Compile and Minify for Production
+## Checks and build
 
-```sh
-pnpm build
+```bash
+pnpm --dir ui test
+pnpm --dir ui lint
+pnpm --dir ui build
 ```
 
-### Run Tests
+`lint` is non-mutating. Use `lint:fix` for safe lint fixes and `format` for an
+explicit formatting pass. Production output goes to `ui/dist/`; packaging
+copies it into the ignored `auditview/static/` directory.
 
-```sh
-pnpm test
-```
-
-### Lint with [ESLint](https://eslint.org/)
-
-```sh
-pnpm lint
-```
+Components use the Vue Options API. Backend resource modules under `ui/src/api/`
+mirror the REST blueprints, while `ui/src/input/actions.js` is the shared action
+registry for keyboard and gamepad input.
