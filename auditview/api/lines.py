@@ -2,6 +2,7 @@ import os
 from quart import Blueprint, request, jsonify, current_app
 from auditview.db.connection import open_db
 from auditview.core.hashing import line_hash, context_hash
+from auditview.core.coverage import is_countable_line
 from auditview.core.io_utils import read_file_lines
 from auditview.core.reconciler import ensure_snapshot
 from auditview.api.util import safe_path, is_excluded
@@ -43,10 +44,15 @@ async def mark_lines(session_id):
             return jsonify({"error": "Could not read file"}), 500
 
         valid_keys = set()
+        countable_keys = set()
+        ext = os.path.splitext(file_path)[1].lower()
         for i, content in enumerate(file_lines):
             prev_c = file_lines[i - 1] if i > 0 else ""
             next_c = file_lines[i + 1] if i < len(file_lines) - 1 else ""
-            valid_keys.add((i + 1, line_hash(content), context_hash(prev_c, content, next_c)))
+            key = (i + 1, line_hash(content), context_hash(prev_c, content, next_c))
+            valid_keys.add(key)
+            if is_countable_line(content, ext):
+                countable_keys.add(key)
 
         accepted = []
         rejected = []
@@ -71,6 +77,14 @@ async def mark_lines(session_id):
                             "context_hash": ch,
                             "line_no": ln,
                             "reason": "stale content: line not found in current file",
+                        })
+                        continue
+                    if (ln, lh, ch) not in countable_keys:
+                        rejected.append({
+                            "line_hash": lh,
+                            "context_hash": ch,
+                            "line_no": ln,
+                            "reason": "line is not countable",
                         })
                         continue
                     await conn.execute(

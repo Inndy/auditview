@@ -156,6 +156,33 @@ async def test_mark_lines_reviewed_success():
 
 
 @pytest.mark.asyncio
+async def test_mark_non_countable_lines_does_not_inflate_coverage():
+    async with _test_app() as (app, root, db_path):
+        file_lines = ["answer = 42", "# not reviewable coverage"]
+        _write_file(root, "app.py", file_lines)
+        async with app.test_client() as client:
+            sid = await _create_session(client)
+            payload = _line_payload(file_lines)
+            resp = await client.post(f"/api/sessions/{sid}/lines/mark", json={
+                "file_path": "app.py",
+                "lines": [payload[1]],
+                "reviewed": True,
+            })
+            assert resp.status_code == 200
+            body = await resp.get_json()
+            assert body["updated"] == 0
+            assert body["accepted"] == []
+            assert body["rejected"][0]["reason"] == "line is not countable"
+
+        async with open_db(db_path) as conn:
+            cur = await conn.execute(
+                "SELECT COUNT(*) AS n FROM reviewed_lines WHERE session_id = ?",
+                (sid,),
+            )
+            assert (await cur.fetchone())["n"] == 0
+
+
+@pytest.mark.asyncio
 async def test_mark_lines_reviewed_creates_snapshot():
     async with _test_app() as (app, root, db_path):
         file_lines = ["line1", "line2"]

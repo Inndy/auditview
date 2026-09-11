@@ -18,7 +18,7 @@ local function send(bufnr, start_line, end_line, reviewed)
     local lines = {}
     for ln = start_line, end_line do
       local entry = cached.lines[ln]
-      if entry then
+      if entry and (not reviewed or entry.is_countable) then
         table.insert(lines, {
           line_no = ln,
           line_hash = entry.line_hash,
