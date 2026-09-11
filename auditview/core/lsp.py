@@ -327,19 +327,51 @@ class _Server:
         self._reader = asyncio.create_task(self._read_loop())
         self._stderr_reader = asyncio.create_task(self._drain_stderr())
 
-        root_uri = path_to_uri(self.root)
-        result = await self.request("initialize", {
-            "processId": os.getpid(),
-            "rootUri": root_uri,
-            "workspaceFolders": [{"uri": root_uri, "name": os.path.basename(self.root)}],
-            "capabilities": CLIENT_CAPABILITIES,
-            "initializationOptions": self.init_options,
-        }, timeout=_INIT_TIMEOUT)
-        self.capabilities = (result or {}).get("capabilities") or {}
-        self.notify("initialized", {})
-        self.notify("workspace/didChangeConfiguration", {"settings": self.settings})
-        self.state = "ready"
-        logger.info("lsp: %s ready at %s", self.name, self.root)
+        try:
+            root_uri = path_to_uri(self.root)
+            result = await self.request("initialize", {
+                "processId": os.getpid(),
+                "rootUri": root_uri,
+                "workspaceFolders": [{"uri": root_uri, "name": os.path.basename(self.root)}],
+                "capabilities": CLIENT_CAPABILITIES,
+                "initializationOptions": self.init_options,
+            }, timeout=_INIT_TIMEOUT)
+            self.capabilities = (result or {}).get("capabilities") or {}
+            self.notify("initialized", {})
+            self.notify("workspace/didChangeConfiguration", {"settings": self.settings})
+            self.state = "ready"
+            logger.info("lsp: %s ready at %s", self.name, self.root)
+        except BaseException as exc:
+            detail = str(exc) or type(exc).__name__
+            self._fail_pending(f"initialization failed: {detail}")
+            await self._terminate_process()
+            if isinstance(exc, asyncio.CancelledError):
+                raise
+            if isinstance(exc, LspError):
+                raise
+            raise LspError(f"{self.name}: initialization failed: {detail}") from exc
+
+    async def _terminate_process(self):
+        """Cancel readers and reap the current child without protocol traffic."""
+        proc = self.proc
+        tasks = [task for task in (self._reader, self._stderr_reader) if task is not None]
+        for task in tasks:
+            task.cancel()
+        if proc is not None and proc.returncode is None:
+            try:
+                proc.terminate()
+                await asyncio.wait_for(proc.wait(), 3.0)
+            except (asyncio.TimeoutError, ProcessLookupError):
+                try:
+                    proc.kill()
+                    await proc.wait()
+                except ProcessLookupError:
+                    pass
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self.proc = None
+        self._reader = None
+        self._stderr_reader = None
 
     async def stop(self):
         self.state = "stopped"
@@ -351,18 +383,7 @@ class _Server:
                 self.notify("exit", {})
         except (LspError, asyncio.TimeoutError, asyncio.CancelledError):
             pass
-        for task in (self._reader, self._stderr_reader):
-            if task is not None:
-                task.cancel()
-        try:
-            if self.proc.returncode is None:
-                self.proc.terminate()
-                await asyncio.wait_for(self.proc.wait(), 3.0)
-        except (asyncio.TimeoutError, ProcessLookupError):
-            try:
-                self.proc.kill()
-            except ProcessLookupError:
-                pass
+        await self._terminate_process()
 
     # --- documents -------------------------------------------------------
     async def sync_document(self, abs_path):

@@ -7,16 +7,19 @@ subprocess -- the real servers are exercised by the spike scripts instead.
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import tempfile
 from contextlib import asynccontextmanager
+from unittest import mock
+from unittest.mock import AsyncMock
 
 import pytest
 from quart import Quart
 
 from auditview.api.lsp import bp as lsp_bp, partition_targets
 from auditview.core.lsp import (LspError, LspService, resolve_root, uri_to_path,
-                                _flatten_locations)
+                                _Server, _flatten_locations)
 from auditview.db.connection import open_db
 from auditview.db.schema import run_migrations
 
@@ -145,6 +148,59 @@ class TestCoreHelpers:
         # The most recent survive; the oldest are evicted.
         assert svc.is_previewable(1, "/x/1499")
         assert not svc.is_previewable(1, "/x/0")
+
+
+class _HangingStream:
+    async def readline(self):
+        await asyncio.Future()
+
+
+class _FakeProcess:
+    def __init__(self):
+        self.stdin = mock.Mock()
+        self.stdout = _HangingStream()
+        self.stderr = _HangingStream()
+        self.returncode = None
+        self.terminated = False
+        self.killed = False
+
+    def terminate(self):
+        self.terminated = True
+        self.returncode = 0
+
+    def kill(self):
+        self.killed = True
+        self.returncode = -9
+
+    async def wait(self):
+        return self.returncode
+
+
+@pytest.mark.asyncio
+async def test_failed_initialization_reaps_process_and_readers(tmp_path):
+    process = _FakeProcess()
+    server = _Server(
+        {"name": "stub", "cmd": ["stub-language-server"]},
+        str(tmp_path),
+    )
+    server.request = AsyncMock(side_effect=LspError("initialize timed out"))
+
+    spawn = AsyncMock(return_value=process)
+    with mock.patch("auditview.core.lsp.asyncio.create_subprocess_exec", spawn):
+        with pytest.raises(LspError, match="initialize timed out"):
+            await server.ensure_started()
+
+        assert process.terminated
+        assert not process.killed
+        assert server.state == "crashed"
+        assert server.proc is None
+        assert server._reader is None
+        assert server._stderr_reader is None
+
+        # LspService replaces crashed instances before attempting another start.
+        with pytest.raises(LspError, match="initialization failed"):
+            await server.ensure_started()
+        assert spawn.await_count == 1
 
 
 class _StubLsp:

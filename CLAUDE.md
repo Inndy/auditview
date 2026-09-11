@@ -223,6 +223,13 @@ lifecycle (inert construction, `start(loop)`, one `run_worker()`, teardown) but
 holds no DB connection - it is pure transport, and all path policy lives in
 `api/lsp.py`.
 
+Initialization failure is a full lifecycle boundary: a timeout, protocol error,
+unexpected exception, or cancellation marks the instance crashed, fails any
+pending requests, cancels both pipe readers, and reaps the child before the
+error escapes. `LspService` may then replace that instance on the next request.
+Never leave a failed instance in `warming` or overwrite its `proc` reference;
+either mistake leaks one subprocess per retry.
+
 Three things about this are counter-intuitive enough to be worth stating, all
 established empirically (see `scripts/lsp-spike/README.md`, which is the
 reference implementation and the record of how each was found):
