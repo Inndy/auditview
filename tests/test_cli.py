@@ -10,6 +10,7 @@ import tempfile
 import pytest
 
 from auditview import cli
+from auditview import __main__ as auditview_main
 from auditview.db.connection import open_db, open_db_readonly
 from auditview.db.schema import run_migrations
 
@@ -49,6 +50,78 @@ def _seed(db_path, **kw):
 def _run(capsys, argv, db_path):
     code = cli.run([*argv, "--db", db_path])
     return code, capsys.readouterr()
+
+
+def test_root_help_lists_server_and_query_commands(monkeypatch, capsys):
+    monkeypatch.setattr("sys.argv", ["auditview", "-h"])
+
+    with pytest.raises(SystemExit) as exc_info:
+        auditview_main.main()
+
+    assert exc_info.value.code == 0
+    output = capsys.readouterr().out
+    assert "commands:" in output
+    assert "serve" in output
+    assert auditview_main.SERVE_HELP in output
+    for command, help_text in cli.COMMAND_HELP.items():
+        assert command in output
+        assert help_text in output
+
+
+def test_existing_directory_is_server_shortcut(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(auditview_main, "serve", lambda argv, **kwargs: calls.append((argv, kwargs)))
+    monkeypatch.setattr("sys.argv", ["auditview", str(tmp_path), "--debug"])
+
+    auditview_main.main()
+
+    assert calls == [([str(tmp_path), "--debug"], {})]
+
+
+def test_explicit_serve_command_has_command_specific_prog(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(auditview_main, "serve", lambda argv, **kwargs: calls.append((argv, kwargs)))
+    monkeypatch.setattr("sys.argv", ["auditview", "serve", str(tmp_path)])
+
+    auditview_main.main()
+
+    assert calls == [([str(tmp_path)], {"prog": "auditview serve"})]
+
+
+def test_server_options_may_precede_directory_shortcut(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(auditview_main, "serve", lambda argv, **kwargs: calls.append((argv, kwargs)))
+    monkeypatch.setattr("sys.argv", ["auditview", "--debug", str(tmp_path)])
+
+    auditview_main.main()
+
+    assert calls == [(["--debug", str(tmp_path)], {})]
+
+
+def test_query_options_may_precede_subcommand(monkeypatch):
+    calls = []
+    monkeypatch.setattr(auditview_main.cli, "run", lambda argv: calls.append(argv) or 0)
+    monkeypatch.setattr("sys.argv", ["auditview", "--json", "context"])
+
+    with pytest.raises(SystemExit) as exc_info:
+        auditview_main.main()
+
+    assert exc_info.value.code == 0
+    assert calls == [["--json", "context"]]
+
+
+def test_unknown_command_that_is_not_a_directory_prints_help(monkeypatch, capsys):
+    monkeypatch.setattr("sys.argv", ["auditview", "sttas"])
+
+    with pytest.raises(SystemExit) as exc_info:
+        auditview_main.main()
+
+    assert exc_info.value.code == 2
+    output = capsys.readouterr().err
+    assert "unknown command or directory: sttas" in output
+    assert "commands:" in output
+    for command in ("serve", *cli.SUBCOMMANDS):
+        assert command in output
 
 
 @pytest.fixture

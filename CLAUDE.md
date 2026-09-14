@@ -190,9 +190,11 @@ functions' return values verbatim.
 resolve the DB (`--db` → `$AUDITVIEW_DB` → search upward for `.auditview.db`) and the session
 (`--session` → `app_config.mcp_session_id` → sole session), then query. Agents read coverage this
 way because it needs no running server and no port discovery; they write via the MCP tools, which
-handle reconciliation and SSE broadcast. `__main__.main()` routes to the CLI when any argument is
-exactly a subcommand name; `auditview serve <path>` is the escape hatch for a directory that
-shares one of those names.
+handle reconciliation and SSE broadcast. `__main__.main()` routes a leading query subcommand to
+the CLI (and preserves query-wide flags before it). An existing directory remains a shortcut for
+the default server command; an unknown name that is not a directory prints the top-level command
+list instead. `auditview serve <path>` is the escape hatch for a directory that shares a command
+name.
 The CLI uses `open_db_readonly()`, never the server's `open_db()`: the latter
 enables WAL and is inherently a write-capable connection. A writable live WAL
 database opens with SQLite `mode=ro`, so queries see uncheckpointed server

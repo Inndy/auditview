@@ -9,6 +9,11 @@ keep an audit trail beside the code.
 > that the code is correct, secure, vulnerability-free, or entirely
 > human-written.
 
+> [!WARNING]
+> The auditview codebase itself has not yet completed a full human review. Treat
+> this alpha software accordingly; its own use of auditview is not a claim that
+> the project has reached 100% review coverage.
+
 ## Quick start
 
 auditview requires Python 3.14 or newer. Install the published CLI with
@@ -23,6 +28,12 @@ Start it against the directory you want to review:
 
 ```bash
 auditview /path/to/project
+```
+
+Or run it without installing it first:
+
+```bash
+uvx auditview /path/to/project
 ```
 
 Open `http://127.0.0.1:5000`, create a session, then select a file. The server
@@ -80,9 +91,11 @@ These commands report review state and nothing else — there is deliberately no
 Deciding which code matters is the agent's job, informed by reading the code; see the
 `audit-triage` and `audit-explain` skills under `.claude/skills/`.
 
-A bare subcommand name anywhere in the arguments routes to the CLI, so `auditview stats` queries
-rather than serves. If you need to serve a directory that happens to be named after a subcommand,
-use the explicit form: `auditview serve ./stats`.
+The `context`, `stats`, and `files` subcommands route to the read-only CLI. Query-wide flags may
+appear before or after the subcommand. A first argument that is not a known command is treated as
+the server root only when it names an existing directory; otherwise auditview reports the unknown
+command and prints its command list. If you need to serve a directory that happens to be named
+after a subcommand, use the explicit form: `auditview serve ./stats`.
 
 ## Roadmap direction
 

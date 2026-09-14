@@ -15,7 +15,12 @@ from auditview.core.progress import (
     session_exists,
 )
 
-SUBCOMMANDS = ("context", "stats", "files")
+COMMAND_HELP = {
+    "context": "Show which session and repository root these commands act on",
+    "stats": "Show session-wide review coverage and issue counts",
+    "files": "List per-file review progress",
+}
+SUBCOMMANDS = tuple(COMMAND_HELP)
 
 _STATUSES = ("not_viewed", "partial", "reviewed", "empty", "unreviewable")
 _SORTS = ("coverage", "path", "size")
@@ -203,12 +208,10 @@ def _build_parser():
 
     sub = p.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("context", parents=[common],
-                   help="Show which session and repository root these commands act on")
-    sub.add_parser("stats", parents=[common],
-                   help="Show session-wide review coverage and issue counts")
+    sub.add_parser("context", parents=[common], help=COMMAND_HELP["context"])
+    sub.add_parser("stats", parents=[common], help=COMMAND_HELP["stats"])
 
-    files = sub.add_parser("files", parents=[common], help="List per-file review progress")
+    files = sub.add_parser("files", parents=[common], help=COMMAND_HELP["files"])
     files.add_argument("--status", action="append", choices=_STATUSES,
                        help="Only show files with this status (repeatable)")
     files.add_argument("--sort", choices=_SORTS, default="path",
