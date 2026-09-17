@@ -114,6 +114,13 @@ input-source plumbing here to widen the guard.
 
 **One action registry, two input sources** - `ui/src/input/actions.js` is the single table of user actions in the review view: label, key bindings, gamepad bindings, and a `run(targets, params)` thunk. `keyboard.js` resolves a `KeyboardEvent` to an action id (it owns the vim count buffer and the `z`/`[`/`]`/`g` prefix timeout, which have no gamepad analogue); `gamepad.js` polls the Gamepad API in `requestAnimationFrame` and resolves a button/axis to an action id. Both call `dispatch()`, which applies the shared guards (a dialog is open → only `context: 'modal'` actions; a text field has focus; `requiresSelection`). Held-input behavior (`padRepeat` / `padContinuous`) belongs to the action rather than the physical input, so the same button may repeat ordinary navigation without repeating a modifier chord such as pane switching. `CodeView` is the only input host: it registers the `$refs` the actions operate on via `setTargets()` and owns which pane has gamepad focus. `KeyboardHelpModal` renders its table from the registry, so documentation cannot drift from the bindings.
 
+A focused control yields only the keys it actually uses: `keyboard.js:ownsKeyNatively()`
+hands the whole keyboard to a text field, textarea, contenteditable or `select` (caret or
+native typeahead), but a checkbox, radio, button or link keeps only Space/Enter — plus the
+arrows inside a radio group. A blanket "interactive element → stand aside" check is what made
+`j`/`k` die after one click on a file row or the hide-reviewed checkbox: nothing blurs those
+controls, so focus sits there for the rest of the session.
+
 Gamepad support targets the W3C **standard** mapping (Xbox layout) only. A Steam Controller or Steam Deck reports that mapping through Steam Input, which also consumes the touchpads before the browser sees them — pad coordinates are not readable from a browser, and the right pad arrives as ordinary mouse movement. `/gamepad` is a live input dump for checking an unfamiliar pad; both the action→button map and the physical input map are overridable from `localStorage` (`auditview:gamepad:bindings`, `auditview:gamepad:inputs`).
 
 **Which files a session tracks: two filters, and only one of them is negotiable** -

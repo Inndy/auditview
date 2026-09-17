@@ -54,6 +54,48 @@ function tryDispatch(e, id, params) {
   return true
 }
 
+const INTERACTIVE_SELECTOR =
+  'button, a, input, textarea, select, [contenteditable], [role="button"], [role="link"]'
+
+// Input types whose native keyboard behavior is limited to activation: they hold
+// no caret and consume no motion key.
+const ACTIVATION_ONLY_INPUT_TYPES = new Set([
+  'checkbox',
+  'radio',
+  'button',
+  'submit',
+  'reset',
+  'image',
+])
+
+const ACTIVATION_KEYS = new Set([' ', 'Enter'])
+const ARROW_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])
+
+/**
+ * Whether the focused element genuinely needs this key, in which case the review
+ * bindings must stand aside. Only Space/Enter (and arrows inside a radio group)
+ * are native on a checkbox, a button or a link, so yielding *every* key to them
+ * left j/k dead after a single click on a file row or a filter checkbox — focus
+ * stays on the control long after the click that put it there. Anything holding a
+ * caret or its own typeahead — text field, textarea, contenteditable, select —
+ * still owns the whole keyboard.
+ */
+export function ownsKeyNatively(e) {
+  const el = e.target?.closest?.(INTERACTIVE_SELECTOR)
+  if (!el) return false
+
+  const tag = el.tagName
+  if (tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable) return true
+  if (tag === 'INPUT') {
+    const type = (el.type || 'text').toLowerCase()
+    if (!ACTIVATION_ONLY_INPUT_TYPES.has(type)) return true
+    if (type === 'radio' && ARROW_KEYS.has(e.key)) return true
+  }
+
+  if (e.ctrlKey || e.metaKey || e.altKey) return false
+  return ACTIVATION_KEYS.has(e.key)
+}
+
 function onKeyDown(e) {
   // While a dialog is up, only dialog actions run — and unlike the rest, they are
   // allowed to fire with a text field focused (that is where the caret usually is).
@@ -64,12 +106,7 @@ function onKeyDown(e) {
     return
   }
 
-  // Preserve native keyboard behavior for every interactive element. In
-  // particular, Space must activate a focused button instead of toggling the
-  // code selection anchor, and arrows in a select must not change files.
-  if (e.target?.closest?.(
-    'button, a, input, textarea, select, [contenteditable], [role="button"], [role="link"]',
-  )) return
+  if (ownsKeyNatively(e)) return
 
   const key = e.key
 
