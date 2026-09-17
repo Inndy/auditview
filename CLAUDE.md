@@ -158,6 +158,19 @@ out of coverage. If the file becomes reviewable again, the normal reconciler
 uses the preserved snapshot to verify, migrate, or discard them safely.
 
 
+**A blank or comment-only line can be marked read; only countable rows reach the
+ledger** - `reviewed_lines.is_countable` is written at mark time from
+`is_countable_line(content, ext)`, and `core/progress.py` counts only rows with
+`is_countable = 1`. Rejecting such a mark instead (the first fix for coverage
+inflation) was wrong for the reading workflow: marking a whole range or whole
+file is how a reviewer records "I read this", and a range that straddles a blank
+line came back partially applied, so the file never reached 100% without hunting
+for the gap. The flag can be stored once because the reconciler never migrates a
+mark onto different content - countability is a pure function of content and
+extension, so it cannot go stale under an edit. It *can* go stale when the rules
+themselves change (as `_COMMENT_PREFIXES` did), which is why `_reconcile_reviewed`
+rewrites the flag for every surviving row rather than only for rows that moved.
+
 **`WatcherService` uses asyncio.Queue for thread→async bridging** - watchdog runs file observer threads that post paths via `loop.call_soon_threadsafe`. An async worker task consumes and does all DB work. Each operation opens its own short-lived aiosqlite connection.
 
 The handler must implement `on_moved` alongside create/modify/delete: inotify pairs `IN_MOVED_FROM`/`IN_MOVED_TO` into a single move event whenever both ends are inside the watched tree, so an atomic save (write temp, rename over the target) — what editors, `sed -i`, and `git checkout` all do — arrives *only* as `on_moved`. Dropping it leaves `reviewed_lines` and `countable_lines` frozen at pre-edit values, so a fully reviewed file keeps reporting 100% until something else forces a reconcile.

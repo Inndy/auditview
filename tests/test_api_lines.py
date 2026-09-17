@@ -12,6 +12,7 @@ from quart import Quart
 from auditview.api.lines import bp as lines_bp
 from auditview.api.sessions import bp as sessions_bp
 from auditview.core.hashing import context_hash, line_hash
+from auditview.core.progress import file_progress, session_coverage
 from auditview.db.connection import open_db
 from auditview.db.schema import run_migrations
 
@@ -180,28 +181,67 @@ async def test_mark_lines_reviewed_success():
 @pytest.mark.asyncio
 async def test_mark_non_countable_lines_does_not_inflate_coverage():
     async with _test_app() as (app, root, db_path):
-        file_lines = ["answer = 42", "# not reviewable coverage"]
+        file_lines = ["answer = 42", "", "# not reviewable coverage"]
         _write_file(root, "app.py", file_lines)
         async with app.test_client() as client:
             sid = await _create_session(client)
             payload = _line_payload(file_lines)
             resp = await client.post(f"/api/sessions/{sid}/lines/mark", json={
                 "file_path": "app.py",
-                "lines": [payload[1]],
+                "lines": [payload[1], payload[2]],
                 "reviewed": True,
             })
             assert resp.status_code == 200
             body = await resp.get_json()
-            assert body["updated"] == 0
-            assert body["accepted"] == []
-            assert body["rejected"][0]["reason"] == "line is not countable"
+            assert body["updated"] == 2
+            assert body["rejected"] == []
 
         async with open_db(db_path) as conn:
             cur = await conn.execute(
-                "SELECT COUNT(*) AS n FROM reviewed_lines WHERE session_id = ?",
+                "SELECT line_no, is_countable FROM reviewed_lines "
+                "WHERE session_id = ? ORDER BY line_no",
                 (sid,),
             )
-            assert (await cur.fetchone())["n"] == 0
+            assert [(r["line_no"], r["is_countable"]) for r in await cur.fetchall()] == [
+                (2, 0), (3, 0),
+            ]
+
+            cov = await session_coverage(conn, sid)
+            assert cov["total_countable_lines"] == 1
+            assert cov["total_reviewed_lines"] == 0
+
+            entry = next(
+                f for f in await file_progress(conn, sid) if f["rel_path"] == "app.py"
+            )
+            assert entry["reviewed_lines"] == 0
+            assert entry["status"] == "not_viewed"
+
+
+@pytest.mark.asyncio
+async def test_mark_mixed_lines_counts_only_countable():
+    async with _test_app() as (app, root, db_path):
+        file_lines = ["answer = 42", "", "value = 7"]
+        _write_file(root, "app.py", file_lines)
+        async with app.test_client() as client:
+            sid = await _create_session(client)
+            resp = await client.post(f"/api/sessions/{sid}/lines/mark", json={
+                "file_path": "app.py",
+                "lines": _line_payload(file_lines),
+                "reviewed": True,
+            })
+            assert resp.status_code == 200
+            assert (await resp.get_json())["updated"] == 3
+
+        async with open_db(db_path) as conn:
+            cov = await session_coverage(conn, sid)
+            assert cov["total_countable_lines"] == 2
+            assert cov["total_reviewed_lines"] == 2
+            assert cov["coverage"] == 1.0
+
+            entry = next(
+                f for f in await file_progress(conn, sid) if f["rel_path"] == "app.py"
+            )
+            assert entry["status"] == "reviewed"
 
 
 @pytest.mark.asyncio

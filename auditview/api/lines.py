@@ -95,19 +95,14 @@ async def mark_lines(session_id):
                             "reason": "stale content: line not found in current file",
                         })
                         continue
-                    if (ln, lh, ch) not in countable_keys:
-                        rejected.append({
-                            "line_hash": lh,
-                            "context_hash": ch,
-                            "line_no": ln,
-                            "reason": "line is not countable",
-                        })
-                        continue
                     await conn.execute(
                         "INSERT OR REPLACE INTO reviewed_lines "
-                        "(session_id, file_path, line_hash, context_hash, line_no) "
-                        "VALUES (?, ?, ?, ?, ?)",
-                        (session_id, file_path, lh, ch, ln),
+                        "(session_id, file_path, line_hash, context_hash, line_no, is_countable) "
+                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        (
+                            session_id, file_path, lh, ch, ln,
+                            1 if (ln, lh, ch) in countable_keys else 0,
+                        ),
                     )
                 else:
                     await conn.execute(

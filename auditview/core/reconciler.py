@@ -77,7 +77,7 @@ preferable during active review, where users see the file and can re-check.
 
 
 async def _reconcile_reviewed(
-    conn, rows, new_lines, new_line_hashes, line_map, block_margins, old_line_hashes
+    conn, rows, new_lines, new_line_hashes, line_map, block_margins, old_line_hashes, ext
 ):
     if not rows:
         return
@@ -122,7 +122,9 @@ async def _reconcile_reviewed(
                 delete_ids.append(row_id)
                 continue
             new_ln = new_idx + 1
-            updates.append((new_ln, new_lh, new_ch, row_id))
+            updates.append(
+                (new_ln, new_lh, new_ch, int(is_countable_line(curr_content, ext)), row_id)
+            )
     else:
         for row in rows:
             key = (row["line_hash"], row["context_hash"])
@@ -137,8 +139,16 @@ async def _reconcile_reviewed(
                 # one happened to be the last writer in the index.
                 delete_ids.append(row["id"])
                 continue
-            if new_ln != row["line_no"]:
-                updates.append((new_ln, row["line_hash"], row["context_hash"], row["id"]))
+            # Unmoved rows are re-written too: the update refreshes
+            # is_countable, which a change to the countability rules (not to the
+            # file) can otherwise leave stale forever.
+            updates.append((
+                new_ln,
+                row["line_hash"],
+                row["context_hash"],
+                int(is_countable_line(new_lines[new_ln - 1], ext)),
+                row["id"],
+            ))
 
     # UNIQUE is (session_id, file_path, line_hash, context_hash, line_no), so
     # rows with the same (lh, ch) at different line_no coexist. Collisions only
@@ -147,13 +157,13 @@ async def _reconcile_reviewed(
     # Keep the first survivor per (lh, ch, new_ln), drop the rest.
     deduped_updates = []
     seen_keys = set()
-    for new_ln, lh, ch, row_id in updates:
+    for new_ln, lh, ch, countable, row_id in updates:
         key = (lh, ch, new_ln)
         if key in seen_keys:
             delete_ids.append(row_id)
         else:
             seen_keys.add(key)
-            deduped_updates.append((new_ln, lh, ch, row_id))
+            deduped_updates.append((new_ln, lh, ch, countable, row_id))
 
     # Deletes first: a deleted row may sit at a position that a surviving row
     # is migrating to; removing it before the updates avoids UNIQUE conflicts.
@@ -167,10 +177,11 @@ async def _reconcile_reviewed(
         # real destinations. Negative line_nos never exist outside this window.
         await conn.executemany(
             "UPDATE reviewed_lines SET line_no = -? WHERE id = ?",
-            [(new_ln, row_id) for new_ln, lh, ch, row_id in deduped_updates],
+            [(new_ln, row_id) for new_ln, lh, ch, countable, row_id in deduped_updates],
         )
         await conn.executemany(
-            "UPDATE reviewed_lines SET line_no = ?, line_hash = ?, context_hash = ? WHERE id = ?",
+            "UPDATE reviewed_lines SET line_no = ?, line_hash = ?, context_hash = ?, "
+            "is_countable = ? WHERE id = ?",
             deduped_updates,
         )
 
@@ -408,7 +419,8 @@ async def reconcile_file(conn, session_id, file_path, root_path):
         rows = await cur.fetchall()
 
         await _reconcile_reviewed(
-            conn, rows, new_lines, new_line_hashes, line_map, block_margins, old_line_hashes
+            conn, rows, new_lines, new_line_hashes, line_map, block_margins,
+            old_line_hashes, ext,
         )
         await _reconcile_notes(
             conn, session_id, file_path, new_lines, new_line_hashes,

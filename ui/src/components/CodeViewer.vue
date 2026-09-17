@@ -611,7 +611,7 @@ export default {
       if (this.lines.length === 0) return
       const countable = this.lines.filter((l) => l.is_countable)
       const allReviewed = countable.length > 0 && countable.every((l) => l.is_reviewed)
-      await this.doMark(countable, !allReviewed)
+      await this.doMark(this.lines, !allReviewed)
     },
 
     async unmarkWholeFile() {
@@ -624,8 +624,7 @@ export default {
       if (rangeLines.length === 0) return
       const countable = rangeLines.filter((l) => l.is_countable)
       const allReviewed = countable.length > 0 && countable.every((l) => l.is_reviewed)
-      const reviewed = !allReviewed
-      await this.doMark(reviewed ? countable : rangeLines, reviewed)
+      await this.doMark(rangeLines, !allReviewed)
       this.anchorLine = null
     },
 

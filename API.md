@@ -127,7 +127,9 @@ state (a file tree, a progress list) should call that instead of this.
 - `status` is one of `"empty"` (no countable lines), `"unreviewable"` (large,
   binary, missing during the scan, or unreadable), `"not_viewed"` (none reviewed),
   `"partial"` (some reviewed), or `"reviewed"` (all countable lines reviewed)
-- `reviewed_lines` is clamped to `countable_lines` so stale rows can't push it above 100%
+- `reviewed_lines` counts only marks on countable lines (a marked blank or
+  comment-only line is stored but not counted), and is clamped to
+  `countable_lines` so stale rows can't push it above 100%
 - `notes_count` / `todos_count` count only **live** (non-orphaned) notes
 - `max_severity` is `"P0"` | `"P1"` | `"P2"` | `null` — the highest severity among
   **open** issues attached to any live note in this file. `null` when no open
@@ -333,7 +335,8 @@ runs before the response is built.
 - `line_hash`: SHA-256 hex of the line's content string
 - `context_hash`: SHA-256 hex of `prev_content + "\n" + curr_content + "\n" + next_content` (empty string for missing prev/next)
 - `is_countable`: false for blank lines and comment-only lines (skip-comments is always on for now)
-- `is_reviewed`: true if a matching `(line_hash, context_hash)` pair exists in `reviewed_lines` for this session+file
+- `is_reviewed`: true if a matching `(line_hash, context_hash)` pair exists in `reviewed_lines` for this session+file.
+  A non-countable line can be reviewed; it just does not contribute to `countable_lines` or to coverage
 - `issue_id` / `issue_severity`: present when the note is attached to an issue; both `null` otherwise
 - Notes include both live and orphaned notes for this file, ordered by `start_line`
 
@@ -409,10 +412,11 @@ silently written.
 ```
 - `updated`: number of rows inserted (when `reviewed=true`) or deleted (when `reviewed=false`)
 - `accepted` / `rejected`: per-line breakdown; `reason` explains why a line was skipped
-- When marking (`reviewed=true`), a stale hash/context/line_no triple or a line
-  whose `is_countable` value is false is rejected. The latter protects the
-  coverage ledger even when a client submits blank or comment-only lines.
-  When unmarking, validation against current content and countability is skipped;
+- When marking (`reviewed=true`), a stale hash/context/line_no triple is rejected.
+  A line whose `is_countable` is false (blank or comment-only) is accepted and
+  stored, but its row is flagged non-countable and never enters the coverage
+  ledger — so a client may submit a whole range without filtering it first.
+  When unmarking, validation against current content is skipped;
   the matching `(line_hash, context_hash, line_no)` row is deleted. Each visible line is its own row, so two lines that happen to share the same `(line_hash, context_hash)` (e.g. consecutive identical lines or repeating blocks) can be marked and unmarked independently.
 - When `reviewed=true` and at least one line was accepted, the file's checkpoint snapshot is refreshed.
 
@@ -700,7 +704,7 @@ Aggregate coverage statistics for the session.
 ```
 - Files whose `countable_lines` has not been computed, including files reported
   as `unreviewable`, are excluded from the totals
-- `total_reviewed_lines` clamps each file's reviewed count to its `countable_lines` so stale rows can't push coverage above 100%
+- `total_reviewed_lines` counts only marks on countable lines, and clamps each file's reviewed count to its `countable_lines` so stale rows can't push coverage above 100%
 - `coverage` is `total_reviewed_lines / total_countable_lines`; `0` if denominator is zero
 
 **Errors**

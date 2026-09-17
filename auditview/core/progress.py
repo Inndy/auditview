@@ -12,7 +12,8 @@ async def file_progress(conn, session_id):
     countable_map = {r["rel_path"]: r["countable_lines"] for r in file_rows}
 
     cur = await conn.execute(
-        "SELECT file_path, COUNT(*) AS cnt FROM reviewed_lines WHERE session_id = ? GROUP BY file_path",
+        "SELECT file_path, COUNT(*) AS cnt FROM reviewed_lines "
+        "WHERE session_id = ? AND is_countable = 1 GROUP BY file_path",
         (session_id,),
     )
     reviewed_map = {r["file_path"]: r["cnt"] for r in await cur.fetchall()}
@@ -93,7 +94,7 @@ async def session_coverage(conn, session_id):
         "FROM files f "
         "JOIN ("
         "  SELECT file_path, COUNT(*) AS rl_cnt FROM reviewed_lines "
-        "  WHERE session_id = ? GROUP BY file_path"
+        "  WHERE session_id = ? AND is_countable = 1 GROUP BY file_path"
         ") rl ON rl.file_path = f.rel_path "
         "WHERE f.session_id = ? AND f.countable_lines IS NOT NULL",
         (session_id, session_id),

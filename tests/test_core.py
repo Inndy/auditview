@@ -648,6 +648,40 @@ async def test_reconcile_file_temporarily_unreviewable_preserves_state(tmp_path)
         assert (await cur.fetchone())["countable_lines"] == 1
 
 @pytest.mark.asyncio
+async def test_reconcile_file_refreshes_is_countable_on_migration(tmp_path):
+    filepath = "app.py"
+    full = tmp_path / filepath
+    full.write_text("a = 1\n\nb = 2")
+
+    async with _test_db(root=str(tmp_path)) as (conn, root):
+        blank_lh = line_hash("")
+        blank_ch = context_hash("a = 1", "", "b = 2")
+        # A stale flag: written before the line became blank, or by an older
+        # build whose countability rules differed.
+        await conn.execute(
+            "INSERT INTO reviewed_lines "
+            "(session_id, file_path, line_no, line_hash, context_hash, is_countable) "
+            "VALUES (1, ?, 2, ?, ?, 1)",
+            (filepath, blank_lh, blank_ch),
+        )
+        await conn.execute(
+            "INSERT INTO files (session_id, rel_path, last_mtime, prev_line_hashes, countable_lines) "
+            "VALUES (1, ?, 0.0, ?, 2)",
+            (filepath, "\n".join(line_hash(l) for l in ["a = 1", "", "b = 2"])),
+        )
+
+        full.write_text("header = 0\na = 1\n\nb = 2")
+        await reconcile_file(conn, 1, filepath, root)
+
+        cur = await conn.execute(
+            "SELECT line_no, is_countable FROM reviewed_lines WHERE session_id = 1 AND file_path = ?",
+            (filepath,),
+        )
+        rows = await cur.fetchall()
+        assert [(r["line_no"], r["is_countable"]) for r in rows] == [(3, 0)]
+
+
+@pytest.mark.asyncio
 async def test_reconcile_file_deleted_clears_marks(tmp_path):
     filepath = "app.py"
     full = tmp_path / filepath

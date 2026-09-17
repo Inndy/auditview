@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS reviewed_lines (
     line_hash TEXT NOT NULL,
     context_hash TEXT NOT NULL,
     line_no INTEGER NOT NULL,
+    is_countable INTEGER NOT NULL DEFAULT 1,
     reviewed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
     UNIQUE(session_id, file_path, line_hash, context_hash, line_no)
 );
@@ -104,6 +105,11 @@ _MIGRATIONS = [
     ),
     "ALTER TABLE issues ADD COLUMN source TEXT DEFAULT NULL",
     "ALTER TABLE issues ADD COLUMN closed_by TEXT DEFAULT NULL",
+    # A blank or comment-only line can be marked read, but only countable rows
+    # reach the coverage ledger. Existing rows predate the distinction and were
+    # written when marking non-countable lines was rejected, so 1 is right for
+    # them; reconciliation refreshes the flag as files change.
+    "ALTER TABLE reviewed_lines ADD COLUMN is_countable INTEGER NOT NULL DEFAULT 1",
 ]
 
 _IDEMPOTENT_ERROR_FRAGMENTS = ("duplicate column name", "already exists")
